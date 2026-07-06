@@ -1,0 +1,23 @@
+#!/bin/bash
+set -eu
+
+# On-demand only (not run automatically) — grub2-probe can't resolve
+# composefs's root mount (fails with "failed to get canonical path of
+# `composefs'"), so grub2-mkconfig currently always fails here. This is an
+# open upstream bug (ostreedev/ostree#3198, ublue-os/bazzite#2519) with no
+# fix yet in the ostree/bootc ecosystem — Bazzite's own regenerate-grub hits
+# the identical failure. Kept as a manually-run command (matching Bazzite's
+# `ujust regenerate-grub`, also on-demand rather than automatic) so it's
+# ready to actually work once that's fixed upstream, instead of being a
+# permanently-failing systemd unit in the meantime.
+
+mount -o remount,rw /boot
+trap 'mount -o remount,ro /boot' EXIT
+
+if [ -d /sys/firmware/efi ]; then
+    GRUB_CFG="/etc/grub2-efi.cfg"
+else
+    GRUB_CFG="/etc/grub2.cfg"
+fi
+
+grub2-mkconfig -o "$GRUB_CFG"

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+  ],
+
+  "rebaseWhen": "never",
+
+  "packageRules": [
+    {
+      "automerge": true,
+      "matchUpdateTypes": ["pin", "pinDigest"]
+    },
+    {
+      "enabled": false,
+      "matchUpdateTypes": ["digest", "pinDigest", "pin"],
+      "matchDepTypes": ["container"],
+      "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"],
+    },
+    // Each PR triggers a full CI build (Renovate's PRs included) — grouping
+    // means N dependency bumps become 1-2 PRs/builds instead of N, without
+    // losing any validation.
+    {
+      "matchManagers": ["regex"],
+      "groupName": "pinned app versions",
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+    },
+  ],
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Version-tagged pins in build_files/versions-*.sh",
+      "managerFilePatterns": ["/^build_files/versions-(core|frequent)-[a-z]+\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-releases|github-tags) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\w+=\"(?<currentValue>[^\"]+)\"",
+      ],
+    },
+    {
+      "customType": "regex",
+      "description": "Commit-pinned deps in build_files/versions-*.sh",
+      "managerFilePatterns": ["/^build_files/versions-(core|frequent)-[a-z]+\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+)\\n\\w+=\"(?<currentDigest>[^\"]+)\"",
+      ],
+      // Both commit-pinned deps (xone, Ant) track their default branch,
+      // which is `master` for both — Renovate's regex manager requires a
+      // currentValue (or this template) even for a digest-only pin.
+      "currentValueTemplate": "master",
+    },
+  ],
+}

@@ -1,0 +1,5 @@
+Download "FW 13 Wallpaper 5.jpg" from https://frame.work/wallpapers
+and save it in THIS folder, renamed to:
+    2256x1504.jpg
+(that matches the default set in /etc/skel appletsrc). Then delete this
+placeholder. You can add extra resolutions like 3840x2560.jpg too.
