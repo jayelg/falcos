@@ -1,0 +1,4 @@
+# Namespace-scoped so one entry covers both flavor images.
+docker:
+  ghcr.io/jayelg:
+    use-sigstore-attachments: true

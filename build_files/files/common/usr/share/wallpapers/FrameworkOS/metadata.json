@@ -1,0 +1,8 @@
+{
+    "KPackageStructure": "Wallpaper/Images",
+    "KPlugin": {
+        "Id": "FrameworkOS",
+        "Name": "Framework OS",
+        "License": "Framework Computer (personal use)"
+    }
+}

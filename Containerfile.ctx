@@ -1,0 +1,11 @@
+# Built and tagged as a standalone image (see .github/workflows/build.yml)
+# rather than declared as a stage inside Containerfile itself. Buildah only
+# appends a real content checksum to a RUN --mount=type=bind,from=X step's
+# cache key when X resolves as an external image reference — if X is a stage
+# name defined in the *same* Containerfile, buildah's classic builder skips
+# the checksum entirely (containers/buildah#6609), so a change anywhere under
+# build_files/ would silently fail to bust (or un-bust) any of the layers
+# that mount from it. Keeping this content in a separate, pre-built, tagged
+# image sidesteps that bug.
+FROM scratch
+COPY build_files /

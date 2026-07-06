@@ -1,0 +1,13 @@
+[Common]
+ShadowStrength=51
+
+[Style]
+DolphinSidebarOpacity=80
+DolphinViewOpacity=90
+
+[Windeco]
+DrawBackgroundGradient=true
+DrawBorderOnMaximizedWindows=true
+DrawTitleBarSeparator=true
+OtherCornerRadius=4
+TitleAlignment=AlignCenter

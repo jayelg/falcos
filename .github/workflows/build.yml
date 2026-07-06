@@ -1,0 +1,254 @@
+---
+name: Build container image
+on:
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '05 10 * * *'  # 10:05am UTC everyday — also picks up upstream fedora-bootc updates
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/README.md'
+  workflow_dispatch:
+
+env:
+  IMAGE_DESC: "Custom Fedora bootc KDE Plasma image"
+  IMAGE_KEYWORDS: "bootc,fedora,kde-plasma"
+  IMAGE_LOGO_URL: "https://avatars.githubusercontent.com/u/99842644?v=4"
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
+
+jobs:
+  # PR builds only need to prove the change still builds, not publish both
+  # flavors — the full matrix already runs on every push to main and on the
+  # daily schedule regardless, so skipping desktop here halves the
+  # Actions-minutes cost of every PR (Renovate's included) without losing
+  # real coverage. The `matrix` context isn't available in a job-level `if`,
+  # so this has to be a separate job computing the matrix array itself.
+  compute-matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      flavors: ${{ steps.set.outputs.flavors }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo 'flavors=["laptop"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'flavors=["desktop","laptop"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  build_push:
+    needs: compute-matrix
+    name: Build and push image (${{ matrix.flavor }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        flavor: ${{ fromJson(needs.compute-matrix.outputs.flavors) }}
+      fail-fast: false
+
+    concurrency:
+      # event_name included so a push doesn't cancel the daily schedule run
+      # (same ref) — that run exists specifically to refresh the cache.
+      group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref || github.run_id }}-${{ matrix.flavor }}
+      cancel-in-progress: true
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      # Separate image per flavor (falcos-laptop, falcos-desktop) rather than
+      # one image with flavor-named tags, so each flavor's tag history/pruning
+      # is independent and `bootc switch` targets are unambiguous.
+      - name: Prepare environment
+        run: |
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
+          echo "IMAGE_NAME=falcos-${{ matrix.flavor }}" >> ${GITHUB_ENV}
+
+      # These stage versions are pinned by https://github.com/renovatebot/renovate
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+
+      - name: Get current date
+        id: date
+        run: |
+          echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
+
+      - name: Image Metadata
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        id: metadata
+        with:
+          tags: |
+            type=raw,value=latest
+            type=raw,value={{date 'YYYYMMDD'}}
+            type=sha,enable=${{ github.event_name == 'pull_request' }}
+            type=ref,event=pr
+          labels: |
+            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+            org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.flavor }})
+            org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+            org.opencontainers.image.version={{date 'YYYYMMDD'}}
+            io.artifacthub.package.deprecated=false
+            io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}
+            io.artifacthub.package.license=Apache-2.0
+            io.artifacthub.package.logo-url=${{ env.IMAGE_LOGO_URL }}
+            io.artifacthub.package.prerelease=false
+            containers.bootc=1
+          sep-tags: " "
+          sep-annotations: " "
+
+      # Optional Secure Boot signing key; only written on pushes to the
+      # default branch, same gate as the cosign steps below.
+      - name: Write MOK signing key
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          umask 077
+          printf '%s' "$MOK_PRIVATE_KEY" > "${RUNNER_TEMP}/mok_privkey.pem"
+        env:
+          MOK_PRIVATE_KEY: ${{ secrets.MOK_PRIVATE_KEY }}
+
+      # Tagged as a standalone image, not a stage inside Containerfile — see
+      # Containerfile.ctx for why (containers/buildah#6609: buildah's classic
+      # builder never appends a content checksum to a RUN --mount=...,from=X
+      # step's cache key when X is a same-Containerfile stage name, so every
+      # layer mounting from it would be permanently cache-missing regardless
+      # of the registry cache below). Building it here, ahead of time and by
+      # tag, is what makes that checksum actually get computed.
+      - name: Build context image
+        run: |
+          buildah build --layers=true -t localhost/falcos-ctx -f Containerfile.ctx .
+
+      # Registry-based layer cache, so a version bump in common/frequent
+      # doesn't force a rebuild of the (expensive) common/core layer — but
+      # gated by event, since aggressive caching would also mask upstream
+      # drift in the many unpinned packages in both layers:
+      #   - schedule: write-only. This run's whole purpose is catching
+      #     upstream drift, so it never reads the cache, only refreshes it
+      #     for the reads below.
+      #   - push/workflow_dispatch (on the default branch): read + write.
+      #     Needs login (below) since --cache-to pushes during the build,
+      #     not in the later Push step.
+      #   - pull_request: read-only. No registry login is ever granted to
+      #     PR builds, so this relies on the cache image being pullable
+      #     anonymously (public package visibility on ghcr.io).
+      #
+      # ARG FLAVOR moved down in the Containerfile to right before the one
+      # step that needs it (see Containerfile) — per containers/buildah#4536,
+      # every layer *after* an ARG loses registry cache import in CI
+      # environments with non-persistent local storage (every GitHub Actions
+      # runner). With ARG that low, only the flavor-specific layer is
+      # affected; phase-setup/phase-core/phase-frequent above it aren't.
+      - name: Determine build cache args
+        id: cache-args
+        run: |
+          # Buildah's --cache-to/--cache-from (unlike Docker/BuildKit) reject
+          # a tag or digest on the reference — it manages its own tagging
+          # inside the given repository. One shared repo (not per-flavor):
+          # phase-setup/phase-core are flavor-agnostic (see phase-setup.sh),
+          # so both flavor builds' matrix jobs need to read/write the *same*
+          # cache repo for that shared prefix to ever actually get reused
+          # instead of each flavor silently keeping its own redundant copy.
+          cache_ref="${{ env.IMAGE_REGISTRY }}/falcos-cache"
+          {
+            echo 'args<<EOF'
+            echo "--layers=true"
+            if [ "${{ github.event_name }}" != "schedule" ]; then
+              echo "--cache-from=${cache_ref}"
+            fi
+            if [ "${{ github.event_name }}" = "schedule" ] || { [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; }; then
+              echo "--cache-to=${cache_ref}"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Image
+        id: build_image
+        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
+        with:
+          containerfiles: |
+            ./Containerfile
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          build-args: |
+            FLAVOR=${{ matrix.flavor }}
+          oci: false
+          extra-args: |
+            ${{ steps.cache-args.outputs.args }}
+            ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+                && format('--secret=id=mok_privkey,src={0}/mok_privkey.pem', runner.temp) || '' }}
+
+      # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
+      # This does not make your image faster to download, just provides better resumability and fixes a few errors.
+      # Documentation for Rechunk is provided on their github repository at https://github.com/hhd-dev/rechunk
+      # You can enable it by uncommenting the following lines:
+      # - name: Run Rechunker
+      #   id: rechunk
+      #   uses: ublue-os/legacy-rechunk@a925083d9af7cb04b3e2a6e8c01bfa495f38b710 # v1.0.0
+      #   with:
+      #     rechunk: 'ghcr.io/ublue-os/legacy-rechunk:v1.0.0-x86_64'
+      #     ref: "localhost/${{ env.IMAGE_NAME }}:latest"
+      #     prev-ref: "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+      #     skip_compression: true
+      #     labels: ${{ steps.metadata.outputs.labels }}
+
+      - name: Push To GHCR
+        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: push
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ github.token }}
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          image: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          cosign-release: 'v2.6.3'
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          # Sign by digest, not tag — covers every tag on this manifest and
+          # avoids a race with a mutable tag moving mid-build.
+          IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY \
+            "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+
+      # Pruning removed: actions/delete-package-versions's ignore-versions
+      # regex was unreliable for a package shared between two flavors plus
+      # cosign .sig tags (upstream: actions/delete-package-versions#120),
+      # and it deleted every "desktop" tag outright on its first run here,
+      # breaking bootc upgrade for anyone on that flavor. Now that each
+      # flavor is its own package (falcos-laptop / falcos-desktop), that
+      # specific failure mode is moot, but pruning still needs a look before
+      # re-enabling since cosign .sig tags remain mixed in with real ones.
