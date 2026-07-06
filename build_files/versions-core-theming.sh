@@ -18,4 +18,4 @@ ANT_COMMIT="79ddc06b40ad1e96c87d9270c71d7db3bfa0c3cd"
 
 # Advanced Weather Widget
 # renovate: datasource=github-releases depName=pnedyalkov91/advanced-weather-widget
-AWW_VERSION="1.6.2"
+AWW_VERSION="1.6.3"
