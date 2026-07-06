@@ -3,7 +3,7 @@
 # declared as a stage here — see Containerfile.ctx for why.
 
 # Base Image
-FROM quay.io/fedora/fedora-bootc:44
+FROM quay.io/fedora/fedora-bootc:44@sha256:418068a16be639037e8584ffc92d3919ea246e1234705b5d3bb21f91b12fd751
 
 ### [IM]MUTABLE /opt
 ## Uncomment the following line if one desires to make /opt immutable and be able to be used
