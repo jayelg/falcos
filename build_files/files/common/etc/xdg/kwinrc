@@ -1,0 +1,12 @@
+[org.kde.kdecoration2]
+library=org.kde.darkly
+theme=Darkly
+
+[Plugins]
+hidecursorEnabled=true
+translucencyEnabled=true
+
+[Effect-blur]
+BlurStrength=12
+NoiseStrength=2
+Saturation=226

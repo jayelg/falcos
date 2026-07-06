@@ -1,0 +1,13 @@
+#!/bin/bash
+# See: https://forge.fedoraproject.org/kde/tickets/issues/684
+set -euo pipefail
+
+if [[ $(grep -c "plasmalogin" "/etc/shadow") -eq 0 ]]; then
+    echo "plasmalogin:!*:::::::" >> "/etc/shadow"
+fi
+
+if [[ $(grep -c "plasmalogin" "/etc/gshadow") -eq 0 ]]; then
+    echo "plasmalogin:!*::" >> "/etc/gshadow"
+fi
+
+touch /etc/.plasmalogin-shadow-workaround

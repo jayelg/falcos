@@ -1,0 +1,1 @@
+alias ujust='just -g'
