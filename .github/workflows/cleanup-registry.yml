@@ -1,0 +1,86 @@
+---
+name: Clean up registry
+
+on:
+  schedule:
+    - cron: '05 12 * * *'  # ~2h after the image build so its pushes are settled
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Log deletions without performing them"
+        type: boolean
+        default: false
+
+env:
+  KEEP: "3"  # tagged builds retained per image flavor
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+
+    # Custom script instead of actions/delete-package-versions: that action
+    # cannot tie a cosign sha256-<digest>.sig tag back to the image it signs,
+    # so it previously deleted signatures of tags that were still live
+    # (actions/delete-package-versions#120). Here signatures are kept or
+    # dropped by matching their digest against the kept images.
+    steps:
+      - name: Prune old package versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          DRY_RUN: ${{ inputs.dry-run || 'false' }}
+        run: |
+          set -euo pipefail
+          api="users/${OWNER}/packages/container"
+
+          delete_version() { # pkg id note
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "dry run: would delete ${1} version ${2} (${3})"
+            else
+              gh api --method DELETE "${api}/${1}/versions/${2}" >/dev/null
+              echo "deleted ${1} version ${2} (${3})"
+            fi
+          }
+
+          # Image packages (keep in sync with build.yml's IMAGE_NAME): keep
+          # the newest KEEP tagged builds plus whatever holds `latest`, the
+          # cosign signature belonging to each kept digest, and nothing else.
+          for pkg in falcos-desktop falcos-laptop; do
+            echo "== ${pkg}"
+            deletions="$(gh api "${api}/${pkg}/versions?per_page=100" --paginate | jq -s 'add' | jq -r --argjson keep "${KEEP}" '
+              def is_sig: test("^sha256-[0-9a-f]{64}\\.(sig|att)$");
+              map({id, name, created_at, tags: .metadata.container.tags})
+              | map(. + {kind: (if (.tags | length) == 0 then "untagged"
+                                elif (.tags | all(is_sig)) then "sig"
+                                else "image" end)})
+              | (map(select(.kind == "image")) | sort_by(.created_at) | reverse) as $images
+              | (($images[:$keep] + ($images | map(select(.tags | index("latest"))))) | unique_by(.id)) as $keepimg
+              | ($keepimg | map(.id)) as $keepids
+              | ($keepimg | map((.name | sub(":"; "-")) + ".sig")) as $keepsigs
+              | map(select(
+                  (.kind == "untagged")
+                  or (.kind == "image" and ((.id as $i | $keepids | index($i)) == null))
+                  or (.kind == "sig" and ((.tags | map(select(. as $t | $keepsigs | index($t) != null)) | length) == 0))
+                ))
+              | .[] | [.id, .kind, (.tags | join(","))] | @tsv')"
+            [ -n "${deletions}" ] || { echo "nothing to delete"; continue; }
+            while IFS=$'\t' read -r id kind tags; do
+              delete_version "${pkg}" "${id}" "${kind}${tags:+, tags: ${tags}}"
+            done <<<"${deletions}"
+          done
+
+          # Cache package: BuildKit overwrites one tag per flavor, so only
+          # the currently tagged manifests are live; anything else (untagged
+          # leftovers, content-keyed hex tags from the buildah era) is dead.
+          pkg="falcos-cache"
+          echo "== ${pkg}"
+          deletions="$(gh api "${api}/${pkg}/versions?per_page=100" --paginate | jq -s 'add' | jq -r '
+            map(select((.metadata.container.tags | map(select(. == "desktop" or . == "laptop")) | length) == 0))
+            | .[] | [.id, (.metadata.container.tags | join(","))] | @tsv')"
+          [ -n "${deletions}" ] || echo "nothing to delete"
+          while IFS=$'\t' read -r id tags; do
+            [ -n "${id}" ] || continue
+            delete_version "${pkg}" "${id}" "stale cache${tags:+, tags: ${tags}}"
+          done <<<"${deletions}"
