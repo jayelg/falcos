@@ -90,10 +90,10 @@ build $target_image=image_name $tag=default_tag $flavor="laptop":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Containerfile mounts build_files/ from localhost/falcos-ctx (see
-    # Containerfile.ctx) — build it fresh first or mounts resolve to a
-    # stale or missing image.
-    podman build --layers -t localhost/falcos-ctx -f Containerfile.ctx .
+    # Containerfile mounts build_files/ from its `ctx` stage. Local buildah
+    # keys the RUN cache on the whole stage, so any build_files/ change
+    # rebuilds every layer here — correct, just coarser than CI's BuildKit,
+    # which scopes invalidation to the layers that mount the changed file.
 
     # Optional Secure Boot signing key; see `just generate-mok-key`.
     SECRET_ARGS=()
