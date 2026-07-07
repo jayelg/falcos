@@ -16,7 +16,7 @@ The containerfile defines the build:
 
 Everything that runs at build time, the phase scripts, the package install scripts and the static directories and files copied into the image.
 
-### [Github Actions](.github)
+### [Github Actions](.github/workflows)
 
 CI workflows that build, sign and publish the images, plus a Renovate automation for dependency updates.
 
@@ -26,8 +26,11 @@ The justfile contains scripts for building and testing outside of CI
 
 ## Features
 Base image: Fedora-Bootc
+
 Kernel: CachyOS-Kernel
+
 Desktop Environment: KDE-Plasma-Desktop
+
 Package managers: Flatpak, Homebrew
 
 ## Build Flavours
