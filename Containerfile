@@ -3,7 +3,7 @@ FROM scratch AS ctx
 COPY build_files /
 
 # Base Image
-FROM quay.io/fedora/fedora-bootc:44
+FROM quay.io/fedora/fedora-bootc:45@sha256:c40ff95a8294ab4586ac6c343226625db0e2c9fbcd40e7990dd9ebbfc9f7efdc
 
 ### [IM]MUTABLE /opt
 ## Uncomment the following line if one desires to make /opt immutable and be able to be used
