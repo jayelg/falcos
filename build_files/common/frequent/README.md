@@ -6,10 +6,8 @@ Faster moving software shared by both flavors. Each script is sourced by phase-f
 
 ### [VPN](010-vpn.sh)
 
-### [Network Audio](020-network-audio.sh)
+### [Custom Apps](020-custom-apps.sh)
 
 ### [Browser](030-browser.sh)
 
 ## Notes / Todo
-
-- Rename Network Audio to custom-apps.sh
