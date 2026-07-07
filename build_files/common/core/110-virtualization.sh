@@ -21,3 +21,13 @@ VIRT_PACKAGES=(
     virt-viewer
 )
 dnf5 install -y "${VIRT_PACKAGES[@]}"
+
+### virt-manager hardened_malloc exemptiion
+if [ -f /usr/bin/virt-manager ] && [ ! -f /usr/bin/virt-manager.bin ]; then
+    mv /usr/bin/virt-manager /usr/bin/virt-manager.bin
+    cat > /usr/bin/virt-manager <<'EOF'
+#!/bin/bash
+exec env -u LD_PRELOAD /usr/bin/virt-manager.bin "$@"
+EOF
+    chmod 755 /usr/bin/virt-manager
+fi
