@@ -53,11 +53,6 @@ fi
 # common/core/120-security.sh
 systemctl enable pcscd.socket
 
-# common/core/130-hardening.sh — unbound+dnsconfd replace systemd-resolved.
-systemctl mask systemd-resolved.service
-systemctl enable unbound.service
-systemctl enable dnsconfd.service
-
 # common/core/160-greenboot.sh — NOT enabled for now. GRUB's boot_counter
 # fallback (meant to be folded into grub.cfg via bootupd) isn't confirmed
 # wired up on real hardware; without it, a red boot retries forever instead
