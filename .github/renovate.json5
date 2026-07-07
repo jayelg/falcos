@@ -6,27 +6,25 @@
 
   "rebaseWhen": "never",
 
+  // One grouped PR per day, created early UTC so the PR build and automerge
+  // finish before the 10:05 UTC scheduled image build, which then picks up
+  // the merged bumps together with any upstream drift. Merges by
+  // renovate[bot] are excluded from the push build in build.yml for the
+  // same reason.
+  "timezone": "Etc/UTC",
+  "schedule": ["before 6am"],
+
   "packageRules": [
     {
+      "matchPackageNames": ["*"],
+      "groupName": "scheduled updates",
       "automerge": true,
-      "matchUpdateTypes": ["pin", "pinDigest"]
     },
     {
       "enabled": false,
       "matchUpdateTypes": ["digest", "pinDigest", "pin"],
       "matchDepTypes": ["container"],
       "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"],
-    },
-    // Each PR triggers a full CI build (Renovate's PRs included) — grouping
-    // means N dependency bumps become 1-2 PRs/builds instead of N, without
-    // losing any validation.
-    {
-      "matchManagers": ["regex"],
-      "groupName": "pinned app versions",
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "groupName": "GitHub Actions",
     },
   ],
 

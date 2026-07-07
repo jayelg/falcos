@@ -23,7 +23,12 @@ jobs:
   # PR builds only prove the change still builds, one flavor is enough.
   # A separate job because the matrix context isn't available in a
   # job-level if.
+  #
+  # Renovate automerges are already validated by their PR build and are
+  # skipped here; the daily scheduled build picks them up together with
+  # upstream drift (see .github/renovate.json5).
   compute-matrix:
+    if: github.event_name != 'push' || github.actor != 'renovate[bot]'
     runs-on: ubuntu-24.04
     outputs:
       flavors: ${{ steps.set.outputs.flavors }}
