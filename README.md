@@ -26,8 +26,11 @@ The justfile contains scripts for building and testing outside of CI
 
 ## Features
 Base image: Fedora-Bootc
+
 Kernel: CachyOS-Kernel
+
 Desktop Environment: KDE-Plasma-Desktop
+
 Package managers: Flatpak, Homebrew
 
 ## Build Flavours
