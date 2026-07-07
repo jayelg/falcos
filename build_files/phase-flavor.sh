@@ -1,9 +1,6 @@
 #!/bin/bash
-# Final frequent-phase group: flavor-specific files + the flavor script
-# (desktop.sh/laptop.sh). Kept separate from phase-frequent.sh's grouped
-# common scripts since this group is inherently flavor-divergent — bundling
-# it in would force a per-flavor cache miss on groups that don't actually
-# need to differ between desktop and laptop.
+# Copies the flavor file overlay and runs the flavor script
+# (desktop.sh/laptop.sh).
 
 set -ouex pipefail
 

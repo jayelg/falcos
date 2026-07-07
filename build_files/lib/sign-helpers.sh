@@ -1,7 +1,6 @@
 #!/bin/bash
 # Secure Boot (MOK) signing helpers, sourced by scripts that build a kernel
-# or DKMS module. Not matched by the phase scripts' common/*.sh glob, so
-# never auto-run. Signing is optional: without a build secret, callers skip it.
+# or DKMS module. Signing is optional: without a build secret, callers skip it.
 
 MOK_KEY="/run/secrets/mok_privkey"
 MOK_CERT_DER="/usr/share/falcos/sb_cert.der"
@@ -10,10 +9,9 @@ mok_signing_available() {
     [ -s "$MOK_KEY" ] && [ -f "$MOK_CERT_DER" ]
 }
 
-# DKMS otherwise self-generates and bakes a throwaway signing key into the
-# image (/var/lib/dkms/mok.key). Points it at this repo's key instead; in
-# the no-key case both paths are unwritable, so its fallback fails cleanly
-# rather than overwriting the committed cert.
+# Point DKMS at this repo's key instead of the throwaway one it would
+# otherwise generate and bake into the image. With no key present both
+# paths are unwritable, so DKMS fails cleanly.
 configure_dkms_signing() {
     if mok_signing_available; then
         export mok_signing_key="$MOK_KEY"

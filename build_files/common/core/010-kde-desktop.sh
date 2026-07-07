@@ -1,10 +1,9 @@
 ### KDE Plasma Desktop
 dnf5 group install -y kde-desktop
 
-# The bare kde-desktop group doesn't pull networkmanager-submodules (only the
-# full kde-desktop-environment does) — without it, wpa_supplicant and
-# NetworkManager-wifi are both missing, so WiFi doesn't work at all. Also
-# covers dnsmasq (libvirt's default NAT network needs it too).
+# Not pulled in by the bare kde-desktop group; without it WiFi doesn't work
+# at all (no wpa_supplicant or NetworkManager-wifi). Also provides dnsmasq
+# for libvirt's default NAT network.
 dnf5 group install -y networkmanager-submodules
 
 # Trim defaults not worth keeping
@@ -27,13 +26,9 @@ dnf5 remove -y --noautoremove \
     NetworkManager-cloud-setup NetworkManager-tui \
     plasma-nm-l2tp plasma-nm-openswan plasma-nm-pptp
 
-# Browser itself lives in common/frequent/030-browser.sh — it updates far
-# too often, unpinned, to sit in this (cached) layer. Generic KDE browser
-# integration stays here since it's not tied to any specific browser.
 dnf5 install -y plasma-browser-integration
 
-# Plain spinner theme, no OEM firmware-logo background. Watermark blanked
-# via the files/common override.
+# Plain spinner boot theme, watermark blanked via the files/common override
 dnf5 install -y plymouth plymouth-theme-spinner
 plymouth-set-default-theme spinner
 

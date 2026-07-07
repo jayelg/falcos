@@ -19,17 +19,13 @@ MULTIMEDIA_PACKAGES=(
     ffmpeg
     ffmpeg-libs
     libva-utils
-    pipewire-config-raop      # AirPlay/RAOP network audio support, see below
+    pipewire-config-raop      # AirPlay/RAOP network audio support
     pipewire-gstreamer        # lets GStreamer apps route audio through PipeWire
     pipewire-libs-extra       # extra codec/format plugins (e.g. AAC, LDAC)
     pipewire-utils
 )
 dnf5 install -y "${MULTIMEDIA_PACKAGES[@]}"
 
-# plasma-network-audio (own project, actively developed — see
-# common/frequent/020-network-audio.sh) is installed in the frequent layer.
-# disable raop-discover auto-sink creation
-# Removes the symlink that enables libpipewire-module-raop-discover, which
-# auto-creates audio sinks for any AirPlay/RAOP device on the network.
-# libpipewire-module-raop-sink remains available for explicit connections.
+# Disable raop-discover auto-sink creation for every AirPlay device on the
+# network; raop-sink remains available for explicit connections.
 rm -f /usr/share/pipewire/pipewire.conf.d/50-raop.conf

@@ -20,12 +20,9 @@ env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 jobs:
-  # PR builds only need to prove the change still builds, not publish both
-  # flavors — the full matrix already runs on every push to main and on the
-  # daily schedule regardless, so skipping desktop here halves the
-  # Actions-minutes cost of every PR (Renovate's included) without losing
-  # real coverage. The `matrix` context isn't available in a job-level `if`,
-  # so this has to be a separate job computing the matrix array itself.
+  # PR builds only prove the change still builds, one flavor is enough.
+  # A separate job because the matrix context isn't available in a
+  # job-level if.
   compute-matrix:
     runs-on: ubuntu-24.04
     outputs:
@@ -61,9 +58,8 @@ jobs:
       id-token: write
 
     steps:
-      # Separate image per flavor (falcos-laptop, falcos-desktop) rather than
-      # one image with flavor-named tags, so each flavor's tag history/pruning
-      # is independent and `bootc switch` targets are unambiguous.
+      # Separate image per flavor so tag history is independent and
+      # bootc switch targets are unambiguous
       - name: Prepare environment
         run: |
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
@@ -118,32 +114,20 @@ jobs:
         env:
           MOK_PRIVATE_KEY: ${{ secrets.MOK_PRIVATE_KEY }}
 
-      # BuildKit (not buildah): its cache keys content-address each RUN
-      # --mount by the mounted path itself, which is what the Containerfile's
-      # narrow per-group mounts assume. Buildah keyed the cache on the whole
-      # build_files context image, so any build_files change busted every
-      # layer and the registry cache never produced a single hit.
+      # BuildKit content-addresses each RUN --mount by the mounted path,
+      # which the Containerfile's narrow per-group mounts rely on for
+      # caching. Buildah keys on the whole ctx stage and never cache-hits.
       - name: Setup Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      # Registry-based layer cache, so a version bump in common/frequent
-      # doesn't force a rebuild of the (expensive) common/core layer — but
-      # gated by event, since aggressive caching would also mask upstream
-      # drift in the many unpinned packages in both layers:
-      #   - schedule: write-only. This run's whole purpose is catching
-      #     upstream drift, so it never reads the cache, only refreshes it
-      #     for the reads below.
-      #   - push/workflow_dispatch (on the default branch): read + write.
-      #     Needs login (below) since cache-to pushes during the build.
-      #   - pull_request: read-only. No registry login is ever granted to
-      #     PR builds, so this relies on the cache image being pullable
-      #     anonymously (public package visibility on ghcr.io).
-      #
-      # Per-flavor cache tags: a buildx cache export is one manifest per ref,
-      # so both matrix jobs writing a single shared tag would clobber each
-      # other. Each flavor writes its own tag but reads both — the sibling's
-      # cache still serves the flavor-agnostic prefix (phase-setup/core/
-      # frequent). mode=max exports every layer, not just the final image's.
+      # Registry layer cache, gated by event so caching doesn't mask
+      # upstream drift in unpinned packages:
+      #   schedule: write-only, exists to catch drift and refresh the cache
+      #   push/workflow_dispatch on main: read and write
+      #   pull_request: read-only, anonymous (public package)
+      # Per-flavor cache tags since a buildx cache export is one manifest
+      # per ref and the matrix jobs would clobber a shared tag. Each flavor
+      # reads both tags, the sibling still serves the flavor-agnostic prefix.
       - name: Determine build cache args
         id: cache-args
         run: |
@@ -171,11 +155,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Builds and (on the default branch) pushes in one step — BuildKit
-      # pushes at export time, so there is no separate push step to keep in
-      # sync. provenance: false keeps the output a single image manifest
-      # rather than an attestation-bearing index, so the pushed digest stays
-      # the same shape bootc switch/upgrade and cosign sign against today.
+      # Builds and (on main) pushes in one step. provenance: false keeps
+      # the output a single image manifest rather than an attestation index,
+      # the shape bootc and cosign expect.
       - name: Build Image
         id: build_image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -203,8 +185,7 @@ jobs:
       - name: Sign container image
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
-          # Sign by digest, not tag — covers every tag on this manifest and
-          # avoids a race with a mutable tag moving mid-build.
+          # Sign by digest, covers every tag and avoids racing a moving tag
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
           cosign sign -y --key env://COSIGN_PRIVATE_KEY \
             "${IMAGE_FULL}@${{ steps.build_image.outputs.digest }}"
@@ -212,11 +193,6 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
-      # Pruning removed: actions/delete-package-versions's ignore-versions
-      # regex was unreliable for a package shared between two flavors plus
-      # cosign .sig tags (upstream: actions/delete-package-versions#120),
-      # and it deleted every "desktop" tag outright on its first run here,
-      # breaking bootc upgrade for anyone on that flavor. Now that each
-      # flavor is its own package (falcos-laptop / falcos-desktop), that
-      # specific failure mode is moot, but pruning still needs a look before
-      # re-enabling since cosign .sig tags remain mixed in with real ones.
+      # No tag pruning for now: actions/delete-package-versions previously
+      # deleted live tags (its regex can't safely skip cosign .sig tags,
+      # see actions/delete-package-versions#120). Needs care to re-add.
