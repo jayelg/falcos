@@ -11,6 +11,7 @@ on:
       - main
     paths-ignore:
       - '**/README.md'
+      - '.github/workflows/cleanup-registry.yml'
   workflow_dispatch:
 
 env:
@@ -198,6 +199,5 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
-      # No tag pruning for now: actions/delete-package-versions previously
-      # deleted live tags (its regex can't safely skip cosign .sig tags,
-      # see actions/delete-package-versions#120). Needs care to re-add.
+      # Old versions are pruned daily by cleanup-registry.yml, which keeps
+      # the newest tagged builds and their cosign signatures.
