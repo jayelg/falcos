@@ -85,6 +85,7 @@ jobs:
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         id: metadata
         with:
+          images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
             type=raw,value={{date 'YYYYMMDD'}}
@@ -106,8 +107,6 @@ jobs:
             io.artifacthub.package.logo-url=${{ env.IMAGE_LOGO_URL }}
             io.artifacthub.package.prerelease=false
             containers.bootc=1
-          sep-tags: " "
-          sep-annotations: " "
 
       # Optional Secure Boot signing key; only written on pushes to the
       # default branch, same gate as the cosign steps below.
@@ -119,16 +118,13 @@ jobs:
         env:
           MOK_PRIVATE_KEY: ${{ secrets.MOK_PRIVATE_KEY }}
 
-      # Tagged as a standalone image, not a stage inside Containerfile — see
-      # Containerfile.ctx for why (containers/buildah#6609: buildah's classic
-      # builder never appends a content checksum to a RUN --mount=...,from=X
-      # step's cache key when X is a same-Containerfile stage name, so every
-      # layer mounting from it would be permanently cache-missing regardless
-      # of the registry cache below). Building it here, ahead of time and by
-      # tag, is what makes that checksum actually get computed.
-      - name: Build context image
-        run: |
-          buildah build --layers=true -t localhost/falcos-ctx -f Containerfile.ctx .
+      # BuildKit (not buildah): its cache keys content-address each RUN
+      # --mount by the mounted path itself, which is what the Containerfile's
+      # narrow per-group mounts assume. Buildah keyed the cache on the whole
+      # build_files context image, so any build_files change busted every
+      # layer and the registry cache never produced a single hit.
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       # Registry-based layer cache, so a version bump in common/frequent
       # doesn't force a rebuild of the (expensive) common/core layer — but
@@ -138,37 +134,31 @@ jobs:
       #     upstream drift, so it never reads the cache, only refreshes it
       #     for the reads below.
       #   - push/workflow_dispatch (on the default branch): read + write.
-      #     Needs login (below) since --cache-to pushes during the build,
-      #     not in the later Push step.
+      #     Needs login (below) since cache-to pushes during the build.
       #   - pull_request: read-only. No registry login is ever granted to
       #     PR builds, so this relies on the cache image being pullable
       #     anonymously (public package visibility on ghcr.io).
       #
-      # ARG FLAVOR moved down in the Containerfile to right before the one
-      # step that needs it (see Containerfile) — per containers/buildah#4536,
-      # every layer *after* an ARG loses registry cache import in CI
-      # environments with non-persistent local storage (every GitHub Actions
-      # runner). With ARG that low, only the flavor-specific layer is
-      # affected; phase-setup/phase-core/phase-frequent above it aren't.
+      # Per-flavor cache tags: a buildx cache export is one manifest per ref,
+      # so both matrix jobs writing a single shared tag would clobber each
+      # other. Each flavor writes its own tag but reads both — the sibling's
+      # cache still serves the flavor-agnostic prefix (phase-setup/core/
+      # frequent). mode=max exports every layer, not just the final image's.
       - name: Determine build cache args
         id: cache-args
         run: |
-          # Buildah's --cache-to/--cache-from (unlike Docker/BuildKit) reject
-          # a tag or digest on the reference — it manages its own tagging
-          # inside the given repository. One shared repo (not per-flavor):
-          # phase-setup/phase-core are flavor-agnostic (see phase-setup.sh),
-          # so both flavor builds' matrix jobs need to read/write the *same*
-          # cache repo for that shared prefix to ever actually get reused
-          # instead of each flavor silently keeping its own redundant copy.
-          cache_ref="${{ env.IMAGE_REGISTRY }}/falcos-cache"
+          cache_repo="${{ env.IMAGE_REGISTRY }}/falcos-cache"
+          sibling="$([ "${{ matrix.flavor }}" = "laptop" ] && echo desktop || echo laptop)"
           {
-            echo 'args<<EOF'
-            echo "--layers=true"
+            echo 'cache-from<<EOF'
             if [ "${{ github.event_name }}" != "schedule" ]; then
-              echo "--cache-from=${cache_ref}"
+              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }}"
+              echo "type=registry,ref=${cache_repo}:${sibling}"
             fi
+            echo 'EOF'
+            echo 'cache-to<<EOF'
             if [ "${{ github.event_name }}" = "schedule" ] || { [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; }; then
-              echo "--cache-to=${cache_ref}"
+              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }},mode=max"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
@@ -181,50 +171,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Builds and (on the default branch) pushes in one step — BuildKit
+      # pushes at export time, so there is no separate push step to keep in
+      # sync. provenance: false keeps the output a single image manifest
+      # rather than an attestation-bearing index, so the pushed digest stays
+      # the same shape bootc switch/upgrade and cosign sign against today.
       - name: Build Image
         id: build_image
-        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
-          containerfiles: |
-            ./Containerfile
-          image: ${{ env.IMAGE_NAME }}
+          context: .
+          file: ./Containerfile
+          push: ${{ github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             FLAVOR=${{ matrix.flavor }}
-          oci: false
-          extra-args: |
-            ${{ steps.cache-args.outputs.args }}
+          provenance: false
+          cache-from: ${{ steps.cache-args.outputs.cache-from }}
+          cache-to: ${{ steps.cache-args.outputs.cache-to }}
+          secret-files: |
             ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-                && format('--secret=id=mok_privkey,src={0}/mok_privkey.pem', runner.temp) || '' }}
-
-      # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
-      # This does not make your image faster to download, just provides better resumability and fixes a few errors.
-      # Documentation for Rechunk is provided on their github repository at https://github.com/hhd-dev/rechunk
-      # You can enable it by uncommenting the following lines:
-      # - name: Run Rechunker
-      #   id: rechunk
-      #   uses: ublue-os/legacy-rechunk@a925083d9af7cb04b3e2a6e8c01bfa495f38b710 # v1.0.0
-      #   with:
-      #     rechunk: 'ghcr.io/ublue-os/legacy-rechunk:v1.0.0-x86_64'
-      #     ref: "localhost/${{ env.IMAGE_NAME }}:latest"
-      #     prev-ref: "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-      #     skip_compression: true
-      #     labels: ${{ steps.metadata.outputs.labels }}
-
-      - name: Push To GHCR
-        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        id: push
-        env:
-          REGISTRY_USER: ${{ github.actor }}
-          REGISTRY_PASSWORD: ${{ github.token }}
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          username: ${{ env.REGISTRY_USER }}
-          password: ${{ env.REGISTRY_PASSWORD }}
+                && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -239,7 +207,7 @@ jobs:
           # avoids a race with a mutable tag moving mid-build.
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
           cosign sign -y --key env://COSIGN_PRIVATE_KEY \
-            "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
+            "${IMAGE_FULL}@${{ steps.build_image.outputs.digest }}"
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
