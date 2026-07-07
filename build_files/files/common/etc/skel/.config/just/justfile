@@ -150,20 +150,33 @@ hardened-malloc-exempt app:
     app="{{ app }}"
 
     fixed=0
+    sysdesk="/usr/share/applications/${app}.desktop"
+    userdesk="$HOME/.local/share/applications/${app}.desktop"
 
-    # Menu/launcher path: override the desktop entry with one that drops LD_PRELOAD.
-    src="/usr/share/applications/${app}.desktop"
-    if [[ -f "$src" ]]; then
-        dest="$HOME/.local/share/applications/${app}.desktop"
+    # Menu/launcher path: for system apps, shadow the entry with an override
+    # that drops LD_PRELOAD. For user-level entries (e.g. AppImages added via
+    # Gear Lever) there is no system entry to shadow, so patch in place.
+    if [[ -f "$sysdesk" ]]; then
         mkdir -p "$HOME/.local/share/applications"
-        sed 's/^Exec=/Exec=env -u LD_PRELOAD /' "$src" > "$dest"
-        echo "==> Wrote launcher override: $dest"
-        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
-        command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 2>/dev/null || true
+        sed 's/^Exec=/Exec=env -u LD_PRELOAD /' "$sysdesk" > "$userdesk"
+        echo "==> Wrote launcher override: $userdesk"
+        fixed=1
+    elif [[ -f "$userdesk" ]]; then
+        if grep -q '^Exec=env -u LD_PRELOAD ' "$userdesk"; then
+            echo "==> Already exempted: $userdesk"
+        else
+            sed -i 's/^Exec=/Exec=env -u LD_PRELOAD /' "$userdesk"
+            echo "==> Patched launcher in place: $userdesk"
+            echo "    App updates may rewrite this file (e.g. Gear Lever) — re-run after updating."
+        fi
         fixed=1
     else
         echo "No desktop entry ${app}.desktop — candidates:"
-        ls /usr/share/applications | grep -i -- "$app" || echo "  (none)"
+        { ls /usr/share/applications; ls "$HOME/.local/share/applications" 2>/dev/null; } | grep -i -- "$app" | sort -u || echo "  (none)"
+    fi
+    if [[ "$fixed" == 1 ]]; then
+        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+        command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 2>/dev/null || true
     fi
 
     # Terminal path: shim in ~/.local/bin, which precedes /usr/bin in PATH.
@@ -192,8 +205,15 @@ hardened-malloc-unexempt app:
     removed=0
     dest="$HOME/.local/share/applications/${app}.desktop"
     if [[ -f "$dest" ]] && grep -q 'env -u LD_PRELOAD' "$dest"; then
-        rm "$dest"
-        echo "==> Removed launcher override: $dest"
+        if [[ -f "/usr/share/applications/${app}.desktop" ]]; then
+            # Override copy of a system entry — remove the shadow.
+            rm "$dest"
+            echo "==> Removed launcher override: $dest"
+        else
+            # In-place patched user entry (e.g. AppImage) — restore it.
+            sed -i 's/^Exec=env -u LD_PRELOAD /Exec=/' "$dest"
+            echo "==> Restored launcher: $dest"
+        fi
         update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
         command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 2>/dev/null || true
         removed=1
