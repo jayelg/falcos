@@ -5,6 +5,7 @@ CLI_PACKAGES=(
     bc                     # POSIX calculator, used by some shell scripts
     bsdunzip               # BSD unzip, handles some archives GNU unzip chokes on
     btop
+    chezmoi                # dotfiles manager
     eza
     fastfetch              # neofetch-style system info banner
     fd-find                # faster find alternative (binary is `fd`)

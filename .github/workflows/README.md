@@ -11,5 +11,3 @@ Builds both flavor images (falcos-desktop and falcos-laptop), then pushes and co
 Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config).
 
 ## Notes / Todo
-
-- Remove option to upload to S3?

@@ -19,7 +19,49 @@ FIRMWARE_PACKAGES=(
 )
 dnf5 install -y "${FIRMWARE_PACKAGES[@]}"
 
+### xone Xbox Wireless Adapter driver
+# Built via DKMS, the akmods wrapper assumes a running kernel and doesn't
+# work mid container build.
+dnf5 -y copr enable bieszczaders/kernel-cachyos
+dnf5 -y install --enablerepo="copr:copr.fedorainfracloud.org:bieszczaders:kernel-cachyos" \
+    dkms gcc make git kernel-cachyos-devel-matched sbsigntools openssl cabextract
+
+XONE_VERSION="0.0.0+${XONE_COMMIT:0:12}"
+
+git clone --quiet https://github.com/medusalix/xone.git /tmp/xone
+git -C /tmp/xone checkout --quiet "$XONE_COMMIT"
+
+sed -i "s/#VERSION#/${XONE_VERSION}/g" /tmp/xone/dkms.conf
+
+KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-cachyos-core)"
+
+source /ctx/lib/sign-helpers.sh
+configure_dkms_signing
+if ! mok_signing_available; then
+    echo "No MOK key supplied, xone modules are unsigned."
+fi
+
+rm -rf "/usr/src/xone-${XONE_VERSION}"
+cp -a /tmp/xone "/usr/src/xone-${XONE_VERSION}"
+dkms add -m xone -v "$XONE_VERSION"
+dkms build -m xone -v "$XONE_VERSION" -k "$KVER"
+dkms install -m xone -v "$XONE_VERSION" -k "$KVER" --force
+# Never leave a DKMS-generated signing key in the image
+rm -f /var/lib/dkms/mok.key /var/lib/dkms/mok.pub
+
+# Stop the in-tree xpad/mt76x2u drivers claiming the same USB IDs
+install -D -m 0644 /tmp/xone/install/modprobe.conf /usr/lib/modprobe.d/xone-blacklist.conf
+
+# Proprietary dongle firmware, subject to Microsoft's Terms of Use;
+# --skip-disclaimer accepts non-interactively at build time.
+sh /tmp/xone/install/firmware.sh --skip-disclaimer
+
+dnf5 -y remove --noautoremove dkms gcc make sbsigntools kernel-cachyos-devel-matched
+dnf5 -y copr disable bieszczaders/kernel-cachyos
+rm -rf /tmp/xone
+
+# bootc lint flags the leftover DKMS build cache as unmanaged /var content
+rm -rf /var/lib/dkms/xone "/usr/src/xone-${XONE_VERSION}"
+
 ### Not yet implemented
-# ZFS filesystem support — kmod build incompatible with container builds
-# (xone Xbox controller support moved to common/core/080-xone-dkms.sh — DKMS
-# works fine here, it's the `akmods` wrapper that assumes a running kernel)
+# ZFS filesystem support, kmod build is incompatible with container builds

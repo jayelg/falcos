@@ -46,14 +46,13 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=bind,from=ctx,source=/files/common/usr/share/falcos/sb_cert.der,target=/ctx/files/sb_cert.der \
     --mount=type=bind,from=ctx,source=/common/core/050-bootloader.sh,target=/ctx/common/core/050-bootloader.sh \
-    --mount=type=bind,from=ctx,source=/common/core/060-cachyos-kernel.sh,target=/ctx/common/core/060-cachyos-kernel.sh \
+    --mount=type=bind,from=ctx,source=/common/core/060-kernel.sh,target=/ctx/common/core/060-kernel.sh \
     --mount=type=bind,from=ctx,source=/common/core/070-hardware.sh,target=/ctx/common/core/070-hardware.sh \
-    --mount=type=bind,from=ctx,source=/common/core/080-xone-dkms.sh,target=/ctx/common/core/080-xone-dkms.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    /ctx/phase-core.sh 050-bootloader.sh 060-cachyos-kernel.sh 070-hardware.sh 080-xone-dkms.sh
+    /ctx/phase-core.sh 050-bootloader.sh 060-kernel.sh 070-hardware.sh
 
 RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/common/core/090-multimedia.sh,target=/ctx/common/core/090-multimedia.sh \
@@ -76,11 +75,10 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
 
 RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/common/core/150-copr-extras.sh,target=/ctx/common/core/150-copr-extras.sh \
-    --mount=type=bind,from=ctx,source=/common/core/160-greenboot.sh,target=/ctx/common/core/160-greenboot.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 150-copr-extras.sh 160-greenboot.sh
+    /ctx/phase-core.sh 150-copr-extras.sh
 
 ## common/frequent, grouped by theme, plus the flavor-specific script last:
 
@@ -95,12 +93,12 @@ RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequ
 RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
     --mount=type=bind,from=ctx,source=/versions-frequent-network.sh,target=/ctx/versions-frequent-network.sh \
     --mount=type=bind,from=ctx,source=/common/frequent/010-vpn.sh,target=/ctx/common/frequent/010-vpn.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/020-network-audio.sh,target=/ctx/common/frequent/020-network-audio.sh \
+    --mount=type=bind,from=ctx,source=/common/frequent/020-custom-apps.sh,target=/ctx/common/frequent/020-custom-apps.sh \
     --mount=type=bind,from=ctx,source=/common/frequent/030-browser.sh,target=/ctx/common/frequent/030-browser.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-frequent.sh 010-vpn.sh 020-network-audio.sh 030-browser.sh
+    /ctx/phase-frequent.sh 010-vpn.sh 020-custom-apps.sh 030-browser.sh
 
 ARG FLAVOR=laptop
 

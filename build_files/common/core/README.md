@@ -16,11 +16,9 @@ Foundational setup shared by both flavors. Each script is sourced by phase-core.
 
 - [Bootloader](050-bootloader.sh)
 
-- [CachyOS Kernel](060-cachyos-kernel.sh)
+- [Kernel](060-kernel.sh)
 
 - [Hardware](070-hardware.sh)
-
-- [Xbox Controller (xone DKMS)](080-xone-dkms.sh)
 
 - [Multimedia](090-multimedia.sh)
 
@@ -36,11 +34,4 @@ Foundational setup shared by both flavors. Each script is sourced by phase-core.
 
 - [COPR Extras](150-copr-extras.sh)
 
-- [Greenboot Health Checks](160-greenboot.sh)
-
 ## Notes / Todo
-
-- Move chezmoi out of dev-tools int CLI tools.
-- Rename cachy_kernel to kernel to be kernel agnostic.
-- Move Xbox Controller into Hardware.
-- Either configure Greenboot better or remove it. Currently disabled.

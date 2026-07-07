@@ -1,20 +1,11 @@
 ### Enable services
-# Grouped by which common/*.sh installed the corresponding package. Must run
-# after systemctl is restored to the real binary (phase-finalize.sh), not
-# while the install-time stub is in place.
+# Grouped by which script installed the package. Runs from
+# phase-finalize.sh after systemctl is restored.
 
-# sshd ships enabled via the base image's systemd-preset (server/IoT
-# default). Disabled, not masked, for this single-user hardened image —
-# still available via `systemctl enable` if wanted.
+# Base image preset enables sshd, not wanted on a single-user desktop
 systemctl disable sshd.service
 
-# common/core/050-bootloader.sh — grub2-os-prober-regen is NOT run
-# automatically (see build_files/files/common/usr/libexec/grub2-os-prober-regen
-# for why); it's an on-demand `sudo /usr/libexec/grub2-os-prober-regen`
-# command instead, matching how Bazzite's own equivalent (`ujust
-# regenerate-grub`) is also manual rather than an automatic unit.
-
-# common/core/010-kde-desktop.sh (kde-desktop group + its own installs)
+# common/core/010-kde-desktop.sh
 systemctl enable plasmalogin-shadow-workaround.service
 systemctl enable plasmalogin.service
 systemctl enable plasma-setup.service
@@ -43,24 +34,13 @@ systemctl enable libvirtd.socket
 systemctl enable libvirt-relabel.service
 systemctl enable libvirt-group-membership.service
 
-# Desktop-only unit (build_files/desktop.sh), absent on laptop — gated on
-# presence since this script runs for both. Enabled here rather than in
-# desktop.sh because systemctl is still stubbed out at that point.
+# Desktop-only unit, absent on laptop
 if [ -f /usr/lib/systemd/system/vfio-rebind-gpu-usb.service ]; then
     systemctl enable vfio-rebind-gpu-usb.service
 fi
 
 # common/core/120-security.sh
 systemctl enable pcscd.socket
-
-# common/core/160-greenboot.sh — NOT enabled for now. GRUB's boot_counter
-# fallback (meant to be folded into grub.cfg via bootupd) isn't confirmed
-# wired up on real hardware; without it, a red boot retries forever instead
-# of ever falling back, which is worse than no health-checking at all.
-# Package and custom checks stay installed so re-enabling later is a
-# one-line change once the bootupd/GRUB gap is understood and verified in
-# a VM first.
-# systemctl enable greenboot-healthcheck.service
 
 # First-boot setup and automatic updates (files/common, no dnf5 install)
 systemctl enable install-default-flatpaks.service
