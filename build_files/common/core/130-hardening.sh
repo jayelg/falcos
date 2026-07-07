@@ -14,13 +14,6 @@ dnf5 -y copr disable secureblue/packages
 # (JVMs, emulators, Wine/Proton) can also LD_PRELOAD libno_rlimit_as.so, or
 # opt out entirely with `env -u LD_PRELOAD <command>`.
 
-### DNS-over-TLS
-# dnsconfd reconfigures unbound to match whatever DNS NetworkManager
-# reports, including VPN-pushed servers (Mullvad/Tailscale/Netbird),
-# upgrading to DoT only where supported. No hardcoded upstream resolver, or
-# it would override VPN-pushed DNS.
-dnf5 -y install unbound dnsconfd
-
 # 99-hardening isn't copied from files/common until phase-finalize.sh (see
 # Containerfile) — this needs its 0440 mode now (git can't track that), so
 # install it directly from its own narrow mount instead.
