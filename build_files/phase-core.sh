@@ -1,9 +1,6 @@
 #!/bin/bash
-# Runs one themed group of common/core/ scripts, named explicitly as
-# arguments by the Containerfile's RUN instruction for that group. Each
-# group is its own RUN/layer, scoped to only the files (and version-pin
-# file, if any) it actually needs — so a change to one group's script or
-# pin doesn't invalidate a sibling group's cache.
+# Sources one themed group of common/core/ scripts, named as arguments by
+# that group's RUN instruction in the Containerfile.
 
 set -ouex pipefail
 

@@ -1,13 +1,8 @@
 ### VSCodium
 dnf5 install -y --enablerepo='vscodium' codium
 
-# Chromium's own allocator override and V8's large upfront address-space
-# reservations are documented crash sources under a system-wide
-# hardened_malloc LD_PRELOAD (common/core/130-hardening.sh). Exempt codium:
-# rename the real binary and replace it with a wrapper dropping LD_PRELOAD
-# before exec. Both the CLI entry point and the desktop launcher resolve to
-# this same binary. Lives here, not in 130-hardening.sh, because codium
-# doesn't exist yet when the core phase runs.
+# Electron crashes under the system-wide hardened_malloc LD_PRELOAD, wrap
+# the binary to drop it (see common/core/130-hardening.sh)
 if [ -f /usr/share/codium/codium ] && [ ! -f /usr/share/codium/codium.bin ]; then
     mv /usr/share/codium/codium /usr/share/codium/codium.bin
     cat > /usr/share/codium/codium <<'EOF'
@@ -18,7 +13,6 @@ EOF
 fi
 
 ### Bitwarden CLI
-# BW_VERSION/BW_SHA256 pinned in build_files/versions-frequent-tools.sh.
 curl -fsSL "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" \
     -o /tmp/bw.zip
 echo "${BW_SHA256}  /tmp/bw.zip" | sha256sum -c -

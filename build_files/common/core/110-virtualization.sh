@@ -22,7 +22,7 @@ VIRT_PACKAGES=(
 )
 dnf5 install -y "${VIRT_PACKAGES[@]}"
 
-### virt-manager hardened_malloc exemptiion
+### virt-manager hardened_malloc exemption
 if [ -f /usr/bin/virt-manager ] && [ ! -f /usr/bin/virt-manager.bin ]; then
     mv /usr/bin/virt-manager /usr/bin/virt-manager.bin
     cat > /usr/bin/virt-manager <<'EOF'

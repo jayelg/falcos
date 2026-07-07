@@ -1,6 +1,6 @@
 ### Branding
-# Patch os-release branding fields only; VERSION/BUILD_ID/OSTREE_VERSION
-# are left untouched so they continue to reflect the base image's own build.
+# Patch os-release branding fields only, VERSION/BUILD_ID/OSTREE_VERSION
+# stay from the base image
 sed -i \
     -e 's|^NAME=.*|NAME="Framework OS"|' \
     -e 's|^PRETTY_NAME=.*|PRETTY_NAME="Framework OS (falcos:laptop)"|' \

@@ -1,4 +1,4 @@
-# dnf5-command(config-manager) — not in fedora-bootc by default, unlike Kinoite
+# dnf5 config-manager is not in fedora-bootc by default
 dnf5 install -y dnf5-plugins
 
 ### Add repos

@@ -4,7 +4,7 @@ dnf5 install -y \
     plasma-wallpapers-dynamic \
     plasma-wallpapers-dynamic-builder
 
-### Darkly — Qt widget style + KWin window decoration
+### Darkly Qt widget style + KWin window decoration, built from source
 DARKLY_BUILD_DEPS=(
     cmake gcc-c++ extra-cmake-modules
     qt6-qtbase-devel
@@ -33,8 +33,7 @@ cmake --install /tmp/darkly-build
 rm -rf /tmp/darkly.tar.gz "/tmp/Darkly-${DARKLY_VERSION}" /tmp/darkly-build
 dnf5 remove -y --noautoremove "${DARKLY_BUILD_DEPS[@]}"
 
-# Ant-Dark plasma desktop theme (github.com/EliverLara/Ant). ANT_COMMIT
-# pinned in build_files/versions-core-theming.sh.
+# Ant-Dark plasma desktop theme
 curl -fsSL "https://github.com/EliverLara/Ant/archive/${ANT_COMMIT}.tar.gz" \
     -o /tmp/ant.tar.gz
 tar -xzf /tmp/ant.tar.gz -C /tmp/
