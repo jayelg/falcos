@@ -43,6 +43,11 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=tmpfs,target=/tmp \
     /ctx/phase-core.sh 030-cli-tools.sh 040-dev-tools.sh
 
+# cachyos (default) or stock. stock keeps the Fedora base kernel and is
+# the temporary fallback flipped by .github/workflows/kernel-freshness.yml
+# when the CachyOS COPR goes stale; see build_files/lib/kernel-helpers.sh.
+ARG KERNEL=cachyos
+
 RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/versions-core-kernel.sh,target=/ctx/versions-core-kernel.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
@@ -54,7 +59,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    /ctx/phase-core.sh 050-bootloader.sh 060-kernel.sh 070-hardware.sh
+    KERNEL=${KERNEL} /ctx/phase-core.sh 050-bootloader.sh 060-kernel.sh 070-hardware.sh
 
 RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/common/core/090-multimedia.sh,target=/ctx/common/core/090-multimedia.sh \
@@ -113,7 +118,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-flavor.sh,target=/ctx/phase-flavor.
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    FLAVOR=${FLAVOR} /ctx/phase-flavor.sh
+    FLAVOR=${FLAVOR} KERNEL=${KERNEL} /ctx/phase-flavor.sh
 
 RUN --mount=type=bind,from=ctx,source=/phase-finalize.sh,target=/ctx/phase-finalize.sh \
     --mount=type=bind,from=ctx,source=/enable-services.sh,target=/ctx/enable-services.sh \

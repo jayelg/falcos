@@ -22,9 +22,8 @@ dnf5 install -y "${FIRMWARE_PACKAGES[@]}"
 ### xone Xbox Wireless Adapter driver
 # Built via DKMS, the akmods wrapper assumes a running kernel and doesn't
 # work mid container build.
-dnf5 -y copr enable bieszczaders/kernel-cachyos
-dnf5 -y install --enablerepo="copr:copr.fedorainfracloud.org:bieszczaders:kernel-cachyos" \
-    dkms gcc make git kernel-cachyos-devel-matched sbsigntools openssl cabextract
+source /ctx/lib/kernel-helpers.sh
+kernel_devel_install dkms gcc make git sbsigntools openssl cabextract
 
 XONE_VERSION="0.0.0+${XONE_COMMIT:0:12}"
 
@@ -33,7 +32,7 @@ git -C /tmp/xone checkout --quiet "$XONE_COMMIT"
 
 sed -i "s/#VERSION#/${XONE_VERSION}/g" /tmp/xone/dkms.conf
 
-KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-cachyos-core)"
+KVER="$(kver)"
 
 source /ctx/lib/sign-helpers.sh
 configure_dkms_signing
@@ -56,8 +55,7 @@ install -D -m 0644 /tmp/xone/install/modprobe.conf /usr/lib/modprobe.d/xone-blac
 # --skip-disclaimer accepts non-interactively at build time.
 sh /tmp/xone/install/firmware.sh --skip-disclaimer
 
-dnf5 -y remove --noautoremove dkms gcc make sbsigntools kernel-cachyos-devel-matched
-dnf5 -y copr disable bieszczaders/kernel-cachyos
+kernel_devel_remove dkms gcc make sbsigntools
 rm -rf /tmp/xone
 
 # bootc lint flags the leftover DKMS build cache as unmanaged /var content

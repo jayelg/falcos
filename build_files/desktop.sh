@@ -1,12 +1,11 @@
 ### Looking Glass kvmfr module (shared-memory transport between host and VM)
-dnf5 -y copr enable bieszczaders/kernel-cachyos
-dnf5 -y install --enablerepo="copr:copr.fedorainfracloud.org:bieszczaders:kernel-cachyos" \
-    dkms gcc make git kernel-cachyos-devel-matched sbsigntools openssl
+source /ctx/lib/kernel-helpers.sh
+kernel_devel_install dkms gcc make git sbsigntools openssl
 
 git clone --quiet --depth 1 --branch "$LOOKING_GLASS_TAG" \
     https://github.com/gnif/LookingGlass.git /tmp/looking-glass
 
-KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-cachyos-core)"
+KVER="$(kver)"
 
 source /ctx/lib/sign-helpers.sh
 configure_dkms_signing
@@ -27,8 +26,7 @@ install -Dm644 /dev/null /usr/lib/udev/rules.d/99-kvmfr.rules
 printf 'SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0660"\n' \
     > /usr/lib/udev/rules.d/99-kvmfr.rules
 
-dnf5 -y remove --noautoremove dkms gcc make sbsigntools kernel-cachyos-devel-matched
-dnf5 -y copr disable bieszczaders/kernel-cachyos
+kernel_devel_remove dkms gcc make sbsigntools
 rm -rf /tmp/looking-glass
 
 # bootc lint flags the leftover DKMS build cache as unmanaged /var content

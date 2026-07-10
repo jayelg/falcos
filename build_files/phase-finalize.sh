@@ -16,7 +16,12 @@ mv /usr/bin/systemctl.bak /usr/bin/systemctl
 #   --add ostree   required for atomic updates
 #   --add crypt    LUKS passphrase prompting
 #   --add plymouth boot splash / graphical passphrase prompt
-KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-cachyos-core)"
+# kernel-cachyos-core normally, kernel-core when built with KERNEL=stock
+for pkg in kernel-cachyos-core kernel-core; do
+    rpm -q "$pkg" &>/dev/null || continue
+    KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$pkg")"
+    break
+done
 export DRACUT_NO_XATTR=1
 dracut --force --no-hostonly --reproducible --add "ostree crypt plymouth" \
     --kver "$KVER" \

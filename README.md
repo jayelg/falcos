@@ -20,6 +20,8 @@ Everything that runs at build time, the phase scripts, the package install scrip
 
 CI workflows that build, sign and publish the images, plus a Renovate automation for dependency updates.
 
+The kernel freshness workflow watches the CachyOS kernel COPR against upstream stable releases. If the COPR stalls it opens a tracking issue, then a pre-validated PR that temporarily switches the image to the stock Fedora kernel (the KERNEL arg in the Containerfile), and a restore PR once the COPR catches up.
+
 ### [Dev Scripts](Justfile)
 
 The justfile contains scripts for building and testing outside of CI 
