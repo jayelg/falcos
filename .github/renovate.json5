@@ -26,6 +26,13 @@
       "matchDepTypes": ["container"],
       "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"],
     },
+    {
+      // quay.io/fedora prunes old untagged manifests within days, so a
+      // pinned digest 404s before the next Renovate bump lands and breaks
+      // the scheduled builds. Track the tag instead.
+      "matchPackageNames": ["quay.io/fedora/fedora-bootc"],
+      "pinDigests": false,
+    },
   ],
 
   "customManagers": [
