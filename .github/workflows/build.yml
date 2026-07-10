@@ -5,7 +5,10 @@ on:
     branches:
       - main
   schedule:
-    - cron: '05 10 * * *'  # 10:05am UTC everyday — also picks up upstream fedora-bootc updates
+    # 12:30 UTC daily: after the fedora-bootc:44 push (~11:30 UTC, with
+    # margin for drift), so the cache written here is built on today's base
+    # and stays valid for pushes/PRs until tomorrow's base lands.
+    - cron: '30 12 * * *'
   push:
     branches:
       - main

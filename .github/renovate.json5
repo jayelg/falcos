@@ -7,7 +7,7 @@
   "rebaseWhen": "never",
 
   // One grouped PR per day, created early UTC so the PR build and automerge
-  // finish before the 10:05 UTC scheduled image build, which then picks up
+  // finish before the 12:30 UTC scheduled image build, which then picks up
   // the merged bumps together with any upstream drift. Merges by
   // renovate[bot] are excluded from the push build in build.yml for the
   // same reason.
