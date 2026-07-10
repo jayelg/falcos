@@ -48,4 +48,3 @@ systemctl --global enable brew-setup.service
 systemctl --global enable seed-justfile.service
 systemctl enable bootc-fetch-apply-updates.timer
 systemctl enable flatpak-update.timer
-systemctl --global enable update-notify.timer
