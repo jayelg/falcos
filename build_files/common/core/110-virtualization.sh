@@ -13,7 +13,9 @@ VIRT_PACKAGES=(
     qemu-img
     qemu-system-x86-core
     qemu-user-binfmt       # register qemu with binfmt_misc for foreign-arch binaries
-    qemu-user-static       # static qemu binaries for cross-arch emulation/builds
+    qemu-user-static-aarch64  # static qemu for aarch64 emulation/builds; the
+                              # qemu-user-static meta-package would reinstall every
+                              # exotic arch trimmed in 010-kde-desktop.sh
     slirp4netns            # userspace networking for rootless containers
     systemd-container      # systemd-nspawn and friends
     virt-manager
