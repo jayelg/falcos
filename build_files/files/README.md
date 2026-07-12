@@ -8,5 +8,8 @@ Static file trees copied verbatim into the image, each mirroring the target file
 
 ### [Laptop Files](laptop)
 
-## Notes / Todo
+## Notes
 
+- `resolv-conf.conf` tmpfiles rule pins `/etc/resolv.conf` to the resolved stub — heals machines where the old dnsconfd image left a stale `127.0.0.1` resolv.conf behind and brakes DNS eg. when switching from a different bootc image like Bazzite or Aurora.
+
+## Todo
