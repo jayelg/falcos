@@ -28,3 +28,9 @@ BLING_SHELL="$(basename "$(readlink /proc/$$/exe)")"
 
 command -v direnv >/dev/null && eval "$(direnv hook "${BLING_SHELL}")"
 command -v zoxide >/dev/null && eval "$(zoxide init "${BLING_SHELL}")"
+
+# Flyline replaces readline itself (prompts, tab completion, history search),
+# so it's Bash-only unlike the shell-agnostic hooks above.
+if [ "${BLING_SHELL}" = "bash" ] && [ -r /usr/lib/bash/libflyline.so ]; then
+    enable -f /usr/lib/bash/libflyline.so flyline
+fi

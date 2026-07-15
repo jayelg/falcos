@@ -22,6 +22,10 @@ PR/push checks: shellcheck over the build and runtime scripts, actionlint over t
 
 Bitwarden publishes no official checksum for the CLI zip, so `BW_SHA256` is pinned in the repo. On PRs that bump `BW_VERSION` (Renovate), this recomputes the checksum, pushes the fix to the PR branch and dispatches validation builds.
 
+### [Flyline Checksum](flyline-checksum.yml)
+
+HalFrgrd/flyline publishes an official checksum per release asset, so `FLYLINE_SHA256` is pinned in the repo. On PRs that bump `FLYLINE_VERSION` (Renovate), this recomputes the checksum, pushes the fix to the PR branch and dispatches validation builds. Same pattern as [Bitwarden CLI Checksum](#bitwarden-cli-checksum) above.
+
 ### [Clean up Registry](cleanup-registry.yml)
 
 Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures, and drops stale build-cache manifests.

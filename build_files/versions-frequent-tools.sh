@@ -17,3 +17,11 @@ STARSHIP_VERSION="1.26.0"
 
 # renovate: datasource=github-releases depName=ryanoasis/nerd-fonts
 NERD_FONTS_VERSION="3.4.0"
+
+# HalFrgrd/flyline publishes a sha256 sidecar per release asset, so unlike
+# BW_SHA256 above this pin starts accurate rather than trust-on-first-use;
+# .github/workflows/flyline-checksum.yml keeps it in sync with
+# FLYLINE_VERSION bumps the same way bw-checksum.yml does for Bitwarden.
+# renovate: datasource=github-releases depName=HalFrgrd/flyline
+FLYLINE_VERSION="1.3.0"
+FLYLINE_SHA256="21bb0a7a0e417496ff68ef8379cadc05d35e42aee357fc64ad9a8d95f69320f8"

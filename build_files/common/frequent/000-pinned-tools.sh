@@ -28,6 +28,14 @@ tar -xzf /tmp/starship.tar.gz -C /tmp/
 install -m755 /tmp/starship /usr/bin/starship
 rm -rf /tmp/starship.tar.gz /tmp/starship
 
+### Flyline (Bash readline replacement)
+curl -fsSL "https://github.com/HalFrgrd/flyline/releases/download/v${FLYLINE_VERSION}/libflyline-v${FLYLINE_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    -o /tmp/flyline.tar.gz
+echo "${FLYLINE_SHA256}  /tmp/flyline.tar.gz" | sha256sum -c -
+tar -xzf /tmp/flyline.tar.gz -C /tmp/
+install -Dm755 "/tmp/libflyline.so.${FLYLINE_VERSION}" /usr/lib/bash/libflyline.so
+rm -rf /tmp/flyline.tar.gz "/tmp/libflyline.so.${FLYLINE_VERSION}"
+
 ### Nerd Fonts
 NERD_FONTS=(0xProto CascadiaMono ComicShannsMono DroidSansMono FiraCode Go-Mono IBMPlexMono JetBrainsMono SourceCodePro Ubuntu)
 for font in "${NERD_FONTS[@]}"; do

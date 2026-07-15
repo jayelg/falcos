@@ -1,6 +1,7 @@
 ### CLI utilities
 CLI_PACKAGES=(
     7zip-standalone
+    bash-completion        # completion specs flyline's tab-completion builds on
     bat
     bc                     # POSIX calculator, used by some shell scripts
     bsdunzip               # BSD unzip, handles some archives GNU unzip chokes on
