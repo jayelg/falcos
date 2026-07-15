@@ -1,3 +1,4 @@
+# shellcheck disable=SC2034  # versions here are consumed by the scripts sourced after this file
 # Renovate-tracked pins for common/core/020-kde-theming.sh. Keep each
 # annotation comment directly above its version line.
 

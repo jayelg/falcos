@@ -1,0 +1,4 @@
+# Build scripts source each other via paths that only exist inside the
+# container build (/ctx/...), so shellcheck can never follow them.
+# SC1090: can't follow non-constant source; SC1091: source file not found.
+disable=SC1090,SC1091

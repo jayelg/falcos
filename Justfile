@@ -273,17 +273,23 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       -i ./output/**/*.{{ type }}
 
 
-# Runs shell check on all Bash scripts
+# Runs shellcheck on all Bash scripts, same file set as the Lint workflow
 lint:
     #!/usr/bin/env bash
-    set -eoux pipefail
+    set -eou pipefail
     # Check if shellcheck is installed
     if ! command -v shellcheck &> /dev/null; then
         echo "shellcheck could not be found. Please install it."
         exit 1
     fi
-    # Run shellcheck on all Bash scripts
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ';'
+    # -s bash because the common/ scripts and versions files are sourced
+    # fragments without shebangs
+    mapfile -t scripts < <(
+        find build_files -name '*.sh' -type f
+        find build_files/files -type f \
+            \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
+    )
+    shellcheck -s bash "${scripts[@]}"
 
 # Runs shfmt on all Bash scripts
 format:

@@ -53,7 +53,7 @@ write_dropin() {
 [Service]
 Environment=SYSTEMD_SULOGIN_FORCE=1
 EOF
-    echo "$(basename ${0}): set SYSTEMD_SULOGIN_FORCE=1 for ${service}.service"
+    echo "$(basename "${0}"): set SYSTEMD_SULOGIN_FORCE=1 for ${service}.service"
 }
 
 # Match kernel command line targets for systemd(1) rescue/emergency

@@ -1,0 +1,42 @@
+---
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # -s bash because the common/ scripts and versions files are sourced
+      # fragments without shebangs. Extensionless runtime scripts (libexec,
+      # systemd generators) are included explicitly. Repo-wide excludes
+      # live in .shellcheckrc.
+      - name: Run shellcheck
+        run: |
+          mapfile -t scripts < <(
+            find build_files -name '*.sh' -type f
+            find build_files/files -type f \
+              \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
+          )
+          shellcheck -s bash "${scripts[@]}"
+
+  actionlint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12
