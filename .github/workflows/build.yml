@@ -304,8 +304,10 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          # default 3m timeout covers the whole multi-MB blob upload and
+          # has been hit on slow ghcr days
           cosign attest --key env://COSIGN_PRIVATE_KEY \
-            --tlog-upload=false \
+            --tlog-upload=false --timeout=10m \
             --type spdxjson --predicate "${RUNNER_TEMP}/sbom.spdx.json" \
             "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
         env:
