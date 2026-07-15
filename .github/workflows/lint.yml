@@ -1,5 +1,5 @@
 ---
-name: Lint
+name: Lint and test
 
 on:
   pull_request:
@@ -40,3 +40,15 @@ jobs:
 
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
+
+  # Unit tests for the kernel-freshness workflow's decision logic
+  script-tests:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run kernel_freshness tests
+        run: python3 -m unittest discover -s .github/scripts -v
