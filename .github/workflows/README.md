@@ -8,6 +8,8 @@ Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, the
 
 Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
 
+Each published digest also carries a syft SPDX SBOM as a cosign in-toto attestation, verifiable with `cosign verify-attestation --key cosign.pub --type spdxjson <image>`.
+
 ### [Build Disk Images](build-disk.yml)
 
 Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config).
@@ -30,6 +32,6 @@ HalFrgrd/flyline publishes an official checksum per release asset, so `FLYLINE_S
 
 ### [Clean up Registry](cleanup-registry.yml)
 
-Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures, and drops stale build-cache manifests.
+Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
 
 ## Notes / Todo

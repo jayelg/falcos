@@ -208,6 +208,26 @@ jobs:
             ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
                 && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
 
+      # SBOM is generated from the raw archive rather than the chunked
+      # image: same filesystem (chunking only repartitions layers), but the
+      # archive is readable without root and gets deleted by the import
+      # step below, so this avoids a second multi-GB rootfs copy.
+      - name: Setup Syft
+        id: setup-syft
+        if: env.PUBLISH == 'true'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Generate SBOM
+        if: env.PUBLISH == 'true'
+        env:
+          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
+        run: |
+          export SYFT_PARALLELISM=$(($(nproc) * 2))
+          "$SYFT_CMD" scan "oci-archive:${RUNNER_TEMP}/raw-oci.tar" \
+            --source-name "${IMAGE_NAME}" \
+            -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
+          du -sh "${RUNNER_TEMP}/sbom.spdx.json"
+
       # build-chunked-oci reads its input from root containers-storage;
       # import the buildx export there and drop the archive to free disk.
       - name: Import image into containers-storage
@@ -284,5 +304,18 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
+      # Stored as an in-toto attestation on the image's .att tag; verify with
+      #   cosign verify-attestation --key cosign.pub --type spdxjson <image>
+      - name: Attest SBOM
+        if: env.PUBLISH == 'true'
+        run: |
+          IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          cosign attest -y --key env://COSIGN_PRIVATE_KEY \
+            --type spdxjson --predicate "${RUNNER_TEMP}/sbom.spdx.json" \
+            "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+
       # Old versions are pruned daily by cleanup-registry.yml, which keeps
-      # the newest tagged builds and their cosign signatures.
+      # the newest tagged builds and their cosign signatures/attestations.

@@ -46,7 +46,8 @@ jobs:
 
           # Image packages (keep in sync with build.yml's IMAGE_NAME): keep
           # the newest KEEP tagged builds plus whatever holds `latest`, the
-          # cosign signature belonging to each kept digest, and nothing else.
+          # cosign signature and SBOM attestation belonging to each kept
+          # digest, and nothing else.
           for pkg in falcos-desktop falcos-laptop; do
             echo "== ${pkg}"
             deletions="$(gh api "${api}/${pkg}/versions?per_page=100" --paginate | jq -s 'add' | jq -r --argjson keep "${KEEP}" '
@@ -58,7 +59,7 @@ jobs:
               | (map(select(.kind == "image")) | sort_by(.created_at) | reverse) as $images
               | (($images[:$keep] + ($images | map(select(.tags | index("latest"))))) | unique_by(.id)) as $keepimg
               | ($keepimg | map(.id)) as $keepids
-              | ($keepimg | map((.name | sub(":"; "-")) + ".sig")) as $keepsigs
+              | ($keepimg | map((.name | sub(":"; "-")) as $n | $n + ".sig", $n + ".att")) as $keepsigs
               | map(select(
                   (.kind == "untagged")
                   or (.kind == "image" and ((.id as $i | $keepids | index($i)) == null))
