@@ -2,15 +2,9 @@
 dnf5 install -y --enablerepo='vscodium' codium
 
 # Electron crashes under the system-wide hardened_malloc LD_PRELOAD, wrap
-# the binary to drop it (see common/core/130-hardening.sh)
-if [ -f /usr/share/codium/codium ] && [ ! -f /usr/share/codium/codium.bin ]; then
-    mv /usr/share/codium/codium /usr/share/codium/codium.bin
-    cat > /usr/share/codium/codium <<'EOF'
-#!/bin/bash
-exec env -u LD_PRELOAD "$(dirname "$(readlink -f "$0")")/codium.bin" "$@"
-EOF
-    chmod 755 /usr/share/codium/codium
-fi
+# the binary to drop it
+source /ctx/lib/wrap-helpers.sh
+wrap_no_hardened_malloc /usr/share/codium/codium
 
 ### Bitwarden CLI
 curl -fsSL "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" \

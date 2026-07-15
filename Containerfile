@@ -65,6 +65,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/common/core/090-multimedia.sh,target=/ctx/common/core/090-multimedia.sh \
     --mount=type=bind,from=ctx,source=/common/core/100-networking.sh,target=/ctx/common/core/100-networking.sh \
     --mount=type=bind,from=ctx,source=/common/core/110-virtualization.sh,target=/ctx/common/core/110-virtualization.sh \
+    --mount=type=bind,from=ctx,source=/lib/wrap-helpers.sh,target=/ctx/lib/wrap-helpers.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
@@ -92,6 +93,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
 RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
     --mount=type=bind,from=ctx,source=/versions-frequent-tools.sh,target=/ctx/versions-frequent-tools.sh \
     --mount=type=bind,from=ctx,source=/common/frequent/000-pinned-tools.sh,target=/ctx/common/frequent/000-pinned-tools.sh \
+    --mount=type=bind,from=ctx,source=/lib/wrap-helpers.sh,target=/ctx/lib/wrap-helpers.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
