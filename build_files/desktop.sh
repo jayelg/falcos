@@ -1,25 +1,15 @@
 ### Looking Glass kvmfr module (shared-memory transport between host and VM)
-source /ctx/lib/kernel-helpers.sh
+source /ctx/lib/dkms-helpers.sh
 kernel_devel_install dkms gcc make git sbsigntools openssl
 
 git clone --quiet --depth 1 --branch "$LOOKING_GLASS_TAG" \
     https://github.com/gnif/LookingGlass.git /tmp/looking-glass
 
-KVER="$(kver)"
+# Version comes from upstream's dkms.conf at LOOKING_GLASS_TAG, no manual
+# pin to keep in sync
+KVMFR_VERSION="$(dkms_conf_version /tmp/looking-glass/module)"
 
-source /ctx/lib/sign-helpers.sh
-configure_dkms_signing
-if ! mok_signing_available; then
-    echo "No MOK key supplied, kvmfr module is unsigned."
-fi
-
-rm -rf "/usr/src/kvmfr-${KVMFR_VERSION}"
-cp -a /tmp/looking-glass/module "/usr/src/kvmfr-${KVMFR_VERSION}"
-dkms add -m kvmfr -v "$KVMFR_VERSION"
-dkms build -m kvmfr -v "$KVMFR_VERSION" -k "$KVER"
-dkms install -m kvmfr -v "$KVMFR_VERSION" -k "$KVER" --force
-# Never leave a DKMS-generated signing key in the image
-rm -f /var/lib/dkms/mok.key /var/lib/dkms/mok.pub
+dkms_build_module kvmfr "$KVMFR_VERSION" /tmp/looking-glass/module
 
 # Allow the kvm group to access the kvmfr device (user must be in the kvm group)
 install -Dm644 /dev/null /usr/lib/udev/rules.d/99-kvmfr.rules
@@ -28,9 +18,6 @@ printf 'SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0660"\n' \
 
 kernel_devel_remove dkms gcc make sbsigntools
 rm -rf /tmp/looking-glass
-
-# bootc lint flags the leftover DKMS build cache as unmanaged /var content
-rm -rf /var/lib/dkms/kvmfr "/usr/src/kvmfr-${KVMFR_VERSION}"
 
 ### VFIO
 # The vfio-rebind-gpu-usb unit is enabled in enable-services.sh and
