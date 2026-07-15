@@ -1,3 +1,10 @@
+### Branding
+source /ctx/lib/brand-helpers.sh
+brand_os_release \
+    NAME="Falcos" \
+    PRETTY_NAME="Falcos" \
+    DEFAULT_HOSTNAME="desktop"
+
 ### Looking Glass kvmfr module (shared-memory transport between host and VM)
 source /ctx/lib/dkms-helpers.sh
 kernel_devel_install dkms gcc make git sbsigntools openssl
