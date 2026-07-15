@@ -1,3 +1,7 @@
+# Everything here is interactive bling; skip scripts and other
+# non-interactive shells (also silences flyline's load warning).
+case $- in *i*) ;; *) return ;; esac
+
 [ "${BLING_SOURCED:-0}" -eq 1 ] && return
 BLING_SOURCED=1
 
