@@ -233,7 +233,7 @@ jobs:
       - name: Import image into containers-storage
         if: env.PUBLISH == 'true'
         run: |
-          sudo skopeo copy "oci-archive:${RUNNER_TEMP}/raw-oci.tar[0]" \
+          sudo skopeo copy "oci-archive:${RUNNER_TEMP}/raw-oci.tar:latest" \
             "containers-storage:localhost/${IMAGE_NAME}:raw"
           rm -f "${RUNNER_TEMP}/raw-oci.tar"
 
