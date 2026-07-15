@@ -81,9 +81,7 @@ jobs:
         run: |
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
           echo "IMAGE_NAME=falcos-${{ matrix.flavor }}" >> "${GITHUB_ENV}"
-          # Single publish gate for the rechunk/push/sign steps below:
-          # pushes to main and the daily schedule publish; PR and
-          # stock-kernel validation builds don't.
+          # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
              && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] \
              && [ "${{ github.event.inputs.kernel }}" != "stock" ]; then
@@ -187,8 +185,8 @@ jobs:
 
       # provenance: false keeps the output a single image manifest rather
       # than an attestation index, the shape bootc and cosign expect.
-      # Publishing builds export an OCI archive for the rechunk steps below
-      # instead of pushing; what lands on the registry is the chunked image.
+      # Publishing builds export an OCI archive rather than pushing; the
+      # chunked repack below is what gets published.
       - name: Build Image
         id: build_image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -208,10 +206,9 @@ jobs:
             ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
                 && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
 
-      # SBOM is generated from the raw archive rather than the chunked
-      # image: same filesystem (chunking only repartitions layers), but the
-      # archive is readable without root and gets deleted by the import
-      # step below, so this avoids a second multi-GB rootfs copy.
+      # Scans the raw archive rather than the chunked image: same
+      # filesystem (chunking only repartitions layers), but readable
+      # without root and no second multi-GB rootfs copy.
       - name: Setup Syft
         id: setup-syft
         if: env.PUBLISH == 'true'
@@ -228,8 +225,8 @@ jobs:
             -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
           du -sh "${RUNNER_TEMP}/sbom.spdx.json"
 
-      # build-chunked-oci reads its input from root containers-storage;
-      # import the buildx export there and drop the archive to free disk.
+      # build-chunked-oci reads from root containers-storage. :latest
+      # selects one image — the buildx export indexes one entry per tag.
       - name: Import image into containers-storage
         if: env.PUBLISH == 'true'
         run: |
@@ -237,13 +234,10 @@ jobs:
             "containers-storage:localhost/${IMAGE_NAME}:raw"
           rm -f "${RUNNER_TEMP}/raw-oci.tar"
 
-      # Repack the image into content-stable chunks (one layer per package
-      # group) so bootc upgrade only downloads what actually changed, instead
-      # of everything above the first drifted RUN layer. Labels and image
-      # config carry over from the raw image. rpm-ostree runs from the image
-      # itself — the base is fedora-bootc, so the chunker always matches the
-      # ostree stack it operates on. Rootless is blocked upstream:
-      # https://github.com/coreos/rpm-ostree/issues/5346
+      # Repack into content-stable chunks (one layer per package group) so
+      # bootc upgrade only downloads what changed. rpm-ostree runs from the
+      # image itself so the chunker matches the ostree stack it operates
+      # on; rootless is blocked upstream (coreos/rpm-ostree#5346).
       - name: Rechunk image
         if: env.PUBLISH == 'true'
         run: |
@@ -256,17 +250,16 @@ jobs:
             --output "containers-storage:localhost/${IMAGE_NAME}:chunked"
           sudo podman rmi "localhost/${IMAGE_NAME}:raw"
 
-      # Root login for the sudo skopeo push; the docker login above only
-      # covers the runner user (buildx cache writes).
+      # The docker login above only covers the runner user; the sudo
+      # skopeo push needs root credentials.
       - name: Login to GitHub Container Registry (root)
         if: env.PUBLISH == 'true'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      # First tag uploads the blobs and records the digest; the remaining
-      # tags are registry-side copies of that digest, so every tag shares
-      # one manifest for cosign to cover.
+      # Tags after the first are registry-side copies of its digest, so
+      # every tag shares one manifest for cosign to cover.
       - name: Push chunked image
         id: push
         if: env.PUBLISH == 'true'
@@ -304,13 +297,15 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
-      # Stored as an in-toto attestation on the image's .att tag; verify with
-      #   cosign verify-attestation --key cosign.pub --type spdxjson <image>
+      # No Rekor upload: the public tlog rejects multi-MB SBOM envelopes
+      # and verification is key-based against the baked-in cosign.pub, so
+      # verify with --insecure-ignore-tlog=true.
       - name: Attest SBOM
         if: env.PUBLISH == 'true'
         run: |
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
-          cosign attest -y --key env://COSIGN_PRIVATE_KEY \
+          cosign attest --key env://COSIGN_PRIVATE_KEY \
+            --tlog-upload=false \
             --type spdxjson --predicate "${RUNNER_TEMP}/sbom.spdx.json" \
             "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
         env:
