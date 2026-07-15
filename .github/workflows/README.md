@@ -10,4 +10,20 @@ Builds both flavor images (falcos-desktop and falcos-laptop), then pushes and co
 
 Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config).
 
+### [Kernel Freshness](kernel-freshness.yml)
+
+Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../scripts/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
+
+### [Lint and Test](lint.yml)
+
+PR/push checks: shellcheck over the build and runtime scripts, actionlint over the workflows, and the [kernel_freshness.py unit tests](../scripts/test_kernel_freshness.py).
+
+### [Bitwarden CLI Checksum](bw-checksum.yml)
+
+Bitwarden publishes no official checksum for the CLI zip, so `BW_SHA256` is pinned in the repo. On PRs that bump `BW_VERSION` (Renovate), this recomputes the checksum, pushes the fix to the PR branch and dispatches validation builds.
+
+### [Clean up Registry](cleanup-registry.yml)
+
+Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures, and drops stale build-cache manifests.
+
 ## Notes / Todo

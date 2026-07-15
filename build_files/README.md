@@ -12,7 +12,7 @@ Config file trees copied verbatim into the image. systemd units, `/etc` and `/us
 
 ### [Shared Libraries](lib)
 
-Shell helpers sourced by the build scripts, not run on their own. Currently just the Secure Boot signing helpers used by the kernel and DKMS scripts.
+Shell helpers sourced by the build scripts, not run on their own: kernel variant resolution, Secure Boot signing, DKMS module builds, hardened_malloc exemption wrappers and os-release branding.
 
 ## Notes / Todo
 
