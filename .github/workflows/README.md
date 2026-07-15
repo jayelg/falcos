@@ -4,7 +4,9 @@ The GitHub Actions pipelines.
 
 ### [Build Container Image](build.yml)
 
-Builds both flavor images (falcos-desktop and falcos-laptop), then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build the laptop flavour only for build testing and does not Push.
+Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build the laptop flavour only for build testing and does not push.
+
+Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
 
 ### [Build Disk Images](build-disk.yml)
 
