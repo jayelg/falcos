@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync image-staged Affinity DLLs into the user Wine prefix
+ConditionPathIsDirectory=%h/.local/share/affinity
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/affinity-sync-prefix
+
+[Install]
+WantedBy=default.target

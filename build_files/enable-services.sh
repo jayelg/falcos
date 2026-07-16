@@ -45,6 +45,6 @@ systemctl enable pcscd.socket
 # First-boot setup and automatic updates (files/common, no dnf5 install)
 systemctl enable install-default-flatpaks.service
 systemctl --global enable brew-setup.service
-systemctl --global enable seed-justfile.service
+systemctl --global enable affinity-sync.service
 systemctl enable bootc-fetch-apply-updates.timer
 systemctl enable flatpak-update.timer
