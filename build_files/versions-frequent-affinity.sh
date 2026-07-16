@@ -23,3 +23,16 @@ DXVK_SHA256="bebb6284db590535b7b005c102ebf6850c98842cff0fded9aacb74babae14c49"
 # renovate: datasource=github-releases depName=HansKristian-Work/vkd3d-proton extractVersion=^v(?<version>.*)$
 VKD3D_PROTON_VERSION="3.0.1"
 VKD3D_PROTON_SHA256="3cf2315522af5e43605ef6d3c41dad91387040bf97199934f3f7ab76caaa2f0c"
+
+# WinRT metadata for the Affinity prefix, from Microsoft's MIT-licensed
+# windows-rs repo (redistributable, so it's baked into the image).
+# Deliberately not Renovate-tracked and not in checksums.yml: windows-rs
+# master moves daily but this only needs bumping when Affinity/Wine do,
+# manually, with a fresh SHA256.
+WINDOWS_WINMD_COMMIT="a4f924122bcdc1e65b94e882b5ea874cccad23bb"
+WINDOWS_WINMD_SHA256="d700ffb5733ffa4b3f58d8853636d195df72aa6ada1ae91651f4fdfeb55cc111"
+
+# Winelib wintypes shim by the patched Wine's author, paired with the
+# winmd above. Manual pin like WINDOWS_WINMD.
+WINTYPES_SHIM_COMMIT="f8a2d42ba3abc5dcdc584daa6728a2fa019be72e"
+WINTYPES_SHIM_SHA256="a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bfebbff6"

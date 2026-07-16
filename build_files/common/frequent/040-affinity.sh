@@ -1,8 +1,8 @@
 ### Affinity v3 (Windows app) under patched Wine
 # Bakes the immutable pieces: the Affinity-patched Wine build, PE DXVK and
-# vkd3d-proton DLLs, and the launcher. The mutable per-user prefix (plus the
-# installer .exe and WinMetadata, which can't ship in the image) is created
-# by `ujust affinity-setup`.
+# vkd3d-proton DLLs, the WinRT metadata + wintypes shim, and the launcher.
+# The mutable per-user prefix (plus the installer .exe, which can't ship in
+# the image) is created by `falcos affinity-setup`.
 
 # winetricks drives the prefix setup; ocl-icd is the OpenCL loader Wine's
 # passthrough needs on top of rusticl (mesa-libOpenCL, common/core/090);
@@ -38,6 +38,22 @@ tar --use-compress-program=zstd -xf /tmp/vkd3d-proton.tar.zst -C /tmp/vkd3d-prot
 install -D -m 0644 -t /usr/share/wine-affinity/vkd3d-proton/x64 /tmp/vkd3d-proton/x64/*.dll
 rm -rf /tmp/vkd3d-proton /tmp/vkd3d-proton.tar.zst
 
+### WinRT metadata + wintypes shim, staged for affinity-setup
+# One merged Windows.winmd serves every Windows.* namespace via WinRT's
+# fallback probing; the shim is the pairing upstream
+# Linux-Affinity-Installer uses.
+curl --retry 3 -fsSLo /tmp/Windows.winmd \
+    "https://github.com/microsoft/windows-rs/raw/${WINDOWS_WINMD_COMMIT}/crates/libs/bindgen/default/Windows.winmd"
+echo "${WINDOWS_WINMD_SHA256}  /tmp/Windows.winmd" | sha256sum -c -
+install -D -m 0644 /tmp/Windows.winmd /usr/share/wine-affinity/WinMetadata/Windows.winmd
+rm -f /tmp/Windows.winmd
+
+curl --retry 3 -fsSLo /tmp/wintypes_shim.dll.so \
+    "https://github.com/ElementalWarrior/wine-wintypes.dll-for-affinity/raw/${WINTYPES_SHIM_COMMIT}/wintypes_shim.dll.so"
+echo "${WINTYPES_SHIM_SHA256}  /tmp/wintypes_shim.dll.so" | sha256sum -c -
+install -D -m 0644 /tmp/wintypes_shim.dll.so /usr/share/wine-affinity/wintypes.dll
+rm -f /tmp/wintypes_shim.dll.so
+
 ### Launcher
 # env -u LD_PRELOAD: Wine crashes under the system-wide hardened_malloc
 # preload (same class of exemption as codium/virt-manager).
@@ -48,7 +64,7 @@ cat > /usr/bin/affinity <<'EOF'
 export WINEPREFIX="${AFFINITY_PREFIX:-$HOME/.local/share/affinity}"
 AFFINITY_EXE="C:\\Program Files\\Affinity\\Affinity\\Affinity.exe"
 if [ ! -f "$WINEPREFIX/drive_c/Program Files/Affinity/Affinity/Affinity.exe" ]; then
-    msg="Affinity is not set up for this user yet. Run: ujust affinity-setup"
+    msg="Affinity is not set up for this user yet. Run: falcos affinity-setup"
     command -v kdialog >/dev/null && kdialog --error "$msg" || echo "$msg" >&2
     exit 1
 fi
