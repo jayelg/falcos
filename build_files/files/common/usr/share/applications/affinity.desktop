@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Affinity
+Comment=Affinity Photo, Designer and Publisher (v3 unified app, via Wine)
+Icon=affinity
+Exec=/usr/bin/affinity
+Terminal=false
+Categories=Graphics;
+StartupWMClass=affinity.exe
+StartupNotify=true

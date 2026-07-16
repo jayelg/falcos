@@ -109,6 +109,16 @@ RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequ
     --mount=type=tmpfs,target=/tmp \
     /ctx/phase-frequent.sh 010-vpn.sh 020-custom-apps.sh 030-browser.sh
 
+# Own layer: the patched Wine tarball is ~400 MB, keep its cache key off
+# the other frequent groups.
+RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
+    --mount=type=bind,from=ctx,source=/versions-frequent-affinity.sh,target=/ctx/versions-frequent-affinity.sh \
+    --mount=type=bind,from=ctx,source=/common/frequent/040-affinity.sh,target=/ctx/common/frequent/040-affinity.sh \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    /ctx/phase-frequent.sh 040-affinity.sh
+
 ARG FLAVOR=laptop
 
 RUN --mount=type=bind,from=ctx,source=/phase-flavor.sh,target=/ctx/phase-flavor.sh \

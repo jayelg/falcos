@@ -10,4 +10,7 @@ Faster moving software shared by both flavors. Each script is sourced by phase-f
 
 ### [Browser](030-browser.sh)
 
+### [Affinity](040-affinity.sh)
+Patched Wine, PE DXVK/vkd3d-proton DLLs and launcher for Affinity v3. Per-user prefix setup is `ujust affinity-setup`.
+
 ## Notes / Todo

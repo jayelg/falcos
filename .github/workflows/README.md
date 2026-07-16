@@ -22,13 +22,9 @@ Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV 
 
 PR/push checks: shellcheck over the build and runtime scripts, actionlint over the workflows, and the [kernel_freshness.py unit tests](../scripts/test_kernel_freshness.py).
 
-### [Bitwarden CLI Checksum](bw-checksum.yml)
+### [Checksums](checksums.yml)
 
-Bitwarden publishes no official checksum for the CLI zip, so `BW_SHA256` is pinned in the repo. On PRs that bump `BW_VERSION` (Renovate), this recomputes the checksum, pushes the fix to the PR branch and dispatches validation builds.
-
-### [Flyline Checksum](flyline-checksum.yml)
-
-HalFrgrd/flyline publishes an official checksum per release asset, so `FLYLINE_SHA256` is pinned in the repo. On PRs that bump `FLYLINE_VERSION` (Renovate), this recomputes the checksum, pushes the fix to the PR branch and dispatches validation builds. Same pattern as [Bitwarden CLI Checksum](#bitwarden-cli-checksum) above.
+Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. Consolidated from the former per-asset workflows, which could race pushing fixups to the same branch.
 
 ### [Clean up Registry](cleanup-registry.yml)
 

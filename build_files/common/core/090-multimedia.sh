@@ -15,6 +15,12 @@ OVERRIDES=(
 )
 dnf5 distro-sync --skip-unavailable -y --repo='fedora-multimedia' "${OVERRIDES[@]}"
 dnf5 versionlock add "${OVERRIDES[@]}"
+
+# rusticl OpenCL ICD (used by the Affinity Wine wrapper via RUSTICL_ENABLE).
+# Not in OVERRIDES: distro-sync only syncs installed packages. Installed from
+# the same repo so it matches the Mesa stack above, then locked with it.
+dnf5 install -y --repo='fedora-multimedia' mesa-libOpenCL
+dnf5 versionlock add mesa-libOpenCL
 MULTIMEDIA_PACKAGES=(
     ffmpeg
     ffmpeg-libs

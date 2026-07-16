@@ -1,0 +1,95 @@
+---
+# Several release assets are pinned with a SHA256 next to their version pin
+# in the versions-*.sh files (trust-on-first-use at PR time, which also
+# catches a release asset being swapped after the pin). Renovate can bump
+# the version pins but can't recompute checksums; this workflow does that
+# follow-up for every pinned asset in one pass: on PRs touching a versions
+# file it recomputes each stale checksum and pushes a single fixup commit
+# to the PR branch. One workflow rather than one per asset so concurrent
+# fixup pushes to the same branch can't race each other.
+#
+# The fixup push uses GITHUB_TOKEN, which never triggers the pull_request
+# workflows on the new commit, so validation runs are dispatched explicitly
+# (same pattern as kernel-freshness.yml).
+name: Checksums
+
+on:
+  pull_request:
+    paths:
+      - 'build_files/versions-frequent-tools.sh'
+      - 'build_files/versions-frequent-affinity.sh'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update-checksums:
+    # Fork branches can't be pushed to; Renovate PRs are same-repo
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Recompute stale checksums and push fixup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          # name|versions file|version var|sha var|mode|asset URL ({v} = version)
+          # mode "download" hashes the asset itself; "sidecar" fetches an
+          # upstream-published .sha256 next to it (URL points at the sidecar).
+          entries=(
+            'bw|build_files/versions-frequent-tools.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
+            'flyline|build_files/versions-frequent-tools.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
+            'wine-affinity|build_files/versions-frequent-affinity.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
+            'dxvk|build_files/versions-frequent-affinity.sh|DXVK_VERSION|DXVK_SHA256|download|https://github.com/doitsujin/dxvk/releases/download/v{v}/dxvk-{v}.tar.gz'
+            'vkd3d-proton|build_files/versions-frequent-affinity.sh|VKD3D_PROTON_VERSION|VKD3D_PROTON_SHA256|download|https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{v}/vkd3d-proton-{v}.tar.zst'
+          )
+
+          fixed=()
+          for entry in "${entries[@]}"; do
+            IFS='|' read -r name file version_var sha_var mode url <<< "$entry"
+
+            version="$(sed -n "s/^${version_var}=\"\([^\"]*\)\"/\1/p" "$file")"
+            pinned="$(sed -n "s/^${sha_var}=\"\([^\"]*\)\"/\1/p" "$file")"
+            [ -n "$version" ] && [ -n "$pinned" ]
+            url="${url//\{v\}/${version}}"
+
+            if [ "$mode" = "sidecar" ]; then
+              actual="$(curl -fsSL --retry 3 "$url" | cut -d' ' -f1)"
+            else
+              curl -fsSL --retry 3 "$url" -o "${RUNNER_TEMP}/asset"
+              actual="$(sha256sum "${RUNNER_TEMP}/asset" | cut -d' ' -f1)"
+              rm -f "${RUNNER_TEMP}/asset"
+            fi
+
+            if [ "$actual" = "$pinned" ]; then
+              echo "${sha_var} already matches ${name} ${version}, nothing to do."
+              continue
+            fi
+
+            sed -i "s/^${sha_var}=.*/${sha_var}=\"${actual}\"/" "$file"
+            fixed+=("${name} ${version}")
+            echo "${sha_var} updated for ${name} ${version}."
+          done
+
+          [ "${#fixed[@]}" -gt 0 ] || exit 0
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "update checksums: $(IFS=', '; echo "${fixed[*]}")"
+          git push origin "HEAD:${BRANCH}"
+
+          # Re-validate the branch on the fixup commit
+          gh workflow run build.yml --ref "$BRANCH"
+          gh workflow run lint.yml --ref "$BRANCH"
