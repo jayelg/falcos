@@ -10,8 +10,8 @@ DEV_PACKAGES=(
 )
 dnf5 install -y "${DEV_PACKAGES[@]}"
 
-# Keep linuxbrew reachable under sudo, which resets PATH to secure_path.
-# 0440 explicitly, sudo ignores drop-ins with looser modes.
-install -Dm440 /dev/stdin /etc/sudoers.d/10-linuxbrew-path <<'EOF'
-Defaults secure_path = /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/linuxbrew/.linuxbrew/bin
-EOF
+# Deliberately no sudoers secure_path entry for linuxbrew:
+# /home/linuxbrew/.linuxbrew/bin is user-writable, so putting it in root's
+# PATH lets code running as the user stage a binary that a later
+# `sudo <name>` executes as root. Use the full path for brew tools under
+# sudo instead.
