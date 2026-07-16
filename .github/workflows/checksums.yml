@@ -18,6 +18,7 @@ on:
     paths:
       - 'build_files/versions-frequent-tools.sh'
       - 'build_files/versions-frequent-affinity.sh'
+      - 'build_files/versions-frequent-network.sh'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -54,7 +55,11 @@ jobs:
             'wine-affinity|build_files/versions-frequent-affinity.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
             'dxvk|build_files/versions-frequent-affinity.sh|DXVK_VERSION|DXVK_SHA256|download|https://github.com/doitsujin/dxvk/releases/download/v{v}/dxvk-{v}.tar.gz'
             'vkd3d-proton|build_files/versions-frequent-affinity.sh|VKD3D_PROTON_VERSION|VKD3D_PROTON_SHA256|download|https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{v}/vkd3d-proton-{v}.tar.zst'
+            'falcos-bootc-updates|build_files/versions-frequent-network.sh|FALCOS_BOOTC_UPDATES_VERSION|FALCOS_BOOTC_UPDATES_SHA256|download|https://github.com/jayelg/falcos-bootc-updates/releases/download/v{v}/falcos-bootc-updates-{v}-1.fc44.x86_64.rpm'
           )
+          # plasma-network-audio's SHA pin (same file) is deliberately not
+          # listed: its asset filename doesn't derive from the tag, so bumps
+          # are a manual follow-up anyway (see versions-frequent-network.sh).
 
           fixed=()
           for entry in "${entries[@]}"; do

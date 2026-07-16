@@ -24,7 +24,7 @@ PR/push checks: shellcheck over the build and runtime scripts, actionlint over t
 
 ### [Checksums](checksums.yml)
 
-Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. Consolidated from the former per-asset workflows, which could race pushing fixups to the same branch.
+Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs, the falcos-bootc-updates RPM) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. Consolidated from the former per-asset workflows, which could race pushing fixups to the same branch.
 
 ### [Clean up Registry](cleanup-registry.yml)
 
