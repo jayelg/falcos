@@ -2,14 +2,12 @@
 # Renovate-tracked pins for common/frequent/020-custom-apps.sh. Keep each
 # annotation comment directly above its version line.
 #
-# Both RPMs carry a SHA256 because dnf5 doesn't GPG-check URL-installed
-# RPMs and release tags are mutable (trust-on-first-use, like the pins in
-# versions-frequent-affinity.sh).
+# Both RPMs carry a trust-on-first-use SHA256: dnf5 doesn't GPG-check
+# URL-installed RPMs and release tags are mutable.
 
-# The RPM asset filename doesn't derive cleanly from the tag, so a Renovate
-# bump here needs a manual follow-up to update the filename in
-# common/frequent/020-custom-apps.sh and recompute the SHA256 below —
-# checksums.yml can't cover it for the same reason.
+# The RPM asset filename doesn't derive from the tag, so a Renovate bump
+# here needs a manual follow-up: the filename in 020-custom-apps.sh and
+# the SHA256 below (out of checksums.yml's reach for the same reason).
 # renovate: datasource=github-releases depName=johngrantdev/plasma-network-audio
 PLASMA_NETWORK_AUDIO_TAG="v0.1-alpha.1"
 PLASMA_NETWORK_AUDIO_SHA256="685cffb92549d8eb8c31e598782ae29c99f859bfd8adef842ee9ee8821864b4e"

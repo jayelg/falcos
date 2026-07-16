@@ -10,8 +10,6 @@ DEV_PACKAGES=(
 )
 dnf5 install -y "${DEV_PACKAGES[@]}"
 
-# Deliberately no sudoers secure_path entry for linuxbrew:
-# /home/linuxbrew/.linuxbrew/bin is user-writable, so putting it in root's
-# PATH lets code running as the user stage a binary that a later
-# `sudo <name>` executes as root. Use the full path for brew tools under
-# sudo instead.
+# No sudoers secure_path entry for linuxbrew: /home/linuxbrew is
+# user-writable, so putting it in root's PATH would let user-level code
+# plant a binary that `sudo <name>` runs as root.
