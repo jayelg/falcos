@@ -25,3 +25,10 @@ NERD_FONTS_VERSION="3.4.0"
 # renovate: datasource=github-releases depName=HalFrgrd/flyline
 FLYLINE_VERSION="1.3.0"
 FLYLINE_SHA256="21bb0a7a0e417496ff68ef8379cadc05d35e42aee357fc64ad9a8d95f69320f8"
+
+# falcos-cli, the OS TUI aliased to the OS name. Own repo, prebuilt static
+# binary; publishes a .sha256 sidecar per asset like flyline, so
+# checksums.yml keeps FALCOS_CLI_SHA256 in sync with version bumps.
+# renovate: datasource=github-releases depName=jayelg/falcos-cli
+FALCOS_CLI_VERSION="0.1.0"
+FALCOS_CLI_SHA256="0000000000000000000000000000000000000000000000000000000000000000"

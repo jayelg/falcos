@@ -1,5 +1,0 @@
-#!/usr/bin/bash
-set -euo pipefail
-
-mkdir -p "${HOME}/.config/just"
-cp -n /etc/skel/.config/just/justfile "${HOME}/.config/just/justfile"
