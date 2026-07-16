@@ -72,7 +72,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     steps:
       # Separate image per flavor so tag history is independent and
