@@ -9,7 +9,7 @@ _default:
     @just --justfile '{{ justfile() }}' --list --list-heading $'Available commands:\n' --list-prefix $' - '
 
 # Set up dotfiles and secrets with chezmoi and Vaultwarden — run once on a new machine
-[group('Dotfiles')]
+[group('Configuration')]
 setup-dotfiles:
     #!/usr/bin/env bash
     set -eou pipefail
@@ -109,19 +109,6 @@ randomize-mac:
 [group('System')]
 system-info:
     fastfetch
-
-# Boot into this device's BIOS/UEFI screen
-[group('System')]
-bios:
-    #!/usr/bin/bash
-    if [ ! -d /sys/firmware/efi ]; then
-        echo "Rebooting to legacy BIOS from OS is not supported."
-        exit 1
-    fi
-
-    if gum confirm "Reboot into BIOS?" ; then
-        systemctl reboot --firmware-setup
-    fi
 
 # Show BIOS info
 [group('System')]
@@ -303,8 +290,10 @@ affinity-remove:
 update:
     #!/usr/bin/bash
     # falcos-progress feeds the TUI's bottom bar; a no-op in a plain terminal.
-    # Steps are coarse (bootc/flatpak don't report percentages).
+    # Steps are coarse (bootc/flatpak don't report percentages). `:` fallback
+    # keeps the recipe runnable where the helper isn't installed.
     prog=/usr/libexec/falcos-progress
+    [ -x "$prog" ] || prog=:
     SERVICE="bootc-fetch-apply-updates.service"
     if systemctl is-active --quiet "$SERVICE"; then
         echo "Automatic updates are currently running, use \`journalctl -fexu $SERVICE\` to see logs"
@@ -331,6 +320,40 @@ update:
     "$prog" 100
     "$prog" clear
     echo "Done."
+
+# Reboot this machine
+[group('Power')]
+reboot:
+    #!/usr/bin/bash
+    if gum confirm "Reboot now?"; then
+        systemctl reboot
+    else
+        echo "Cancelled."
+    fi
+
+# Reboot into this device's UEFI (BIOS) setup screen
+[group('Power')]
+reboot-uefi:
+    #!/usr/bin/bash
+    if [ ! -d /sys/firmware/efi ]; then
+        echo "Rebooting to legacy BIOS from OS is not supported."
+        exit 1
+    fi
+    if gum confirm "Reboot into UEFI setup?"; then
+        systemctl reboot --firmware-setup
+    else
+        echo "Cancelled."
+    fi
+
+# Shut down this machine
+[group('Power')]
+shutdown:
+    #!/usr/bin/bash
+    if gum confirm "Shut down now?"; then
+        systemctl poweroff
+    else
+        echo "Cancelled."
+    fi
 
 # Personal additions, not managed by the image
 import? "~/.config/just/user.justfile"

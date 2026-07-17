@@ -5,7 +5,9 @@
 # of the environment.
 case $- in
     *i*)
-        __os_cli_name="$(. /etc/os-release 2>/dev/null && printf '%s' "$NAME" | tr '[:upper:]' '[:lower:]')"
+        # First word only: alias names can't contain spaces (e.g. an
+        # unbranded "Fedora Linux" base would otherwise break the alias)
+        __os_cli_name="$(. /etc/os-release 2>/dev/null && printf '%s' "${NAME%% *}" | tr '[:upper:]' '[:lower:]')"
         # Alias name is intentionally the os-release NAME resolved now.
         # shellcheck disable=SC2139
         [ -n "$__os_cli_name" ] && alias "$__os_cli_name"='falcos-cli'

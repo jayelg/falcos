@@ -3,7 +3,7 @@
 # files/common/etc/environment.d/30-hardened-malloc.conf (see
 # common/core/130-hardening.sh). Apps that crash under it get wrapped at
 # install time with this helper; runtime exemptions are handled by
-# `ujust hardened-malloc-exempt`. Standalone so RUN layers can mount just
+# `falcos hardened-malloc-exempt`. Standalone so RUN layers can mount just
 # this file without pulling in the rest of lib/.
 
 # <binary> — renames <binary> to <binary>.bin and installs a wrapper that
