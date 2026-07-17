@@ -2,11 +2,70 @@
 # System justfile behind the os-name alias (etc/profile.d/falcos-cli.sh).
 # Ships in the image so recipes are always current; personal additions go
 # in ~/.config/just/user.justfile via the import at the bottom.
+# Comments above recipes provide the description for falcos-cli.
 set allow-duplicate-recipes := true
 set ignore-comments := true
 
 _default:
     @just --justfile '{{ justfile() }}' --list --list-heading $'Available commands:\n' --list-prefix $' - '
+
+# Update system and flatpaks
+[group('System')]
+update:
+    #!/usr/bin/bash
+    # falcos-progress feeds the TUI's bottom bar; a no-op in a plain terminal.
+    # Steps are coarse (bootc/flatpak don't report percentages). `:` fallback
+    # keeps the recipe runnable where the helper isn't installed.
+    prog=/usr/libexec/falcos-progress
+    [ -x "$prog" ] || prog=:
+    SERVICE="bootc-fetch-apply-updates.service"
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo "Automatic updates are currently running, use \`journalctl -fexu $SERVICE\` to see logs"
+        exit 1
+    fi
+    echo "==> Updating system image..."
+    "$prog" 10
+    # bootc upgrade doesn't support local layered packages, so fall back to
+    # rpm-ostree upgrade if LockLayering is off in /etc/rpm-ostreed.conf.
+    if command -v rpm-ostree >/dev/null 2>&1 && [ -f /etc/rpm-ostreed.conf ] && \
+        grep -qE '^[[:space:]]*LockLayering[[:space:]]*=[[:space:]]*true' /etc/rpm-ostreed.conf; then
+        sudo bootc upgrade
+    else
+        rpm-ostree upgrade
+    fi
+    echo "==> Updating flatpaks..."
+    "$prog" 60
+    if flatpak remotes | grep -q system; then
+        flatpak update -y
+    fi
+    if flatpak remotes | grep -q user; then
+        flatpak update --user -y
+    fi
+    "$prog" 100
+    "$prog" clear
+    echo "Done."
+
+# Show BIOS info
+[group('System')]
+bios-info:
+    #!/usr/bin/bash
+    sudo bash <<'EOF'
+    echo "Manufacturer: $(dmidecode -s baseboard-manufacturer)"
+    echo "Product Name: $(dmidecode -s baseboard-product-name)"
+    echo "Version: $(dmidecode -s bios-version)"
+    echo "Release Date: $(dmidecode -s bios-release-date)"
+    EOF
+
+# Measure idle power draw
+[group('System')]
+check-idle-power-draw:
+    #!/usr/bin/bash
+    sudo powerstat -a -r
+
+# Regenerate grub.cfg with os-prober so other installed OSes (e.g. Windows) show up in the boot menu
+[group('System')]
+regenerate-grub:
+    sudo /usr/libexec/grub2-os-prober-regen
 
 # Set up dotfiles and secrets with chezmoi and Vaultwarden — run once on a new machine
 [group('Configuration')]
@@ -105,32 +164,63 @@ randomize-mac:
     nmcli connection up "$ACTIVE"
     echo "Done. New MAC: $(ip link show wlan0 | awk '/ether/{print $2}')"
 
-# Show system info
-[group('System')]
-system-info:
-    fastfetch
+# Set up the Affinity v3 Wine prefix for this user (Wine and DLLs ship in the image; run once)
+[group('Apps')]
+affinity-setup:
+    #!/usr/bin/env bash
+    set -eou pipefail
 
-# Show BIOS info
-[group('System')]
-bios-info:
-    #!/usr/bin/bash
-    sudo bash <<'EOF'
-    echo "Manufacturer: $(dmidecode -s baseboard-manufacturer)"
-    echo "Product Name: $(dmidecode -s baseboard-product-name)"
-    echo "Version: $(dmidecode -s bios-version)"
-    echo "Release Date: $(dmidecode -s bios-release-date)"
-    EOF
+    export WINEPREFIX="$HOME/.local/share/affinity"
+    export WINE=/usr/lib/wine-affinity/bin/wine
+    export WINESERVER=/usr/lib/wine-affinity/bin/wineserver
+    export PATH="/usr/lib/wine-affinity/bin:$PATH"
+    # Wine crashes under the system-wide hardened_malloc preload
+    unset LD_PRELOAD
 
-# Measure idle power draw
-[group('System')]
-check-idle-power-draw:
-    #!/usr/bin/bash
-    sudo powerstat -a -r
+    echo "==> Initialising Wine prefix at $WINEPREFIX..."
+    wineboot --init
 
-# Regenerate grub.cfg with os-prober so other installed OSes (e.g. Windows) show up in the boot menu
-[group('System')]
-regenerate-grub:
-    sudo /usr/libexec/grub2-os-prober-regen
+    # Component set and order from upstream Linux-Affinity-Installer
+    echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
+    winetricks --unattended --force remove_mono vcrun2022 dotnet48 corefonts win11 tahoma renderer=vulkan
+    winecfg -v win11
+
+    echo "==> Installing DLLs + WinRT metadata from the image..."
+    /usr/libexec/affinity-sync-prefix
+
+    # wintypes native so Affinity loads the shim staged next to its exe
+    # instead of Wine's builtin
+    for dll in d3d9 d3d10core d3d11 dxgi d3d12 d3d12core wintypes; do
+        "$WINE" reg add 'HKCU\Software\Wine\DllOverrides' /v "$dll" /d native /f >/dev/null
+    done
+
+    echo ""
+    echo "Download the Affinity v3 installer (.exe) from https://www.affinity.studio"
+    read -rp "Path to the installer .exe: " exe
+    WINEDEBUG=-all "$WINE" "$exe"
+
+    # Second sync now that the app directory exists (d3d12 + wintypes
+    # shim go next to Affinity.exe)
+    appdir="$WINEPREFIX/drive_c/Program Files/Affinity/Affinity"
+    if [[ -d "$appdir" ]]; then
+        /usr/libexec/affinity-sync-prefix
+        echo "Done. Launch from the Affinity menu entry, or run: affinity"
+        echo "Verify OpenCL under Settings > Performance (Hardware acceleration)."
+    else
+        echo "Installer finished but $appdir was not found;"
+        echo "re-run 'falcos affinity-setup' after a successful install."
+        exit 1
+    fi
+
+# Remove this user's Affinity Wine prefix (the image-baked Wine and launcher remain)
+[group('Apps')]
+affinity-remove:
+    #!/usr/bin/env bash
+    set -eou pipefail
+    /usr/lib/wine-affinity/bin/wineserver -k 2>/dev/null || true
+    rm -rf "$HOME/.local/share/affinity"
+    rm -f "$HOME/.local/share/applications/wine/Programs/Affinity.desktop"
+    echo "Removed ~/.local/share/affinity"
 
 # Exempt an app from the system-wide hardened_malloc LD_PRELOAD (fixes crashes in some GTK/Electron apps)
 [group('Hardening')]
@@ -226,100 +316,6 @@ hardened-malloc-exemptions:
     grep -l 'env -u LD_PRELOAD' "$HOME/.local/bin"/* 2>/dev/null || echo "  (none)"
     echo "Baked into the image:"
     grep -rl 'env -u LD_PRELOAD' /usr/bin /usr/share/codium/codium 2>/dev/null || echo "  (none)"
-
-# Set up the Affinity v3 Wine prefix for this user (Wine and DLLs ship in the image; run once)
-[group('Apps')]
-affinity-setup:
-    #!/usr/bin/env bash
-    set -eou pipefail
-
-    export WINEPREFIX="$HOME/.local/share/affinity"
-    export WINE=/usr/lib/wine-affinity/bin/wine
-    export WINESERVER=/usr/lib/wine-affinity/bin/wineserver
-    export PATH="/usr/lib/wine-affinity/bin:$PATH"
-    # Wine crashes under the system-wide hardened_malloc preload
-    unset LD_PRELOAD
-
-    echo "==> Initialising Wine prefix at $WINEPREFIX..."
-    wineboot --init
-
-    # Component set and order from upstream Linux-Affinity-Installer
-    echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
-    winetricks --unattended --force remove_mono vcrun2022 dotnet48 corefonts win11 tahoma renderer=vulkan
-    winecfg -v win11
-
-    echo "==> Installing DLLs + WinRT metadata from the image..."
-    /usr/libexec/affinity-sync-prefix
-
-    # wintypes native so Affinity loads the shim staged next to its exe
-    # instead of Wine's builtin
-    for dll in d3d9 d3d10core d3d11 dxgi d3d12 d3d12core wintypes; do
-        "$WINE" reg add 'HKCU\Software\Wine\DllOverrides' /v "$dll" /d native /f >/dev/null
-    done
-
-    echo ""
-    echo "Download the Affinity v3 installer (.exe) from https://www.affinity.studio"
-    read -rp "Path to the installer .exe: " exe
-    WINEDEBUG=-all "$WINE" "$exe"
-
-    # Second sync now that the app directory exists (d3d12 + wintypes
-    # shim go next to Affinity.exe)
-    appdir="$WINEPREFIX/drive_c/Program Files/Affinity/Affinity"
-    if [[ -d "$appdir" ]]; then
-        /usr/libexec/affinity-sync-prefix
-        echo "Done. Launch from the Affinity menu entry, or run: affinity"
-        echo "Verify OpenCL under Settings > Performance (Hardware acceleration)."
-    else
-        echo "Installer finished but $appdir was not found;"
-        echo "re-run 'falcos affinity-setup' after a successful install."
-        exit 1
-    fi
-
-# Remove this user's Affinity Wine prefix (the image-baked Wine and launcher remain)
-[group('Apps')]
-affinity-remove:
-    #!/usr/bin/env bash
-    set -eou pipefail
-    /usr/lib/wine-affinity/bin/wineserver -k 2>/dev/null || true
-    rm -rf "$HOME/.local/share/affinity"
-    rm -f "$HOME/.local/share/applications/wine/Programs/Affinity.desktop"
-    echo "Removed ~/.local/share/affinity"
-
-# Update system and flatpaks
-[group('System')]
-update:
-    #!/usr/bin/bash
-    # falcos-progress feeds the TUI's bottom bar; a no-op in a plain terminal.
-    # Steps are coarse (bootc/flatpak don't report percentages). `:` fallback
-    # keeps the recipe runnable where the helper isn't installed.
-    prog=/usr/libexec/falcos-progress
-    [ -x "$prog" ] || prog=:
-    SERVICE="bootc-fetch-apply-updates.service"
-    if systemctl is-active --quiet "$SERVICE"; then
-        echo "Automatic updates are currently running, use \`journalctl -fexu $SERVICE\` to see logs"
-        exit 1
-    fi
-    echo "==> Updating system image..."
-    "$prog" 10
-    # bootc upgrade doesn't support local layered packages, so fall back to
-    # rpm-ostree upgrade if LockLayering is off in /etc/rpm-ostreed.conf.
-    if command -v rpm-ostree >/dev/null 2>&1 && [ -f /etc/rpm-ostreed.conf ] && \
-        grep -qE '^[[:space:]]*LockLayering[[:space:]]*=[[:space:]]*true' /etc/rpm-ostreed.conf; then
-        sudo bootc upgrade
-    else
-        rpm-ostree upgrade
-    fi
-    echo "==> Updating flatpaks..."
-    "$prog" 60
-    if flatpak remotes | grep -q system; then
-        flatpak update -y
-    fi
-    if flatpak remotes | grep -q user; then
-        flatpak update --user -y
-    fi
-    "$prog" 100
-    "$prog" clear
-    echo "Done."
 
 # Reboot this machine
 [group('Power')]
