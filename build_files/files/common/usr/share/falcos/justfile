@@ -160,12 +160,14 @@ randomize-mac:
 		echo "No active Wi-Fi connection found."
 		exit 1
 	fi
+	# DEVICE first: SSIDs may contain colons, device names never do
+	DEV=$(nmcli -t -f DEVICE,TYPE connection show --active | awk -F: '$2=="802-11-wireless"{print $1; exit}')
 
 	echo "==> Setting MAC randomization for: $ACTIVE"
 	nmcli connection modify "$ACTIVE" wifi.cloned-mac-address random
 	nmcli connection down "$ACTIVE"
 	nmcli connection up "$ACTIVE"
-	echo "Done. New MAC: $(ip link show wlan0 | awk '/ether/{print $2}')"
+	echo "Done. New MAC: $(ip link show "$DEV" | awk '/ether/{print $2}')"
 
 # Set up the Affinity v3 Wine prefix for this user (Wine and DLLs ship in the image; run once)
 [group('Apps')]

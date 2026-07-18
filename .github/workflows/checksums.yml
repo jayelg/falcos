@@ -19,6 +19,7 @@ on:
       - 'build_files/versions-frequent-tools.sh'
       - 'build_files/versions-frequent-affinity.sh'
       - 'build_files/versions-frequent-network.sh'
+      - 'build_files/versions-core-theming.sh'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -51,6 +52,14 @@ jobs:
           # upstream-published .sha256 next to it (URL points at the sidecar).
           entries=(
             'bw|build_files/versions-frequent-tools.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
+            'aichat|build_files/versions-frequent-tools.sh|AICHAT_VERSION|AICHAT_SHA256|download|https://github.com/sigoden/aichat/releases/download/v{v}/aichat-v{v}-x86_64-unknown-linux-musl.tar.gz'
+            'starship|build_files/versions-frequent-tools.sh|STARSHIP_VERSION|STARSHIP_SHA256|sidecar|https://github.com/starship/starship/releases/download/v{v}/starship-x86_64-unknown-linux-musl.tar.gz.sha256'
+            # nerd-fonts pins the release's SHA-256.txt manifest, the build
+            # verifies each font archive against it
+            'nerd-fonts|build_files/versions-frequent-tools.sh|NERD_FONTS_VERSION|NERD_FONTS_SHA256|download|https://github.com/ryanoasis/nerd-fonts/releases/download/v{v}/SHA-256.txt'
+            'darkly|build_files/versions-core-theming.sh|DARKLY_VERSION|DARKLY_SHA256|download|https://github.com/Bali10050/Darkly/archive/refs/tags/v{v}.tar.gz'
+            'ant|build_files/versions-core-theming.sh|ANT_COMMIT|ANT_SHA256|download|https://github.com/EliverLara/Ant/archive/{v}.tar.gz'
+            'advanced-weather-widget|build_files/versions-core-theming.sh|AWW_VERSION|AWW_SHA256|download|https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/{v}/advanced-weather-widget.plasmoid'
             'flyline|build_files/versions-frequent-tools.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
             'falcos-cli|build_files/versions-frequent-tools.sh|FALCOS_CLI_VERSION|FALCOS_CLI_SHA256|sidecar|https://github.com/jayelg/falcos-cli/releases/download/v{v}/falcos-cli-v{v}-x86_64-linux-gnu.tar.gz.sha256'
             'wine-affinity|build_files/versions-frequent-affinity.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
@@ -67,7 +76,12 @@ jobs:
 
             version="$(sed -n "s/^${version_var}=\"\([^\"]*\)\"/\1/p" "$file")"
             pinned="$(sed -n "s/^${sha_var}=\"\([^\"]*\)\"/\1/p" "$file")"
-            [ -n "$version" ] && [ -n "$pinned" ]
+            # Not `[ -n .. ] && [ -n .. ]`: set -e exempts non-final commands
+            # of a && list, so that form never aborts on an empty $version
+            if [ -z "$version" ] || [ -z "$pinned" ]; then
+              echo "::error::${name}: ${version_var} or ${sha_var} not found in ${file}"
+              exit 1
+            fi
             url="${url//\{v\}/${version}}"
 
             if [ "$mode" = "sidecar" ]; then

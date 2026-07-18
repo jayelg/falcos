@@ -41,7 +41,9 @@ install -D -m 0644 /tmp/xone/install/modprobe.conf /usr/lib/modprobe.d/xone-blac
 # --skip-disclaimer accepts non-interactively at build time.
 sh /tmp/xone/install/firmware.sh --skip-disclaimer
 
-kernel_devel_remove dkms gcc make sbsigntools
+# cabextract comes back later as a winetricks dependency (needed at runtime
+# by affinity-setup); removing it here keeps its presence dependency-owned
+kernel_devel_remove dkms gcc make sbsigntools cabextract
 rm -rf /tmp/xone
 
 ### Not yet implemented

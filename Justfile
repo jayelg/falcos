@@ -51,7 +51,7 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using Podman, e.g. `just build falcos desktop`
+# Build the image using Podman, e.g. `just build falcos latest desktop`
 build $target_image=image_name $tag=default_tag $flavor="laptop":
     #!/usr/bin/env bash
     set -euo pipefail
