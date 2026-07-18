@@ -23,7 +23,7 @@ dnf5 install -y "${FIRMWARE_PACKAGES[@]}"
 # Built via DKMS, the akmods wrapper assumes a running kernel and doesn't
 # work mid container build.
 source /ctx/lib/dkms-helpers.sh
-kernel_devel_install dkms gcc make git sbsigntools openssl cabextract
+kernel_devel_install "${DKMS_BUILD_DEPS[@]}" cabextract
 
 XONE_VERSION="0.0.0+${XONE_COMMIT:0:12}"
 
@@ -43,7 +43,7 @@ sh /tmp/xone/install/firmware.sh --skip-disclaimer
 
 # cabextract comes back later as a winetricks dependency (needed at runtime
 # by affinity-setup); removing it here keeps its presence dependency-owned
-kernel_devel_remove dkms gcc make sbsigntools cabextract
+kernel_devel_remove "${DKMS_BUILD_DEPS_REMOVE[@]}" cabextract
 rm -rf /tmp/xone
 
 ### Not yet implemented

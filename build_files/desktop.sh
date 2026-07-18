@@ -7,7 +7,7 @@ brand_os_release \
 
 ### Looking Glass kvmfr module (shared-memory transport between host and VM)
 source /ctx/lib/dkms-helpers.sh
-kernel_devel_install dkms gcc make git sbsigntools openssl
+kernel_devel_install "${DKMS_BUILD_DEPS[@]}"
 
 git clone --quiet --depth 1 --branch "$LOOKING_GLASS_TAG" \
     https://github.com/gnif/LookingGlass.git /tmp/looking-glass
@@ -23,7 +23,7 @@ install -Dm644 /dev/null /usr/lib/udev/rules.d/99-kvmfr.rules
 printf 'SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0660"\n' \
     > /usr/lib/udev/rules.d/99-kvmfr.rules
 
-kernel_devel_remove dkms gcc make sbsigntools
+kernel_devel_remove "${DKMS_BUILD_DEPS_REMOVE[@]}"
 rm -rf /tmp/looking-glass
 
 ### VFIO

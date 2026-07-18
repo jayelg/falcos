@@ -7,6 +7,14 @@
 source "$(dirname "${BASH_SOURCE[0]}")/kernel-helpers.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/sign-helpers.sh"
 
+# Shared build deps for kernel_devel_install/kernel_devel_remove. The remove
+# list is smaller on purpose: git is a permanent package owned by
+# common/core/040-dev-tools.sh and openssl ships in the fedora-bootc base,
+# so removing either would strip a package the image wants. Callers append
+# module-specific extras (e.g. cabextract for xone) to both calls.
+DKMS_BUILD_DEPS=(dkms gcc make git sbsigntools openssl)
+DKMS_BUILD_DEPS_REMOVE=(dkms gcc make sbsigntools)
+
 # <src-dir> — prints PACKAGE_VERSION from the dkms.conf in <src-dir>
 dkms_conf_version() {
     local version
