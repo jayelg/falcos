@@ -38,7 +38,7 @@ rm -rf /tmp/flyline.tar.gz "/tmp/libflyline.so.${FLYLINE_VERSION}"
 
 ### falcos-cli (OS TUI, aliased to the OS name via etc/profile.d/falcos-cli.sh)
 ### Includes runtime helper scripts: falcos-helpers.sh, falcos-progress
-curl -fsSL "https://github.com/jayelg/falcos-cli/releases/download/v${FALCOS_CLI_VERSION}/falcos-cli-v${FALCOS_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+curl -fsSL "https://github.com/jayelg/falcos-cli/releases/download/v${FALCOS_CLI_VERSION}/falcos-cli-v${FALCOS_CLI_VERSION}-x86_64-linux-gnu.tar.gz" \
     -o /tmp/falcos-cli.tar.gz
 echo "${FALCOS_CLI_SHA256}  /tmp/falcos-cli.tar.gz" | sha256sum -c -
 tar -xzf /tmp/falcos-cli.tar.gz -C /tmp/

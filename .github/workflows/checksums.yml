@@ -52,7 +52,7 @@ jobs:
           entries=(
             'bw|build_files/versions-frequent-tools.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
             'flyline|build_files/versions-frequent-tools.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
-            'falcos-cli|build_files/versions-frequent-tools.sh|FALCOS_CLI_VERSION|FALCOS_CLI_SHA256|sidecar|https://github.com/jayelg/falcos-cli/releases/download/v{v}/falcos-cli-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
+            'falcos-cli|build_files/versions-frequent-tools.sh|FALCOS_CLI_VERSION|FALCOS_CLI_SHA256|sidecar|https://github.com/jayelg/falcos-cli/releases/download/v{v}/falcos-cli-v{v}-x86_64-linux-gnu.tar.gz.sha256'
             'wine-affinity|build_files/versions-frequent-affinity.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
             'dxvk|build_files/versions-frequent-affinity.sh|DXVK_VERSION|DXVK_SHA256|download|https://github.com/doitsujin/dxvk/releases/download/v{v}/dxvk-{v}.tar.gz'
             'vkd3d-proton|build_files/versions-frequent-affinity.sh|VKD3D_PROTON_VERSION|VKD3D_PROTON_SHA256|download|https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{v}/vkd3d-proton-{v}.tar.zst'

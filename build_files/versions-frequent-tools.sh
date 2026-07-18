@@ -30,5 +30,5 @@ FLYLINE_SHA256="21bb0a7a0e417496ff68ef8379cadc05d35e42aee357fc64ad9a8d95f69320f8
 # binary; publishes a .sha256 sidecar per asset like flyline, so
 # checksums.yml keeps FALCOS_CLI_SHA256 in sync with version bumps.
 # renovate: datasource=github-releases depName=jayelg/falcos-cli
-FALCOS_CLI_VERSION="0.1.0"
-FALCOS_CLI_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+FALCOS_CLI_VERSION="0.1.1"
+FALCOS_CLI_SHA256="396b530d915a8030bb02ef1917021e10199a43134b9aad8783b13e689dde50c4"
