@@ -8,4 +8,6 @@ StartLimitBurst=5
 
 [Service]
 Type=oneshot
+Restart=on-failure
+RestartSec=60s
 ExecStart=/usr/bin/flatpak update --system --noninteractive --assumeyes

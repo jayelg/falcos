@@ -5,10 +5,10 @@
 # Apps that break under it are wrapped with `env -u LD_PRELOAD` where they
 # are installed, or at runtime via `falcos hardened-malloc-exempt`.
 dnf5 -y copr enable secureblue/packages
+dnf5 -y copr disable secureblue/packages
 dnf5 -y install --enablerepo="copr:copr.fedorainfracloud.org:secureblue:packages" \
     hardened_malloc \
     no_rlimit_as
-dnf5 -y copr disable secureblue/packages
 
 # Installed directly rather than via the files/common copy since git can't
 # track the 0440 mode sudo requires

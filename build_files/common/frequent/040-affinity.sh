@@ -17,7 +17,7 @@ mkdir /tmp/wine-affinity
 tar -xf /tmp/wine-affinity.tar.xz -C /tmp/wine-affinity
 # Top-level directory name varies between releases; locate bin/wine and
 # normalise whatever contains it to /usr/lib/wine-affinity.
-WINE_BIN_DIR="$(find /tmp/wine-affinity -maxdepth 3 -type f -name wine -path '*/bin/*' -printf '%h\n' | head -1)"
+WINE_BIN_DIR="$(find /tmp/wine-affinity -maxdepth 3 -type f -name wine -path '*/bin/*' -printf '%h\n' -quit)"
 mv "$(dirname "$WINE_BIN_DIR")" /usr/lib/wine-affinity
 rm -rf /tmp/wine-affinity /tmp/wine-affinity.tar.xz
 
