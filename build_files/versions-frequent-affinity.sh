@@ -15,8 +15,8 @@ AFFINITY_WINE_TAG="11.12"
 AFFINITY_WINE_SHA256="44a99f2a90356790936f08620ccca573581c0bb006b9bed6899dd4ed465986aa"
 
 # renovate: datasource=github-releases depName=doitsujin/dxvk extractVersion=^v(?<version>.*)$
-DXVK_VERSION="3.0.1"
-DXVK_SHA256="bebb6284db590535b7b005c102ebf6850c98842cff0fded9aacb74babae14c49"
+DXVK_VERSION="3.0.2"
+DXVK_SHA256="9c538924110a7cdef871ca36dee218c0774124374ffdeb38af4b76be55bdf7c2"
 
 # Last version validated against Affinity by ryzendew/Linux-Affinity-Installer
 # was 2.14.1; if a bump breaks Affinity's OpenCL compute, pin back to that.
