@@ -16,7 +16,6 @@ _default:
 
 # Update system and flatpaks
 [group('System')]
-[progress]
 update:
 	#!/usr/bin/bash
 	source /usr/share/falcos/falcos-helpers.sh
@@ -183,10 +182,18 @@ affinity-setup:
 	unset LD_PRELOAD
 
 	echo "==> Initialising Wine prefix at $WINEPREFIX..."
-	wineboot --init
+	# Suppress wine-mono/gecko install dialogs — winetricks removes mono and
+	# installs dotnet48 (full .NET 4.8) two lines below.
+	WINEDLLOVERRIDES="mscoree,mshtml=" wineboot --init
+	# Wait for background services to settle before winetricks touches regedit.
+	"$WINESERVER" -w
+	sleep 2
 
 	echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
-	winetricks --unattended --force remove_mono vcrun2022 dotnet48 corefonts win11 tahoma renderer=vulkan
+	# vcrun2022 is installed from the baked-in 64-bit redist instead of
+	# winetricks, because this WoW64 Wine build has no syswow64 (32-bit) path.
+	winetricks --unattended --force remove_mono dotnet48 corefonts win11 tahoma renderer=vulkan
+	"$WINE" /usr/share/wine-affinity/vc_redist.x64.exe /install /quiet /norestart
 	winecfg -v win11
 
 	echo "==> Installing DLLs + WinRT metadata from the image..."
@@ -313,7 +320,6 @@ hardened-malloc-exemptions:
 
 # Reboot this machine
 [group('Power')]
-[silent]
 reboot:
 	#!/usr/bin/bash
 	source /usr/share/falcos/falcos-helpers.sh
@@ -325,7 +331,6 @@ reboot:
 
 # Reboot into this device's UEFI (BIOS) setup screen
 [group('Power')]
-[silent]
 reboot-uefi:
 	#!/usr/bin/bash
 	source /usr/share/falcos/falcos-helpers.sh
@@ -341,7 +346,6 @@ reboot-uefi:
 
 # Shut down this machine
 [group('Power')]
-[silent]
 shutdown:
 	#!/usr/bin/bash
 	source /usr/share/falcos/falcos-helpers.sh
