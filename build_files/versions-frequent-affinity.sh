@@ -36,3 +36,10 @@ WINDOWS_WINMD_SHA256="d700ffb5733ffa4b3f58d8853636d195df72aa6ada1ae91651f4fdfeb5
 # winmd above. Manual pin like WINDOWS_WINMD.
 WINTYPES_SHIM_COMMIT="f8a2d42ba3abc5dcdc584daa6728a2fa019be72e"
 WINTYPES_SHIM_SHA256="a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bfebbff6"
+
+# 64-bit VC++ 2022 redistributable, needed by dotnet48 and Affinity itself.
+# aka.ms/vs/17/release/vc_redist.x64.exe is the permanent latest-version URL.
+# No official checksum published; trust-on-first-use like the Wine tarball.
+# .github/workflows/checksums.yml recomputes this on bumps.
+# renovate: datasource=github-releases depName=Microsoft/vc-redist
+VC_REDIST_X64_SHA256="cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b"

@@ -54,6 +54,16 @@ echo "${WINTYPES_SHIM_SHA256}  /tmp/wintypes_shim.dll.so" | sha256sum -c -
 install -D -m 0644 /tmp/wintypes_shim.dll.so /usr/share/wine-affinity/wintypes.dll
 rm -f /tmp/wintypes_shim.dll.so
 
+### VC++ 2022 64-bit redistributable (winetricks' vcrun2022 verb uses the 32-bit
+# regedit path which doesn't exist on this WoW64 Wine build)
+curl --retry 3 -fsSLo /tmp/vc_redist.x64.exe \
+    "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+# No official checksum published for the VC++ redist; trust-on-first-use like
+# the Wine tarball. SHA256 is validated by checksums.yml on first bump.
+echo "${VC_REDIST_X64_SHA256}  /tmp/vc_redist.x64.exe" | sha256sum -c -
+install -D -m 0644 /tmp/vc_redist.x64.exe /usr/share/wine-affinity/vc_redist.x64.exe
+rm -f /tmp/vc_redist.x64.exe
+
 ### Launcher
 # env -u LD_PRELOAD: Wine crashes under the system-wide hardened_malloc
 # preload (same class of exemption as codium/virt-manager).
