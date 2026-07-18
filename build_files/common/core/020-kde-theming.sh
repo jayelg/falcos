@@ -19,6 +19,7 @@ DARKLY_BUILD_DEPS=(
 dnf5 install -y "${DARKLY_BUILD_DEPS[@]}"
 curl -fsSL "https://github.com/Bali10050/Darkly/archive/refs/tags/v${DARKLY_VERSION}.tar.gz" \
     -o /tmp/darkly.tar.gz
+echo "${DARKLY_SHA256}  /tmp/darkly.tar.gz" | sha256sum -c -
 tar -xzf /tmp/darkly.tar.gz -C /tmp/
 cmake \
     -B /tmp/darkly-build \
@@ -36,6 +37,7 @@ dnf5 remove -y --noautoremove "${DARKLY_BUILD_DEPS[@]}"
 # Ant-Dark plasma desktop theme
 curl -fsSL "https://github.com/EliverLara/Ant/archive/${ANT_COMMIT}.tar.gz" \
     -o /tmp/ant.tar.gz
+echo "${ANT_SHA256}  /tmp/ant.tar.gz" | sha256sum -c -
 tar -xzf /tmp/ant.tar.gz -C /tmp/
 cp -r "/tmp/Ant-${ANT_COMMIT}/kde/Dark/plasma/desktoptheme/Ant-Dark" \
     /usr/share/plasma/desktoptheme/Ant-Dark
@@ -44,6 +46,7 @@ rm -rf /tmp/ant.tar.gz "/tmp/Ant-${ANT_COMMIT}"
 # Advanced Weather Widget
 curl -fsSL "https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/${AWW_VERSION}/advanced-weather-widget.plasmoid" \
     -o /tmp/weather-widget.plasmoid
+echo "${AWW_SHA256}  /tmp/weather-widget.plasmoid" | sha256sum -c -
 mkdir -p /usr/share/plasma/plasmoids/org.kde.plasma.advanced-weather-widget
 unzip /tmp/weather-widget.plasmoid -d /usr/share/plasma/plasmoids/org.kde.plasma.advanced-weather-widget/
 rm /tmp/weather-widget.plasmoid
