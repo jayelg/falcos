@@ -19,8 +19,10 @@ dnf5 versionlock add "${OVERRIDES[@]}"
 # rusticl OpenCL ICD (used by the Affinity Wine wrapper via RUSTICL_ENABLE).
 # Not in OVERRIDES: distro-sync only syncs installed packages. Repo priority
 # keeps it on fedora-multimedia; arch pinned so dnf can't pick the i686
-# multilib package.
-dnf5 install -y mesa-libOpenCL.x86_64
+# multilib package. ocl-icd named so the OpenCL loader dep resolves to it
+# rather than OpenCL-ICD-Loader, which conflicts with the ocl-icd the
+# Affinity phase requires.
+dnf5 install -y mesa-libOpenCL.x86_64 ocl-icd
 dnf5 versionlock add mesa-libOpenCL
 MULTIMEDIA_PACKAGES=(
     ffmpeg
