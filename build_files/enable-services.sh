@@ -5,6 +5,12 @@
 # Base image preset enables sshd, not wanted on a single-user desktop
 systemctl disable sshd.service
 
+# Fedora countme telemetry, off for this image. Only the timer is masked so
+# `rpm-ostree countme` still works manually. The timer elapses during sleep
+# and fires on resume before the network is up, leaving a failed unit; if
+# unmasked, the rpm-ostree-countme.service.d drop-in adds retries for that.
+systemctl mask rpm-ostree-countme.timer
+
 # common/core/010-kde-desktop.sh
 systemctl enable plasmalogin-shadow-workaround.service
 systemctl enable plasmalogin.service
