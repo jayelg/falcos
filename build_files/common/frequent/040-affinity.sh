@@ -4,10 +4,10 @@
 # The mutable per-user prefix (plus the installer .exe, which can't ship in
 # the image) is created by `falcos affinity-setup`.
 
-# winetricks drives the prefix setup; ocl-icd is the OpenCL loader Wine's
-# passthrough needs on top of rusticl (mesa-libOpenCL, common/core/090);
-# zstd for the vkd3d-proton tarball below.
-dnf5 install -y winetricks ocl-icd clinfo zstd
+# winetricks drives the prefix setup; Wine's OpenCL passthrough goes through
+# the base image's OpenCL-ICD-Loader with the rusticl ICD (mesa-libOpenCL,
+# common/core/090); zstd for the vkd3d-proton tarball below.
+dnf5 install -y winetricks clinfo zstd
 
 ### Patched Wine (WoW64 build, no 32-bit runtime needed)
 curl --retry 3 -fsSLo /tmp/wine-affinity.tar.xz \
