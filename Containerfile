@@ -48,9 +48,13 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
 # when the CachyOS COPR goes stale; see build_files/lib/kernel-helpers.sh.
 ARG KERNEL=cachyos
 
+# dkms-helpers sources kernel-helpers and sign-helpers, and 060-kernel sources
+# sign-helpers only when a MOK key is mounted, so all three must ride together.
 RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/versions-core-kernel.sh,target=/ctx/versions-core-kernel.sh \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=bind,from=ctx,source=/lib/kernel-helpers.sh,target=/ctx/lib/kernel-helpers.sh \
+    --mount=type=bind,from=ctx,source=/lib/sign-helpers.sh,target=/ctx/lib/sign-helpers.sh \
+    --mount=type=bind,from=ctx,source=/lib/dkms-helpers.sh,target=/ctx/lib/dkms-helpers.sh \
     --mount=type=bind,from=ctx,source=/files/common/usr/share/falcos/sb_cert.der,target=/ctx/files/sb_cert.der \
     --mount=type=bind,from=ctx,source=/common/core/050-bootloader.sh,target=/ctx/common/core/050-bootloader.sh \
     --mount=type=bind,from=ctx,source=/common/core/060-kernel.sh,target=/ctx/common/core/060-kernel.sh \
@@ -123,9 +127,14 @@ RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequ
 
 ARG FLAVOR=laptop
 
+# Union of both flavors' helpers: brand for laptop and desktop, dkms (which
+# sources kernel- and sign-helpers) for desktop's kvmfr module.
 RUN --mount=type=bind,from=ctx,source=/phase-flavor.sh,target=/ctx/phase-flavor.sh \
     --mount=type=bind,from=ctx,source=/versions-frequent-desktop.sh,target=/ctx/versions-frequent-desktop.sh \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=bind,from=ctx,source=/lib/brand-helpers.sh,target=/ctx/lib/brand-helpers.sh \
+    --mount=type=bind,from=ctx,source=/lib/dkms-helpers.sh,target=/ctx/lib/dkms-helpers.sh \
+    --mount=type=bind,from=ctx,source=/lib/kernel-helpers.sh,target=/ctx/lib/kernel-helpers.sh \
+    --mount=type=bind,from=ctx,source=/lib/sign-helpers.sh,target=/ctx/lib/sign-helpers.sh \
     --mount=type=bind,from=ctx,source=/${FLAVOR}.sh,target=/ctx/${FLAVOR}.sh \
     --mount=type=bind,from=ctx,source=/files/${FLAVOR},target=/ctx/files/${FLAVOR} \
     --mount=type=cache,target=/var/cache \

@@ -51,8 +51,8 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using Podman, e.g. `just build falcos latest desktop`
-build $target_image=image_name $tag=default_tag $flavor="laptop":
+# Build the image using Podman, e.g. `just build falcos latest desktop stock`
+build $target_image=image_name $tag=default_tag $flavor="laptop" $kernel="cachyos":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -69,6 +69,7 @@ build $target_image=image_name $tag=default_tag $flavor="laptop":
     podman build \
         "${SECRET_ARGS[@]}" \
         --build-arg "FLAVOR=${flavor}" \
+        --build-arg "KERNEL=${kernel}" \
         --pull=newer \
         --tag "${target_image}:${tag}" \
         .
@@ -271,7 +272,6 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --network-user-mode \
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
-
 
 # Runs shellcheck on all Bash scripts, same file set as the Lint workflow
 lint:
