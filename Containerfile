@@ -76,6 +76,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=bind,from=ctx,source=/common/core/120-security.sh,target=/ctx/common/core/120-security.sh \
     --mount=type=bind,from=ctx,source=/common/core/130-hardening.sh,target=/ctx/common/core/130-hardening.sh \
     --mount=type=bind,from=ctx,source=/common/core/140-selinux.sh,target=/ctx/common/core/140-selinux.sh \
+    --mount=type=bind,from=ctx,source=/lib/selinux-helpers.sh,target=/ctx/lib/selinux-helpers.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
@@ -104,6 +105,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequ
     --mount=type=bind,from=ctx,source=/common/frequent/010-vpn.sh,target=/ctx/common/frequent/010-vpn.sh \
     --mount=type=bind,from=ctx,source=/common/frequent/020-custom-apps.sh,target=/ctx/common/frequent/020-custom-apps.sh \
     --mount=type=bind,from=ctx,source=/common/frequent/030-browser.sh,target=/ctx/common/frequent/030-browser.sh \
+    --mount=type=bind,from=ctx,source=/lib/selinux-helpers.sh,target=/ctx/lib/selinux-helpers.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \

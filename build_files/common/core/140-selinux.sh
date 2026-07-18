@@ -12,7 +12,5 @@ require {
 
 allow kernel_t self:process execmem;
 EOF
-checkmodule -M -m -o /tmp/composefs_execmem.mod /tmp/composefs_execmem.te
-semodule_package -o /tmp/composefs_execmem.pp -m /tmp/composefs_execmem.mod
-semodule -n -s targeted -X 200 -i /tmp/composefs_execmem.pp
-rm -f /tmp/composefs_execmem.te /tmp/composefs_execmem.mod /tmp/composefs_execmem.pp
+source /ctx/lib/selinux-helpers.sh
+install_selinux_module /tmp/composefs_execmem.te

@@ -18,8 +18,12 @@ Builds and installs an out-of-tree module via DKMS (used for xone and kvmfr), si
 
 Wraps a binary to strip the system-wide hardened_malloc `LD_PRELOAD` for apps that crash under it. Standalone so RUN layers can mount just this file.
 
+### [SELinux Helpers](selinux-helpers.sh)
+
+Compiles and installs a local SELinux policy module from a `.te` file into the targeted store. Standalone so RUN layers can mount just this file.
+
 ### [Brand Helpers](brand-helpers.sh)
 
 Patches the branding fields of `/etc/os-release`, parameterized per flavor.
 
-## Notes / Todo
+## Todo

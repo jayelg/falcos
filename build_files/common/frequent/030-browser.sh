@@ -30,7 +30,5 @@ allow unconfined_trivalent_script_t proc_t:filesystem associate;
 allow unconfined_trivalent_t sysctl_dev_t:dir search;
 allow unconfined_trivalent_t unconfined_t:dir search;
 EOF
-checkmodule -M -m -o /tmp/trivalent_local_fixes.mod /tmp/trivalent_local_fixes.te
-semodule_package -o /tmp/trivalent_local_fixes.pp -m /tmp/trivalent_local_fixes.mod
-semodule -n -s targeted -X 200 -i /tmp/trivalent_local_fixes.pp
-rm -f /tmp/trivalent_local_fixes.te /tmp/trivalent_local_fixes.mod /tmp/trivalent_local_fixes.pp
+source /ctx/lib/selinux-helpers.sh
+install_selinux_module /tmp/trivalent_local_fixes.te
