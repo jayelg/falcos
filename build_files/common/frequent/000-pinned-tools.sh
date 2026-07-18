@@ -42,7 +42,7 @@ curl -fsSL "https://github.com/jayelg/falcos-cli/releases/download/v${FALCOS_CLI
     -o /tmp/falcos-cli.tar.gz
 echo "${FALCOS_CLI_SHA256}  /tmp/falcos-cli.tar.gz" | sha256sum -c -
 tar -xzf /tmp/falcos-cli.tar.gz -C /tmp/
-/tmp/install.sh
+bash /tmp/install.sh
 rm -rf /tmp/falcos-cli.tar.gz /tmp/falcos-cli /tmp/install.sh /tmp/scripts/
 
 ### Nerd Fonts
