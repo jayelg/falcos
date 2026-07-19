@@ -1,5 +1,5 @@
-# shellcheck disable=SC2034  # versions here are consumed by the scripts sourced after this file
-# Renovate-tracked pins for common/frequent/040-affinity.sh. Keep each
+# shellcheck disable=SC2034  # versions here are consumed by component.sh
+# Renovate-tracked pins for the Affinity component. Keep each
 # annotation comment directly above its version line.
 #
 # None of these upstreams publish official checksums, so each pin carries a

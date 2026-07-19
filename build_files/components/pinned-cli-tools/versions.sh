@@ -1,5 +1,5 @@
-# shellcheck disable=SC2034  # versions here are consumed by the scripts sourced after this file
-# Renovate-tracked pins for common/frequent/000-pinned-tools.sh. Keep each
+# shellcheck disable=SC2034  # versions here are consumed by component.sh
+# Renovate-tracked pins for the pinned-cli-tools metapackage. Keep each
 # annotation comment directly above its version line.
 
 # No official checksum is published (trust-on-first-use). When a PR bumps

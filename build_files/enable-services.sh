@@ -29,7 +29,7 @@ systemctl --global enable pipewire-pulse.socket
 systemctl enable lm_sensors.service
 systemctl enable intel_lpmd.service
 
-# common/frequent/010-vpn.sh
+# components/mullvad-vpn/component.sh, components/netbird/component.sh, components/tailscale/component.sh
 systemctl enable mullvad-daemon
 systemctl enable netbird
 systemctl enable tailscaled

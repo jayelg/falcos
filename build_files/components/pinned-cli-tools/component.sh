@@ -1,3 +1,16 @@
+# Pinned CLI Tools (metapackage: VSCodium, Bitwarden CLI, aichat, Starship, Flyline, falcos-cli, Nerd Fonts)
+# Phase: frequent
+# Priority: 000 (first, no dependencies on other frequent components)
+# Writable paths: /usr/bin /usr/share/codium /usr/share/fonts /usr/lib/bash
+
+COMPDIR="$(dirname "${BASH_SOURCE[0]}")"
+COMPONENT_VERSION="${COMPONENT_VERSION:-latest}"
+if [ -d "$COMPDIR/$COMPONENT_VERSION" ]; then
+    COMPDIR="$COMPDIR/$COMPONENT_VERSION"
+fi
+
+source "$COMPDIR/versions.sh"
+
 ### VSCodium
 dnf5 install -y --enablerepo='vscodium' codium
 
@@ -64,3 +77,8 @@ for font in "${NERD_FONTS[@]}"; do
 done
 rm /tmp/nerdfonts-sha.txt
 fc-cache -f
+
+[ -d "$COMPDIR/files" ] && cp -rT "$COMPDIR/files" "/"
+if [ -f "$COMPDIR/justfile.inc" ]; then
+    cat "$COMPDIR/justfile.inc" >> /usr/share/falcos/justfile.apps
+fi

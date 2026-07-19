@@ -93,37 +93,71 @@ RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
     --mount=type=tmpfs,target=/tmp \
     /ctx/phase-core.sh 150-copr-extras.sh
 
-## common/frequent, grouped by theme, plus the flavor-specific script last:
+## Components (per-component RUN layers for independent BuildKit caching):
 
-RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
-    --mount=type=bind,from=ctx,source=/versions-frequent-tools.sh,target=/ctx/versions-frequent-tools.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/000-pinned-tools.sh,target=/ctx/common/frequent/000-pinned-tools.sh \
-    --mount=type=bind,from=ctx,source=/lib/wrap-helpers.sh,target=/ctx/lib/wrap-helpers.sh \
+# ---- Component: pinned-cli-tools:latest (metapackage) ----
+RUN --mount=type=bind,from=ctx,source=/components/pinned-cli-tools,target=/ctx/components/pinned-cli-tools \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-frequent.sh 000-pinned-tools.sh
+    COMPONENT_VERSION=latest bash /ctx/components/pinned-cli-tools/component.sh
 
-RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
-    --mount=type=bind,from=ctx,source=/versions-frequent-network.sh,target=/ctx/versions-frequent-network.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/010-vpn.sh,target=/ctx/common/frequent/010-vpn.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/020-custom-apps.sh,target=/ctx/common/frequent/020-custom-apps.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/030-browser.sh,target=/ctx/common/frequent/030-browser.sh \
-    --mount=type=bind,from=ctx,source=/lib/selinux-helpers.sh,target=/ctx/lib/selinux-helpers.sh \
+# ---- Component: mullvad-vpn:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/mullvad-vpn,target=/ctx/components/mullvad-vpn \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-frequent.sh 010-vpn.sh 020-custom-apps.sh 030-browser.sh
+    COMPONENT_VERSION=latest bash /ctx/components/mullvad-vpn/component.sh
 
-# Own layer: the patched Wine tarball is ~400 MB, keep its cache key off
-# the other frequent groups.
-RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequent.sh \
-    --mount=type=bind,from=ctx,source=/versions-frequent-affinity.sh,target=/ctx/versions-frequent-affinity.sh \
-    --mount=type=bind,from=ctx,source=/common/frequent/040-affinity.sh,target=/ctx/common/frequent/040-affinity.sh \
+# ---- Component: netbird:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/netbird,target=/ctx/components/netbird \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-frequent.sh 040-affinity.sh
+    COMPONENT_VERSION=latest bash /ctx/components/netbird/component.sh
+
+# ---- Component: tailscale:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/tailscale,target=/ctx/components/tailscale \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/tailscale/component.sh
+
+# ---- Component: falcos-bootc-updates:0.1.1 ----
+RUN --mount=type=bind,from=ctx,source=/components/falcos-bootc-updates,target=/ctx/components/falcos-bootc-updates \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=0.1.1 bash /ctx/components/falcos-bootc-updates/component.sh
+
+# ---- Component: plasma-network-audio:v0.1-alpha.1 ----
+RUN --mount=type=bind,from=ctx,source=/components/plasma-network-audio,target=/ctx/components/plasma-network-audio \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=v0.1-alpha.1 bash /ctx/components/plasma-network-audio/component.sh
+
+# ---- Component: trivalent:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/trivalent,target=/ctx/components/trivalent \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/trivalent/component.sh
+
+# ---- Component: affinity:3.2.0 ----
+RUN --mount=type=bind,from=ctx,source=/components/affinity,target=/ctx/components/affinity \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=3.2.0 bash /ctx/components/affinity/component.sh
 
 ARG FLAVOR=laptop
 # CI passes the YYYYMMDD build date; local builds get it from `just build`

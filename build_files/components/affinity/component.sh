@@ -1,8 +1,20 @@
-### Affinity v3 (Windows app) under patched Wine
-# Bakes the immutable pieces: the Affinity-patched Wine build, PE DXVK and
-# vkd3d-proton DLLs, the WinRT metadata + wintypes shim, and the launcher.
-# The mutable per-user prefix (plus the installer .exe, which can't ship in
-# the image) is created by `falcos affinity-setup`.
+# Affinity v3 (Windows app) under patched Wine
+# Phase: frequent
+# Priority: 040
+# Writable paths: /usr/bin /usr/lib/wine-affinity /usr/share/wine-affinity /usr/libexec/affinity-sync-prefix /usr/share/applications/affinity.desktop /usr/share/icons/hicolor/scalable/apps/affinity.svg /usr/lib/systemd/user/affinity-sync.service
+
+COMPDIR="$(dirname "${BASH_SOURCE[0]}")"
+
+# COMPONENT_VERSION is set by the Containerfile RUN instruction from COMPONENTS.list.
+COMPONENT_VERSION="${COMPONENT_VERSION:-latest}"
+
+# If a versioned subdirectory exists, switch into it.
+if [ -d "$COMPDIR/$COMPONENT_VERSION" ]; then
+    COMPDIR="$COMPDIR/$COMPONENT_VERSION"
+fi
+
+# Source version pins
+source "$COMPDIR/versions.sh"
 
 # winetricks drives the prefix setup; Wine's OpenCL passthrough goes through
 # the base image's OpenCL-ICD-Loader with the rusticl ICD (mesa-libOpenCL,
@@ -93,3 +105,11 @@ exec env -u LD_PRELOAD RUSTICL_ENABLE=radeonsi,iris \
     /usr/lib/wine-affinity/bin/wine "$AFFINITY_EXE" "$@"
 EOF
 chmod 755 /usr/bin/affinity
+
+# Install overlay files into the image
+[ -d "$COMPDIR/files" ] && cp -rT "$COMPDIR/files" "/"
+
+# Append runtime justfile recipes to the shared app-recipes file
+if [ -f "$COMPDIR/justfile.inc" ]; then
+    cat "$COMPDIR/justfile.inc" >> /usr/share/falcos/justfile.apps
+fi

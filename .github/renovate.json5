@@ -38,16 +38,16 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Version-tagged pins in build_files/versions-*.sh",
-      "managerFilePatterns": ["/^build_files/versions-(core|frequent)-[a-z]+\\.sh$/"],
+      "description": "Version-tagged pins in build_files/versions-*.sh and component versions.sh",
+      "managerFilePatterns": ["/^build_files/(versions-(core|frequent)-[a-z]+\\.sh|components/[^/]+/versions\\.sh)$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>github-releases|github-tags) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\w+=\"(?<currentValue>[^\"]+)\"",
       ],
     },
     {
       "customType": "regex",
-      "description": "Commit-pinned deps in build_files/versions-*.sh",
-      "managerFilePatterns": ["/^build_files/versions-(core|frequent)-[a-z]+\\.sh$/"],
+      "description": "Commit-pinned deps in build_files/versions-*.sh and component versions.sh",
+      "managerFilePatterns": ["/^build_files/(versions-(core|frequent)-[a-z]+\\.sh|components/[^/]+/versions\\.sh)$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+)\\n\\w+=\"(?<currentDigest>[^\"]+)\"",
       ],
