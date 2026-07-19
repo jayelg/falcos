@@ -7,7 +7,10 @@
 # winetricks drives the prefix setup; Wine's OpenCL passthrough goes through
 # the base image's OpenCL-ICD-Loader with the rusticl ICD (mesa-libOpenCL,
 # common/core/090); zstd for the vkd3d-proton tarball below.
-dnf5 install -y winetricks clinfo zstd
+# 7zip needed at runtime by falcos affinity-setup to extract the .NET 4.8
+# offline installer's x64 MSI (bypassing the 32-bit self-extractor which
+# fails on this WoW64-only Wine build).
+dnf5 install -y winetricks clinfo zstd 7zip
 
 ### Patched Wine (WoW64 build, no 32-bit runtime needed)
 curl --retry 3 -fsSLo /tmp/wine-affinity.tar.xz \
@@ -63,6 +66,14 @@ curl --retry 3 -fsSLo /tmp/vc_redist.x64.exe \
 echo "${VC_REDIST_X64_SHA256}  /tmp/vc_redist.x64.exe" | sha256sum -c -
 install -D -m 0644 /tmp/vc_redist.x64.exe /usr/share/wine-affinity/vc_redist.x64.exe
 rm -f /tmp/vc_redist.x64.exe
+
+### .NET 4.8 offline installer (winetricks' dotnet48 verb calls dotnet40 which
+# needs syswow64 (32-bit) support that this WoW64 Wine build lacks)
+curl --retry 3 -fsSLo /tmp/ndp48-x86-x64-allos-enu.exe \
+    "https://download.visualstudio.microsoft.com/download/pr/7afca223-55d2-470a-8edc-6a1739ae3252/abd170b4b0ec15ad0222a809b761a036/ndp48-x86-x64-allos-enu.exe"
+echo "${DOTNET48_SHA256}  /tmp/ndp48-x86-x64-allos-enu.exe" | sha256sum -c -
+install -D -m 0644 /tmp/ndp48-x86-x64-allos-enu.exe /usr/share/wine-affinity/ndp48-x86-x64-allos-enu.exe
+rm -f /tmp/ndp48-x86-x64-allos-enu.exe
 
 ### Launcher
 # env -u LD_PRELOAD: Wine crashes under the system-wide hardened_malloc
