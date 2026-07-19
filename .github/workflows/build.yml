@@ -227,16 +227,26 @@ jobs:
         env:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
         run: |
-          # Kernel modules and firmware are RPM-owned files, so excluding
-          # them leaves the package inventory intact while keeping the scan
-          # within the runner's memory; nproc parallelism for the same
-          # reason.
-          SYFT_PARALLELISM=$(nproc)
+          # Scanning a multi-GB bootc archive OOM-killed the 16GB runner
+          # here. Three mitigations, and swap as a backstop:
+          #   - select-catalogers=package limits the scan to the RPM
+          #     inventory (all a supply-chain SBOM needs) and skips the
+          #     file-digest cataloger that hashed the entire rootfs, the
+          #     real memory and time sink.
+          #   - parallelism=1: concurrent catalogers each hold a working
+          #     set, so parallelism raises peak memory, not lowers it.
+          #   - swapfile lets any residual spike spill to disk on /mnt
+          #     (the large runner volume) instead of tripping the OOM
+          #     killer, which shows up as "runner lost communication".
+          sudo fallocate -l 8G /mnt/syft.swap
+          sudo chmod 600 /mnt/syft.swap
+          sudo mkswap /mnt/syft.swap
+          sudo swapon /mnt/syft.swap
+          SYFT_PARALLELISM=1
           export SYFT_PARALLELISM
           "$SYFT_CMD" scan "oci-archive:${RUNNER_TEMP}/raw-oci.tar" \
             --source-name "${IMAGE_NAME}" \
-            --exclude '/usr/lib/modules/**' \
-            --exclude '/usr/lib/firmware/**' \
+            --select-catalogers 'package' \
             -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
           du -sh "${RUNNER_TEMP}/sbom.spdx.json"
 
