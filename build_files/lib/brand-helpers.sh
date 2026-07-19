@@ -2,9 +2,14 @@
 # os-release branding, sourced by the flavor scripts (desktop.sh/laptop.sh).
 
 # NAME=<...> PRETTY_NAME=<...> DEFAULT_HOSTNAME=<...> — keys match the
-# /etc/os-release fields they set. Patches branding fields only,
+# os-release fields they set. Patches branding fields only,
 # VERSION/BUILD_ID/OSTREE_VERSION stay from the base image. Repo URLs are
 # flavor-independent and set here.
+# Targets /usr/lib/os-release: /etc/os-release is a symlink to it, and
+# ostree reads the real file when writing GRUB entry titles. sed -i on the
+# symlink would replace it with a patched copy and leave GRUB on the base
+# image's name. The ln restores the symlink on images where it was already
+# a detached file.
 brand_os_release() {
     local name="" pretty_name="" default_hostname="" arg
     for arg in "$@"; do
@@ -32,5 +37,6 @@ brand_os_release() {
         -e 's|^DOCUMENTATION_URL=.*|DOCUMENTATION_URL="https://github.com/jayelg/falcos"|' \
         -e 's|^SUPPORT_URL=.*|SUPPORT_URL="https://github.com/jayelg/falcos/issues"|' \
         -e 's|^BUG_REPORT_URL=.*|BUG_REPORT_URL="https://github.com/jayelg/falcos/issues"|' \
-        /etc/os-release
+        /usr/lib/os-release
+    ln -sf ../usr/lib/os-release /etc/os-release
 }
