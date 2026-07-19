@@ -1,0 +1,10 @@
+# Extra needs over the standard component block: the optional MOK secret
+# and the KERNEL arg, so the xone DKMS build targets (and signs for) the
+# same kernel variant the image ships.
+RUN --mount=type=bind,from=ctx,source=/components/hardware/gaming,target=/ctx/components/hardware/gaming \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    KERNEL=${KERNEL} bash /ctx/lib/run-component.sh /ctx/components/hardware/gaming

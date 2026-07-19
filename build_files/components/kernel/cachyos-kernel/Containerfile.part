@@ -1,0 +1,11 @@
+# Extra needs over the standard component block: the Secure Boot cert
+# bind, the optional MOK signing secret, and the KERNEL build arg
+# (declared in the Containerfile header, flipped by kernel-freshness.yml).
+RUN --mount=type=bind,from=ctx,source=/components/kernel/cachyos-kernel,target=/ctx/components/kernel/cachyos-kernel \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=bind,from=ctx,source=/files/common/usr/share/falcos/sb_cert.der,target=/ctx/files/sb_cert.der \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    KERNEL=${KERNEL} bash /ctx/lib/run-component.sh /ctx/components/kernel/cachyos-kernel

@@ -1,6 +1,14 @@
 [root](../../README.md) / [build_files](../README.md) / **lib**
 
-Shell helpers sourced by the build scripts, not run on their own. Deliberately kept out of `common/` so the phase scripts' `*.sh` glob never auto runs them.
+Shell helpers sourced by the build scripts, not run on their own (except `run-component.sh`, the entry point the generated Containerfile blocks call).
+
+### [Component Runner](run-component.sh)
+
+Runs one component per RUN layer: flavor gate, repo file, `versions.sh` pins, variant overrides, `component.sh`, `files/` overlay, `justfile.inc` append. Keeps the per-component conventions in one place.
+
+### [Fetch Helpers](fetch-helpers.sh)
+
+Download-verify-install for pinned upstream release assets: `fetch_verified`, `fetch_extract`, `fetch_install_bin`, `fetch_install_rpm`. Every asset is SHA256-checked against the component's `versions.sh`.
 
 ### [Kernel Helpers](kernel-helpers.sh)
 
@@ -26,4 +34,6 @@ Compiles and installs a local SELinux policy module from a `.te` file into the t
 
 Patches the branding fields of `/etc/os-release`, parameterized per flavor.
 
-## Todo
+## Caution
+
+Every component layer bind-mounts this directory, so editing any file here rebuilds all component layers in CI. Keep it small and stable; batch helper changes.

@@ -17,18 +17,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # -s bash because the common/ scripts and versions files are sourced
+      # -s bash because the component scripts and versions files are sourced
       # fragments without shebangs. Extensionless runtime scripts (libexec,
       # systemd generators) are included explicitly. Repo-wide excludes
       # live in .shellcheckrc.
       - name: Run shellcheck
         run: |
           mapfile -t scripts < <(
-            find build_files -name '*.sh' -type f
+            find build_files scripts -name '*.sh' -type f
             find build_files/files -type f \
               \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
           )
           shellcheck -s bash "${scripts[@]}"
+
+      # Catches list entries that don't resolve to a component directory
+      # and skeleton marker damage, without needing a full image build.
+      - name: Validate COMPONENTS.list against the component tree
+        run: ./scripts/gen-containerfile.sh
 
   actionlint:
     runs-on: ubuntu-24.04

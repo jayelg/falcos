@@ -1,0 +1,11 @@
+# Applied at build time by phase-finalize.sh (falcos presets only).
+enable plasmalogin-shadow-workaround.service
+enable plasmalogin.service
+enable plasma-setup.service
+enable accounts-daemon.service
+enable firewalld.service
+enable tuned.service
+enable tuned-ppd.service
+enable thermald.service
+enable switcheroo-control.service
+enable input-remapper.service

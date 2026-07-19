@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC2034  # the dep arrays are consumed by the sourcing scripts
 # DKMS module build helper, sourced by scripts that compile an out-of-tree
-# module (xone in components/hardware/gaming, kvmfr in desktop.sh).
+# module (xone in components/hardware/gaming, kvmfr in
+# components/virtualization/looking-glass).
 # Callers handle kernel_devel_install/remove and any module-specific
 # extras (modprobe configs, firmware, udev rules).
 

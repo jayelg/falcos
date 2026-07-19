@@ -1,15 +1,7 @@
 # Pinned CLI Tools (metapackage: VSCodium, Bitwarden CLI, aichat, Starship, Flyline, falcos-cli, Nerd Fonts)
-# Phase: frequent
-# Priority: 000 (first, no dependencies on other frequent components)
 # Writable paths: /usr/bin /usr/share/codium /usr/share/fonts /usr/lib/bash
 
-COMPDIR="$(dirname "${BASH_SOURCE[0]}")"
-COMPONENT_VERSION="${COMPONENT_VERSION:-latest}"
-if [ -d "$COMPDIR/$COMPONENT_VERSION" ]; then
-    COMPDIR="$COMPDIR/$COMPONENT_VERSION"
-fi
-
-source "$COMPDIR/versions.sh"
+source /ctx/lib/fetch-helpers.sh
 
 ### VSCodium
 dnf5 install -y --enablerepo='vscodium' codium
@@ -20,56 +12,39 @@ source /ctx/lib/wrap-helpers.sh
 wrap_no_hardened_malloc /usr/share/codium/codium
 
 ### Bitwarden CLI
-curl -fsSL "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" \
-    -o /tmp/bw.zip
-echo "${BW_SHA256}  /tmp/bw.zip" | sha256sum -c -
-unzip /tmp/bw.zip -d /tmp/bw-extract
-install -m755 /tmp/bw-extract/bw /usr/bin/bw
-rm -rf /tmp/bw.zip /tmp/bw-extract
+fetch_install_bin "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" \
+    "$BW_SHA256" bw
 
 ### aichat CLI
-curl -fsSL "https://github.com/sigoden/aichat/releases/download/v${AICHAT_VERSION}/aichat-v${AICHAT_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    -o /tmp/aichat.tar.gz
-echo "${AICHAT_SHA256}  /tmp/aichat.tar.gz" | sha256sum -c -
-tar -xzf /tmp/aichat.tar.gz -C /tmp/
-install -m755 /tmp/aichat /usr/bin/aichat
-rm -rf /tmp/aichat.tar.gz /tmp/aichat
+fetch_install_bin "https://github.com/sigoden/aichat/releases/download/v${AICHAT_VERSION}/aichat-v${AICHAT_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    "$AICHAT_SHA256" aichat
 
 ### Starship prompt
-curl -fsSL "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-x86_64-unknown-linux-musl.tar.gz" \
-    -o /tmp/starship.tar.gz
-echo "${STARSHIP_SHA256}  /tmp/starship.tar.gz" | sha256sum -c -
-tar -xzf /tmp/starship.tar.gz -C /tmp/
-install -m755 /tmp/starship /usr/bin/starship
-rm -rf /tmp/starship.tar.gz /tmp/starship
+fetch_install_bin "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-x86_64-unknown-linux-musl.tar.gz" \
+    "$STARSHIP_SHA256" starship
 
 ### Flyline (Bash readline replacement)
-curl -fsSL "https://github.com/HalFrgrd/flyline/releases/download/v${FLYLINE_VERSION}/libflyline-v${FLYLINE_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
-    -o /tmp/flyline.tar.gz
-echo "${FLYLINE_SHA256}  /tmp/flyline.tar.gz" | sha256sum -c -
-tar -xzf /tmp/flyline.tar.gz -C /tmp/
-install -Dm755 "/tmp/libflyline.so.${FLYLINE_VERSION}" /usr/lib/bash/libflyline.so
-rm -rf /tmp/flyline.tar.gz "/tmp/libflyline.so.${FLYLINE_VERSION}"
+fetch_extract "https://github.com/HalFrgrd/flyline/releases/download/v${FLYLINE_VERSION}/libflyline-v${FLYLINE_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    "$FLYLINE_SHA256" /tmp/flyline
+install -Dm755 "/tmp/flyline/libflyline.so.${FLYLINE_VERSION}" /usr/lib/bash/libflyline.so
+rm -rf /tmp/flyline
 
 ### falcos-cli (OS TUI, aliased to the OS name via etc/profile.d/falcos-cli.sh)
 ### Includes runtime helper scripts: falcos-helpers.sh, falcos-progress
-curl -fsSL "https://github.com/jayelg/falcos-cli/releases/download/v${FALCOS_CLI_VERSION}/falcos-cli-v${FALCOS_CLI_VERSION}-x86_64-linux-gnu.tar.gz" \
-    -o /tmp/falcos-cli.tar.gz
-echo "${FALCOS_CLI_SHA256}  /tmp/falcos-cli.tar.gz" | sha256sum -c -
-tar -xzf /tmp/falcos-cli.tar.gz -C /tmp/
+fetch_extract "https://github.com/jayelg/falcos-cli/releases/download/v${FALCOS_CLI_VERSION}/falcos-cli-v${FALCOS_CLI_VERSION}-x86_64-linux-gnu.tar.gz" \
+    "$FALCOS_CLI_SHA256" /tmp
 bash /tmp/install.sh
-rm -rf /tmp/falcos-cli.tar.gz /tmp/falcos-cli /tmp/install.sh /tmp/scripts/
+rm -rf /tmp/falcos-cli /tmp/install.sh /tmp/scripts/
 
 ### Nerd Fonts
 # The pin is of the release's SHA-256.txt manifest; each font archive is
 # then verified against the manifest, so one pin covers all of them
-curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/SHA-256.txt" \
-    -o /tmp/nerdfonts-sha.txt
-echo "${NERD_FONTS_SHA256}  /tmp/nerdfonts-sha.txt" | sha256sum -c -
+fetch_verified "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/SHA-256.txt" \
+    "$NERD_FONTS_SHA256" /tmp/nerdfonts-sha.txt
 NERD_FONTS=(0xProto CascadiaMono ComicShannsMono DroidSansMono FiraCode Go-Mono IBMPlexMono JetBrainsMono SourceCodePro Ubuntu)
 for font in "${NERD_FONTS[@]}"; do
-    curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/${font}.tar.xz" \
-        -o "/tmp/${font}.tar.xz"
+    curl --retry 3 -fsSLo "/tmp/${font}.tar.xz" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/${font}.tar.xz"
     (cd /tmp && grep " ${font}\.tar\.xz$" nerdfonts-sha.txt | sha256sum -c -)
     mkdir -p "/usr/share/fonts/nerd-fonts/${font}"
     tar -xJf "/tmp/${font}.tar.xz" -C "/usr/share/fonts/nerd-fonts/${font}"
@@ -77,8 +52,3 @@ for font in "${NERD_FONTS[@]}"; do
 done
 rm /tmp/nerdfonts-sha.txt
 fc-cache -f
-
-[ -d "$COMPDIR/files" ] && cp -rT "$COMPDIR/files" "/"
-if [ -f "$COMPDIR/justfile.inc" ]; then
-    cat "$COMPDIR/justfile.inc" >> /usr/share/falcos/justfile.apps
-fi

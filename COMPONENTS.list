@@ -1,53 +1,71 @@
 # =============================================================================
-# Falcos Component Inventory
+# Falcos Component Inventory — source of truth for what goes in the image.
 #
-# Comment out any line to disable that component.
-# Add a line + create build_files/components/<group>/<name>/ to add a component.
-# Format: NAME:VERSION
+# Order matters: each line becomes one Containerfile RUN layer, in this
+# order. Keep heavy, rarely-changing components early for better layer
+# caching, and flavor-gated components last, next to the flavor split.
+#
+# Editing this file is all that's needed: `just build` and the CI build
+# generate Containerfile.generated (skeleton Containerfile + one RUN
+# layer per line here) automatically before building. The committed
+# Containerfile stays an empty skeleton; nothing generated is committed.
+#
+# Syntax:
+#   <name>            enable the component at build_files/components/**/<name>
+#   <name>@<variant>  enable it with its variants/<variant>.sh overrides
+#   # <name>          comment out to disable
+#
+# Version pins live in each component's versions.sh (Renovate-tracked),
+# not here. A component that needs extra mounts or env (build secrets,
+# ARGs) ships its own Containerfile.part; see cachyos-kernel, gaming and
+# looking-glass.
 # =============================================================================
 
-# Desktop Environment (build_files/components/de/)
-kde-desktop:latest
-kde-theming:latest
-plasma-network-audio:v0.1-alpha.1
+# Desktop environment (build_files/components/de/)
+kde-desktop
+kde-theming
 
-# Core System (build_files/components/core/) -- do not disable
-cli-tools:latest
-dev-tools:latest
-falcos-bootc-updates:0.1.1
-pinned-cli-tools:latest
+# Core system (build_files/components/core/) -- do not disable
+cli-tools
+dev-tools
+falcos-bootc-updates
+pinned-cli-tools
 
-# Kernel (build_files/components/kernel/)
-cachyos-kernel:latest
+# Kernel (build_files/components/kernel/). The KERNEL=stock build arg
+# (ARG in the Containerfile, flipped by kernel-freshness.yml) keeps the
+# Fedora base kernel instead.
+cachyos-kernel
 
-# Hardware Support (build_files/components/hardware/)
-firmware:latest
-gaming:latest
-hardware-tools:latest
+# Hardware support (build_files/components/hardware/)
+firmware
+gaming
+hardware-tools
 
-# Multimedia
-multimedia:latest
-
-# Networking
-networking:latest
+# Multimedia & networking
+multimedia
+networking
 
 # Virtualization (build_files/components/virtualization/)
-libvirt:latest
-incus:latest
-podman:latest
+libvirt
+incus
+podman
 
-# Security
-security:latest
+# Security & hardening (build_files/components/{security,hardening}/)
+security
+hardened-malloc
+sudo-hardening
 
-# Hardening (build_files/components/hardening/)
-hardened-malloc:latest
-sudo-hardening:latest
+# Desktop applications (build_files/components/apps/)
+affinity
+trivalent
 
-# Desktop Applications (build_files/components/apps/)
-affinity:3.2.0
-trivalent:latest
+# VPN (build_files/components/vpn/)
+mullvad-vpn
+netbird
+tailscale
 
-# VPN & Network (build_files/components/vpn/)
-mullvad-vpn:latest
-netbird:latest
-tailscale:latest
+# Kept last: frequently-bumped or flavor-gated components, so their
+# rebuilds and the desktop/laptop cache fork stay at the bottom of the
+# layer stack.
+plasma-network-audio
+looking-glass

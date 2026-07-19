@@ -1,5 +1,5 @@
 #!/bin/bash
-# os-release branding, sourced by the flavor scripts (desktop.sh/laptop.sh).
+# os-release branding, sourced by the flavor scripts (flavors/*.sh).
 
 # NAME=<...> PRETTY_NAME=<...> DEFAULT_HOSTNAME=<...> — keys match the
 # os-release fields they set. Patches branding fields only,

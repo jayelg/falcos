@@ -17,3 +17,7 @@ mkdir /opt
 # Restored in phase-finalize.sh.
 mv /usr/bin/systemctl /usr/bin/systemctl.bak
 ln -s /usr/bin/true /usr/bin/systemctl
+
+# dnf5 copr/config-manager plugins, needed by the component repo files
+# sourced in lib/run-component.sh.
+dnf5 install -y dnf5-plugins

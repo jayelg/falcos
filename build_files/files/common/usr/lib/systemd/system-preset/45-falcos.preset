@@ -1,0 +1,6 @@
+# Applied at build time by phase-finalize.sh (falcos presets only).
+# Base image preset enables sshd, not wanted on a single-user desktop.
+disable sshd.service
+enable install-default-flatpaks.service
+enable bootc-fetch-apply-updates.timer
+enable flatpak-update.timer

@@ -5,3 +5,4 @@ output
 _build-*/**
 .claude/
 __pycache__/
+Containerfile.generated
