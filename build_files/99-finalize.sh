@@ -18,12 +18,11 @@ mv /usr/bin/systemctl.bak /usr/bin/systemctl
 #   --add crypt    LUKS passphrase prompting
 #   --add plymouth boot splash / graphical passphrase prompt (only when
 #                  installed, it comes with the kde-desktop component)
-# kernel-cachyos-core normally, kernel-core when built with KERNEL=stock
-for pkg in kernel-cachyos-core kernel-core; do
-    rpm -q "$pkg" &>/dev/null || continue
-    KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$pkg")"
-    break
-done
+# Kernel package identity is written by the kernel component at
+# /usr/lib/falcos/kernel-package so 99-finalize doesn't need to know
+# which kernel variant is installed.
+KERNEL_PKG="$(cat /usr/lib/falcos/kernel-package 2>/dev/null || echo 'kernel-core')"
+KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$KERNEL_PKG")"
 DRACUT_MODULES="ostree crypt"
 rpm -q plymouth &>/dev/null && DRACUT_MODULES+=" plymouth"
 export DRACUT_NO_XATTR=1

@@ -9,8 +9,10 @@ source /ctx/lib/kernel-helpers.sh
 # files/common by this component's Containerfile.part.
 install -Dm644 /ctx/files/sb_cert.der /usr/share/falcos/sb_cert.der
 
+mkdir -p /usr/lib/falcos
 if [ "$KERNEL" = "stock" ]; then
     echo "KERNEL=stock: keeping the Fedora base kernel, skipping CachyOS packages."
+    echo "kernel-core" > /usr/lib/falcos/kernel-package
 else
     dnf5 -y copr enable bieszczaders/kernel-cachyos
     dnf5 -y copr enable bieszczaders/kernel-cachyos-addons
@@ -20,6 +22,8 @@ else
         kernel-cachyos-core \
         kernel-cachyos-modules \
         kernel-cachyos-devel-matched
+
+    echo "kernel-cachyos-core" > /usr/lib/falcos/kernel-package
 
     dnf5 -y install --enablerepo="copr:copr.fedorainfracloud.org:bieszczaders:kernel-cachyos-addons" \
         ananicy-cpp \
