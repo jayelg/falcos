@@ -100,6 +100,9 @@ jobs:
         id: date
         run: |
           echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          # Single value for the version tag, OCI label and IMAGE_VERSION
+          # build-arg so they can't disagree across a midnight boundary
+          echo "version=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Image Metadata
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -108,7 +111,7 @@ jobs:
           images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=raw,value={{date 'YYYYMMDD'}}
+            type=raw,value=${{ steps.date.outputs.version }}
             type=sha,enable=${{ github.event_name == 'pull_request' }}
             type=ref,event=pr
           labels: |
@@ -120,7 +123,7 @@ jobs:
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
-            org.opencontainers.image.version={{date 'YYYYMMDD'}}
+            org.opencontainers.image.version=${{ steps.date.outputs.version }}
             io.artifacthub.package.deprecated=false
             io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}
             io.artifacthub.package.license=Apache-2.0
@@ -197,6 +200,7 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             FLAVOR=${{ matrix.flavor }}
+            IMAGE_VERSION=${{ steps.date.outputs.version }}
             ${{ github.event.inputs.kernel && format('KERNEL={0}', github.event.inputs.kernel) || '' }}
           provenance: false
           cache-from: ${{ steps.cache-args.outputs.cache-from }}

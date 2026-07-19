@@ -126,6 +126,8 @@ RUN --mount=type=bind,from=ctx,source=/phase-frequent.sh,target=/ctx/phase-frequ
     /ctx/phase-frequent.sh 040-affinity.sh
 
 ARG FLAVOR=laptop
+# CI passes the YYYYMMDD build date; local builds get it from `just build`
+ARG IMAGE_VERSION=dev
 
 # Union of both flavors' helpers: brand for laptop and desktop, dkms (which
 # sources kernel- and sign-helpers) for desktop's kvmfr module.
@@ -141,7 +143,7 @@ RUN --mount=type=bind,from=ctx,source=/phase-flavor.sh,target=/ctx/phase-flavor.
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    FLAVOR=${FLAVOR} KERNEL=${KERNEL} /ctx/phase-flavor.sh
+    FLAVOR=${FLAVOR} KERNEL=${KERNEL} IMAGE_VERSION=${IMAGE_VERSION} /ctx/phase-flavor.sh
 
 RUN --mount=type=bind,from=ctx,source=/phase-finalize.sh,target=/ctx/phase-finalize.sh \
     --mount=type=bind,from=ctx,source=/enable-services.sh,target=/ctx/enable-services.sh \

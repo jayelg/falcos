@@ -70,6 +70,7 @@ build $target_image=image_name $tag=default_tag $flavor="laptop" $kernel="cachyo
         "${SECRET_ARGS[@]}" \
         --build-arg "FLAVOR=${flavor}" \
         --build-arg "KERNEL=${kernel}" \
+        --build-arg "IMAGE_VERSION=$(date -u +%Y%m%d)" \
         --pull=newer \
         --tag "${target_image}:${tag}" \
         .

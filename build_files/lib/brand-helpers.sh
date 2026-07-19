@@ -11,20 +11,21 @@
 # image's name. The ln restores the symlink on images where it was already
 # a detached file.
 brand_os_release() {
-    local name="" pretty_name="" default_hostname="" arg
+    local name="" pretty_name="" default_hostname="" image_version="" arg
     for arg in "$@"; do
         case "$arg" in
             NAME=*) name="${arg#NAME=}" ;;
             PRETTY_NAME=*) pretty_name="${arg#PRETTY_NAME=}" ;;
             DEFAULT_HOSTNAME=*) default_hostname="${arg#DEFAULT_HOSTNAME=}" ;;
+            IMAGE_VERSION=*) image_version="${arg#IMAGE_VERSION=}" ;;
             *)
                 echo "brand_os_release: unknown argument '${arg}'" >&2
                 return 1
                 ;;
         esac
     done
-    if [ -z "$name" ] || [ -z "$pretty_name" ] || [ -z "$default_hostname" ]; then
-        echo "brand_os_release: NAME=, PRETTY_NAME= and DEFAULT_HOSTNAME= are all required" >&2
+    if [ -z "$name" ] || [ -z "$pretty_name" ] || [ -z "$default_hostname" ] || [ -z "$image_version" ]; then
+        echo "brand_os_release: NAME=, PRETTY_NAME=, DEFAULT_HOSTNAME= and IMAGE_VERSION= are all required" >&2
         return 1
     fi
 
@@ -38,5 +39,11 @@ brand_os_release() {
         -e 's|^SUPPORT_URL=.*|SUPPORT_URL="https://github.com/jayelg/falcos/issues"|' \
         -e 's|^BUG_REPORT_URL=.*|BUG_REPORT_URL="https://github.com/jayelg/falcos/issues"|' \
         /usr/lib/os-release
+    # The base image has no IMAGE_VERSION line, so a bare sed would no-op
+    if grep -q '^IMAGE_VERSION=' /usr/lib/os-release; then
+        sed -i "s|^IMAGE_VERSION=.*|IMAGE_VERSION=\"${image_version}\"|" /usr/lib/os-release
+    else
+        echo "IMAGE_VERSION=\"${image_version}\"" >> /usr/lib/os-release
+    fi
     ln -sf ../usr/lib/os-release /etc/os-release
 }
