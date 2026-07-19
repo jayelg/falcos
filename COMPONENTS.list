@@ -1,0 +1,84 @@
+# =============================================================================
+# Falcos Component Inventory — source of truth for what goes in the image.
+#
+# Order matters: each line becomes one Containerfile RUN layer, in this
+# order. Keep heavy, rarely-changing components early for better layer
+# caching, and flavor-gated components last, next to the flavor split.
+#
+# Editing this file is all that's needed: `just build` and the CI build
+# generate Containerfile.generated (skeleton Containerfile + one RUN
+# layer per line here) automatically before building. The committed
+# Containerfile stays an empty skeleton; nothing generated is committed.
+#
+# Syntax:
+#   <name>            enable the component at build_files/components/**/<name>
+#   <name>@<variant>  enable it with its variants/<variant>.sh overrides
+#   # <name>          comment out to disable
+#
+# [flavor] sections gate components to a single flavor. Everything above
+# the first [flavor] header builds on all flavors. Flavor sections must
+# stay at the bottom to preserve the cache fork.
+#
+# Version pins live in each component's versions.sh (Renovate-tracked),
+# not here. A component that needs extra mounts or env (build secrets,
+# ARGs) ships its own Containerfile.part; see cachyos-kernel, gaming and
+# looking-glass.
+# =============================================================================
+
+# Desktop environment (build_files/components/de/)
+kde-desktop
+kde-theming
+
+# Core system (build_files/components/core/) -- do not disable
+cli-tools
+dev-tools
+falcos-bootc-updates
+pinned-cli-tools
+
+# Kernel (build_files/components/kernel/). The KERNEL=stock build arg
+# (ARG in the Containerfile, flipped by kernel-freshness.yml) keeps the
+# Fedora base kernel instead.
+cachyos-kernel
+
+# Hardware support (build_files/components/hardware/)
+firmware
+gaming
+hardware-tools
+
+# Multimedia & networking
+multimedia
+networking
+
+# Virtualization (build_files/components/virtualization/)
+libvirt
+incus
+podman
+
+# Security & hardening (build_files/components/{security,hardening}/)
+security
+hardened-malloc
+sudo-hardening
+
+# Desktop applications (build_files/components/apps/)
+affinity
+trivalent
+
+# VPN (build_files/components/vpn/)
+mullvad-vpn
+netbird
+tailscale
+
+# Kept last: frequently-bumped components, so their rebuilds stay at the
+# bottom of the layer stack.
+plasma-network-audio
+
+# ---------------------------------------------------------------------------
+# Flavor-gated components. The generator injects COMPONENT_FLAVORS=<flavor>
+# for components under a [flavor] header so run-component.sh skips them on
+# other flavors. Components with a Containerfile.part (looking-glass) gate
+# themselves; the generator cross-checks the part's COMPONENT_FLAVORS
+# matches the section header and errors on mismatch.
+# ---------------------------------------------------------------------------
+
+[desktop]
+looking-glass

@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC2034  # the dep arrays are consumed by the sourcing scripts
 # DKMS module build helper, sourced by scripts that compile an out-of-tree
-# module (xone in common/core/070-hardware.sh, kvmfr in desktop.sh).
+# module (xone in components/hardware/gaming, kvmfr in
+# components/virtualization/looking-glass).
 # Callers handle kernel_devel_install/remove and any module-specific
 # extras (modprobe configs, firmware, udev rules).
 
@@ -10,7 +11,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/sign-helpers.sh"
 
 # Shared build deps for kernel_devel_install/kernel_devel_remove. The remove
 # list is smaller on purpose: git is a permanent package owned by
-# common/core/040-dev-tools.sh and openssl ships in the fedora-bootc base,
+# components/core/dev-tools and openssl ships in the fedora-bootc base,
 # so removing either would strip a package the image wants. Callers append
 # module-specific extras (e.g. cabextract for xone) to both calls.
 DKMS_BUILD_DEPS=(dkms gcc make git sbsigntools openssl)

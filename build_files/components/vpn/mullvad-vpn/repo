@@ -1,0 +1,2 @@
+REPO_ID="mullvad"
+dnf5 config-manager addrepo --from-repofile=https://repository.mullvad.net/rpm/stable/mullvad.repo

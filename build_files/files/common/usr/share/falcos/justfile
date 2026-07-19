@@ -168,66 +168,8 @@ randomize-mac:
 	nmcli connection up "$ACTIVE"
 	echo "Done. New MAC: $(ip link show "$DEV" | awk '/ether/{print $2}')"
 
-# Set up the Affinity v3 Wine prefix for this user (Wine and DLLs ship in the image; run once)
-[group('Apps')]
-affinity-setup:
-	#!/usr/bin/env bash
-	set -eou pipefail
-	source /usr/share/falcos/falcos-helpers.sh
-
-	export WINEPREFIX="$HOME/.local/share/affinity"
-	export WINE=/usr/lib/wine-affinity/bin/wine
-	export WINESERVER=/usr/lib/wine-affinity/bin/wineserver
-	export PATH="/usr/lib/wine-affinity/bin:$PATH"
-	unset LD_PRELOAD
-
-	echo "==> Initialising Wine prefix at $WINEPREFIX..."
-	# Suppress wine-mono/gecko install dialogs — winetricks removes mono and
-	# installs dotnet48 (full .NET 4.8) two lines below.
-	WINEDLLOVERRIDES="mscoree,mshtml=" wineboot --init
-	# Wait for background services to settle before winetricks touches regedit.
-	"$WINESERVER" -w
-	sleep 2
-
-	echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
-	# vcrun2022 is installed from the baked-in 64-bit redist instead of
-	# winetricks, because this WoW64 Wine build has no syswow64 (32-bit) path.
-	winetricks --unattended --force remove_mono dotnet48 corefonts win11 tahoma renderer=vulkan
-	"$WINE" /usr/share/wine-affinity/vc_redist.x64.exe /install /quiet /norestart
-	winecfg -v win11
-
-	echo "==> Installing DLLs + WinRT metadata from the image..."
-	/usr/libexec/affinity-sync-prefix
-
-	for dll in d3d9 d3d10core d3d11 dxgi d3d12 d3d12core wintypes; do
-		"$WINE" reg add 'HKCU\Software\Wine\DllOverrides' /v "$dll" /d native /f >/dev/null
-	done
-
-	echo ""
-	echo "Download the Affinity v3 installer (.exe) from https://www.affinity.studio"
-	exe=$(prompt "Path to the installer .exe:")
-	WINEDEBUG=-all "$WINE" "$exe"
-
-	appdir="$WINEPREFIX/drive_c/Program Files/Affinity/Affinity"
-	if [[ -d "$appdir" ]]; then
-		/usr/libexec/affinity-sync-prefix
-		echo "Done. Launch from the Affinity menu entry, or run: affinity"
-		echo "Verify OpenCL under Settings > Performance (Hardware acceleration)."
-	else
-		echo "Installer finished but $appdir was not found;"
-		echo "re-run 'falcos affinity-setup' after a successful install."
-		exit 1
-	fi
-
-# Remove this user's Affinity Wine prefix (the image-baked Wine and launcher remain)
-[group('Apps')]
-affinity-remove:
-	#!/usr/bin/env bash
-	set -eou pipefail
-	/usr/lib/wine-affinity/bin/wineserver -k 2>/dev/null || true
-	rm -rf "$HOME/.local/share/affinity"
-	rm -f "$HOME/.local/share/applications/wine/Programs/Affinity.desktop"
-	echo "Removed ~/.local/share/affinity"
+# === Apps (populated at build time from component justfile.inc snippets) ===
+import? "/usr/share/falcos/justfile.apps"
 
 # Exempt an app from the system-wide hardened_malloc LD_PRELOAD (fixes crashes in some GTK/Electron apps)
 [group('Hardening')]

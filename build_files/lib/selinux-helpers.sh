@@ -1,6 +1,6 @@
 #!/bin/bash
 # SELinux policy module install helper, sourced by scripts that ship a
-# local .te policy (common/core/140-selinux.sh, common/frequent/030-browser.sh).
+# local .te policy (Containerfile baked step, components/trivalent/component.sh).
 # Standalone so RUN layers can mount just this file.
 
 # <te-file> — compiles the .te source and installs it into the targeted

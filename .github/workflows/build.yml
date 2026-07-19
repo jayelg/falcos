@@ -26,15 +26,14 @@ on:
         default: ''
 
 env:
-  IMAGE_DESC: "Custom Fedora bootc KDE Plasma image"
-  IMAGE_KEYWORDS: "bootc,fedora,kde-plasma"
+  IMAGE_DESC: "Custom Fedora bootc image"
+  IMAGE_KEYWORDS: "bootc,fedora"
   IMAGE_LOGO_URL: "https://avatars.githubusercontent.com/u/99842644?v=4"
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 jobs:
-  # PR builds only prove the change still builds, one flavor is enough.
-  # A separate job because the matrix context isn't available in a
-  # job-level if.
+  # Builds every flavor listed in FLAVORS.list. A separate job because the
+  # matrix context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -45,13 +44,13 @@ jobs:
     outputs:
       flavors: ${{ steps.set.outputs.flavors }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo 'flavors=["laptop"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'flavors=["desktop","laptop"]' >> "$GITHUB_OUTPUT"
-          fi
+          mapfile -t all < <(awk '!/^#/ && !/^[[:space:]]*$/ {print $1}' FLAVORS.list)
+          printf -v joined '","%s' "${all[@]}"
+          printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
@@ -92,6 +91,12 @@ jobs:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The committed Containerfile is a skeleton; this writes the real
+      # build file (one RUN layer per COMPONENTS.list entry) to
+      # Containerfile.generated. Editing the list alone changes the image.
+      - name: Generate Containerfile from COMPONENTS.list
+        run: ./scripts/gen-containerfile.sh
 
       - name: Maximize build space
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
@@ -194,7 +199,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: ./Containerfile
+          file: ./Containerfile.generated
           outputs: ${{ env.PUBLISH == 'true' && format('type=oci,dest={0}/raw-oci.tar', runner.temp) || '' }}
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

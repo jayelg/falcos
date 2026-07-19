@@ -20,12 +20,18 @@ check:
 fix:
     just --unstable --fmt -f Justfile
 
+# Generate Containerfile.generated from the Containerfile skeleton +
+# COMPONENTS.list. Runs automatically as a dependency of `build`.
+[group('Utility')]
+generate:
+    ./scripts/gen-containerfile.sh
+
 # Clean Repo
 [group('Utility')]
 clean:
     #!/usr/bin/bash
     set -eoux pipefail
-    rm -rf _build* output/
+    rm -rf _build* output/ Containerfile.generated
 
 # Sudo Clean Repo
 [group('Utility')]
@@ -51,8 +57,9 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using Podman, e.g. `just build falcos latest desktop stock`
-build $target_image=image_name $tag=default_tag $flavor="laptop" $kernel="cachyos":
+# Build the image using Podman, e.g. `just build falcos latest desktop stock`.
+# Depends on `generate` so the Containerfile always matches COMPONENTS.list.
+build $target_image=image_name $tag=default_tag $flavor=`awk '!/^#/ && !/^[[:space:]]*$/ {print $1; exit}' FLAVORS.list` $kernel="cachyos": generate
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -73,6 +80,7 @@ build $target_image=image_name $tag=default_tag $flavor="laptop" $kernel="cachyo
         --build-arg "IMAGE_VERSION=$(date -u +%Y%m%d)" \
         --pull=newer \
         --tag "${target_image}:${tag}" \
+        -f Containerfile.generated \
         .
 
 # Generate a one-time Secure Boot (MOK) module-signing key pair. Keep the
@@ -283,14 +291,16 @@ lint:
         echo "shellcheck could not be found. Please install it."
         exit 1
     fi
-    # -s bash because the common/ scripts and versions files are sourced
+    # -s bash because the component scripts and versions files are sourced
     # fragments without shebangs
     mapfile -t scripts < <(
-        find build_files -name '*.sh' -type f
+        find build_files scripts -name '*.sh' -type f
         find build_files/files -type f \
             \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
     )
     shellcheck -s bash "${scripts[@]}"
+    # Validate COMPONENTS.list resolves (bad names, missing dirs, markers)
+    ./scripts/gen-containerfile.sh >/dev/null
 
 # Runs shfmt on all Bash scripts
 format:

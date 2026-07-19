@@ -1,0 +1,52 @@
+# shellcheck disable=SC2034  # versions here are consumed by component.sh
+# Renovate-tracked pins for the Affinity component. Keep each
+# annotation comment directly above its version line.
+#
+# None of these upstreams publish official checksums, so each pin carries a
+# trust-on-first-use SHA256; .github/workflows/checksums.yml recomputes the
+# _SHA256 lines when a PR bumps the version pins.
+
+# ElementalWarrior's Affinity-patched Wine, prebuilt by ryzendew's builder
+# (mainline Wine fails in Affinity's installer). Tags are bare Wine versions.
+# A CPU-tuned "-v4" (Zen 4/5) asset also exists per release but is skipped
+# so one image serves both flavors (the laptop is Intel).
+# renovate: datasource=github-releases depName=ryzendew/Affinity-Wine-Builder
+AFFINITY_WINE_TAG="11.12"
+AFFINITY_WINE_SHA256="44a99f2a90356790936f08620ccca573581c0bb006b9bed6899dd4ed465986aa"
+
+# renovate: datasource=github-releases depName=doitsujin/dxvk extractVersion=^v(?<version>.*)$
+DXVK_VERSION="3.0.1"
+DXVK_SHA256="bebb6284db590535b7b005c102ebf6850c98842cff0fded9aacb74babae14c49"
+
+# Last version validated against Affinity by ryzendew/Linux-Affinity-Installer
+# was 2.14.1; if a bump breaks Affinity's OpenCL compute, pin back to that.
+# renovate: datasource=github-releases depName=HansKristian-Work/vkd3d-proton extractVersion=^v(?<version>.*)$
+VKD3D_PROTON_VERSION="3.0.1"
+VKD3D_PROTON_SHA256="3cf2315522af5e43605ef6d3c41dad91387040bf97199934f3f7ab76caaa2f0c"
+
+# WinRT metadata for the Affinity prefix, from Microsoft's MIT-licensed
+# windows-rs repo (redistributable, so it's baked into the image).
+# Deliberately not Renovate-tracked and not in checksums.yml: windows-rs
+# master moves daily but this only needs bumping when Affinity/Wine do,
+# manually, with a fresh SHA256.
+WINDOWS_WINMD_COMMIT="a4f924122bcdc1e65b94e882b5ea874cccad23bb"
+WINDOWS_WINMD_SHA256="d700ffb5733ffa4b3f58d8853636d195df72aa6ada1ae91651f4fdfeb55cc111"
+
+# Winelib wintypes shim by the patched Wine's author, paired with the
+# winmd above. Manual pin like WINDOWS_WINMD.
+WINTYPES_SHIM_COMMIT="f8a2d42ba3abc5dcdc584daa6728a2fa019be72e"
+WINTYPES_SHIM_SHA256="a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bfebbff6"
+
+# 64-bit VC++ 2022 redistributable, needed by dotnet48 and Affinity itself.
+# aka.ms/vs/17/release/vc_redist.x64.exe is the permanent latest-version URL.
+# No official checksum published; trust-on-first-use like the Wine tarball.
+# .github/workflows/checksums.yml recomputes this on bumps.
+# renovate: datasource=github-releases depName=Microsoft/vc-redist
+VC_REDIST_X64_SHA256="cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b"
+
+# .NET Framework 4.8 offline installer, needed by Affinity itself.
+# Downloaded directly instead of through winetricks (whose dotnet48 verb calls
+# dotnet40 which needs syswow64 32-bit support that this WoW64 Wine build lacks).
+# SHA256 from winetricks' own metadata for ndp48-x86-x64-allos-enu.exe.
+# renovate: datasource=git-tags depName=https://github.com/dotnet/runtime extractVersion=^v(?<version>.*)$
+DOTNET48_SHA256="95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53"

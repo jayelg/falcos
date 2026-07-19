@@ -1,0 +1,3 @@
+REPO_ID="secureblue"
+dnf5 config-manager addrepo --from-repofile=https://repo.secureblue.dev/secureblue.repo
+dnf5 config-manager setopt secureblue.enabled=0

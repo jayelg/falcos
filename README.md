@@ -56,13 +56,17 @@ The private key never enters the repo or the image; CI mounts it as a BuildKit s
 
 ## Repo structure
 
+### [COMPONENTS.list](COMPONENTS.list)
+
+The source of truth for what goes in the image: one component per line, in build order. Editing the list is all that's needed — both `just build` and the CI build generate the real build file (`Containerfile.generated`, untracked) from it before building.
+
 ### [Containerfile](Containerfile)
 
-Defines the build: the base image, separate build phases so that more frequent updates do not cause a full image rebuild, the build scripts (`*.sh` under [build_files](build_files)) each phase runs, and `bootc container lint` on the final image.
+The build skeleton: the base image, the setup phase, an empty marker section where one RUN layer per COMPONENTS.list entry is spliced in at build time (so each component caches independently and frequent updates never cause a full rebuild), the flavor and finalize phases, and `bootc container lint` on the final image.
 
 ### [Build files](build_files)
 
-Everything that runs at build time: the phase scripts, the package install scripts, the shared helper libraries and the static file trees copied into the image.
+Everything that runs at build time: the components, the phase scripts, the shared helper libraries and the static file trees copied into the image.
 
 ### [GitHub Actions](.github/workflows)
 
