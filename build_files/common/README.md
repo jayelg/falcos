@@ -1,14 +1,9 @@
 [root](../../README.md) / [build_files](../README.md) / **common**
 
-Package install scripts shared by both flavors, sourced by the phase scripts and grouped into themed layers by the [Containerfile](../../Containerfile). Kept flavor agnostic so the layer cache is shared across the desktop and laptop builds. The split is about build cache locality, foundational packages that rarely change stay in the earlier core layers, faster moving software sits in frequent so a bump doesn't rebuild core.
+Shared build infrastructure that doesn't belong to any single component. Flavor agnostic so the layer cache is shared across desktop and laptop builds.
 
-### [Core Packages](core)
-
-Foundational, infrequently changed setup. Repos, KDE Plasma, the CachyOS kernel, hardware, security and hardening. Runs in the earliest and most expensive layers.
-
-### [Frequent Packages](frequent)
-
-Faster moving software. Pinned CLI tools, VPN clients, and web facing apps like browsers. Kept in later layers so a version bump here doesn't rebuild core.
-
-## Notes / Todo
-
+- **Repo discovery** -- Containerfile baked step that sources each component's `repo` file (idempotent via REPO_ID guard)
+- **Bootloader** -- `GRUB_DISABLE_OS_PROBER=false` baked step
+- **Kernel stale-management** -- removes stock kernel when cachyos is present (bootc lint requirement)
+- **SELinux composefs workaround** -- temporary execmem policy for composefs/overlay mmap bug
+- **Flavor + finalize** -- `phase-flavor.sh` and `phase-finalize.sh` run after all components

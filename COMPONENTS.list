@@ -2,22 +2,52 @@
 # Falcos Component Inventory
 #
 # Comment out any line to disable that component.
-# Add a line + create build_files/components/<name>/ to add a component.
+# Add a line + create build_files/components/<group>/<name>/ to add a component.
 # Format: NAME:VERSION
 # =============================================================================
 
-# Desktop Applications
+# Desktop Environment (build_files/components/de/)
+kde-desktop:latest
+kde-theming:latest
+plasma-network-audio:v0.1-alpha.1
+
+# Core System (build_files/components/core/) -- do not disable
+cli-tools:latest
+dev-tools:latest
+falcos-bootc-updates:0.1.1
+pinned-cli-tools:latest
+
+# Kernel (build_files/components/kernel/)
+cachyos-kernel:latest
+
+# Hardware Support (build_files/components/hardware/)
+firmware:latest
+gaming:latest
+hardware-tools:latest
+
+# Multimedia
+multimedia:latest
+
+# Networking
+networking:latest
+
+# Virtualization (build_files/components/virtualization/)
+libvirt:latest
+incus:latest
+podman:latest
+
+# Security
+security:latest
+
+# Hardening (build_files/components/hardening/)
+hardened-malloc:latest
+sudo-hardening:latest
+
+# Desktop Applications (build_files/components/apps/)
 affinity:3.2.0
 trivalent:latest
 
-# VPN & Network
+# VPN & Network (build_files/components/vpn/)
 mullvad-vpn:latest
 netbird:latest
 tailscale:latest
-
-# System Components
-falcos-bootc-updates:0.1.1
-plasma-network-audio:v0.1-alpha.1
-
-# CLI Tools (metapackage: multiple tools in one component)
-pinned-cli-tools:latest

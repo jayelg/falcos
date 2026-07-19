@@ -1,5 +1,5 @@
 ### Enable services
-# Grouped by which script installed the package. Runs from
+# Grouped by which component installed the package. Runs from
 # phase-finalize.sh after systemctl is restored.
 
 # Base image preset enables sshd, not wanted on a single-user desktop
@@ -11,7 +11,7 @@ systemctl disable sshd.service
 # unmasked, the rpm-ostree-countme.service.d drop-in adds retries for that.
 systemctl mask rpm-ostree-countme.timer
 
-# common/core/010-kde-desktop.sh
+# components/de/kde-desktop/component.sh
 systemctl enable plasmalogin-shadow-workaround.service
 systemctl enable plasmalogin.service
 systemctl enable plasma-setup.service
@@ -25,27 +25,29 @@ systemctl enable input-remapper
 systemctl --global enable wireplumber.service
 systemctl --global enable pipewire-pulse.socket
 
-# common/core/070-hardware.sh
+# components/hardware/tools/component.sh
 systemctl enable lm_sensors.service
 systemctl enable intel_lpmd.service
 
-# components/mullvad-vpn/component.sh, components/netbird/component.sh, components/tailscale/component.sh
+# components/vpn/mullvad-vpn/component.sh, components/vpn/netbird/component.sh, components/vpn/tailscale/component.sh
 systemctl enable mullvad-daemon
 systemctl enable netbird
 systemctl enable tailscaled
 
-# common/core/110-virtualization.sh
-systemctl enable podman.socket
+# components/virtualization/libvirt/component.sh
 systemctl enable libvirtd.socket
 systemctl enable libvirt-relabel.service
 systemctl enable libvirt-group-membership.service
+
+# components/virtualization/podman/component.sh
+systemctl enable podman.socket
 
 # Desktop-only unit, absent on laptop
 if [ -f /usr/lib/systemd/system/vfio-rebind-gpu-usb.service ]; then
     systemctl enable vfio-rebind-gpu-usb.service
 fi
 
-# common/core/120-security.sh
+# components/security/component.sh
 systemctl enable pcscd.socket
 
 # First-boot setup and automatic updates (files/common, no dnf5 install)

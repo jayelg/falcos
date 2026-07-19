@@ -17,147 +17,250 @@ FROM quay.io/fedora/fedora-bootc:44
 RUN --mount=type=bind,from=ctx,source=/phase-setup.sh,target=/ctx/phase-setup.sh \
     /ctx/phase-setup.sh
 
-## common/core, grouped by theme:
+### Repo Discovery (baked, idempotent)
+# Sources every component repo file. Each declares REPO_ID for idempotency:
+# the loop skips repos already configured on disk.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    dnf5 install -y dnf5-plugins && \
+    for repo in /ctx/components/*/repo /ctx/components/*/*/repo; do
+        [ -f "$repo" ] || continue
+        REPO_ID="$(sed -n 's/^REPO_ID="\(.*\)"/\1/p' "$repo")"
+        if [ -n "$REPO_ID" ] && [ -f "/etc/yum.repos.d/${REPO_ID}.repo" ]; then
+            echo "Repo ${REPO_ID} already configured, skipping"
+            continue
+        fi
+        source "$repo"
+    done
 
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/common/core/000-repos.sh,target=/ctx/common/core/000-repos.sh \
+## Components (per-component RUN layers for independent BuildKit caching)
+
+# ---- Component: kde-desktop:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/de/kde-desktop,target=/ctx/components/de/kde-desktop \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 000-repos.sh
+    COMPONENT_VERSION=latest bash /ctx/components/de/kde-desktop/component.sh
 
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/versions-core-theming.sh,target=/ctx/versions-core-theming.sh \
-    --mount=type=bind,from=ctx,source=/common/core/010-kde-desktop.sh,target=/ctx/common/core/010-kde-desktop.sh \
-    --mount=type=bind,from=ctx,source=/common/core/020-kde-theming.sh,target=/ctx/common/core/020-kde-theming.sh \
+# ---- Component: kde-theming:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/de/kde-theming,target=/ctx/components/de/kde-theming \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 010-kde-desktop.sh 020-kde-theming.sh
+    COMPONENT_VERSION=latest bash /ctx/components/de/kde-theming/component.sh
 
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/common/core/030-cli-tools.sh,target=/ctx/common/core/030-cli-tools.sh \
-    --mount=type=bind,from=ctx,source=/common/core/040-dev-tools.sh,target=/ctx/common/core/040-dev-tools.sh \
+# ---- Component: cli-tools:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/core/cli-tools,target=/ctx/components/core/cli-tools \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 030-cli-tools.sh 040-dev-tools.sh
+    COMPONENT_VERSION=latest bash /ctx/components/core/cli-tools/component.sh
+
+# ---- Component: dev-tools:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/core/dev-tools,target=/ctx/components/core/dev-tools \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/core/dev-tools/component.sh
+
+# ---- Component: falcos-bootc-updates:0.1.1 ----
+RUN --mount=type=bind,from=ctx,source=/components/core/falcos-bootc-updates,target=/ctx/components/core/falcos-bootc-updates \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=0.1.1 bash /ctx/components/core/falcos-bootc-updates/component.sh
+
+# ---- Component: pinned-cli-tools:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/core/pinned-cli-tools,target=/ctx/components/core/pinned-cli-tools \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/core/pinned-cli-tools/component.sh
 
 # cachyos (default) or stock. stock keeps the Fedora base kernel and is
 # the temporary fallback flipped by .github/workflows/kernel-freshness.yml
 # when the CachyOS COPR goes stale; see build_files/lib/kernel-helpers.sh.
 ARG KERNEL=cachyos
 
-# dkms-helpers sources kernel-helpers and sign-helpers, and 060-kernel sources
-# sign-helpers only when a MOK key is mounted, so all three must ride together.
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/versions-core-kernel.sh,target=/ctx/versions-core-kernel.sh \
-    --mount=type=bind,from=ctx,source=/lib/kernel-helpers.sh,target=/ctx/lib/kernel-helpers.sh \
-    --mount=type=bind,from=ctx,source=/lib/sign-helpers.sh,target=/ctx/lib/sign-helpers.sh \
-    --mount=type=bind,from=ctx,source=/lib/dkms-helpers.sh,target=/ctx/lib/dkms-helpers.sh \
+# ---- Component: cachyos-kernel:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/kernel/cachyos-kernel,target=/ctx/components/kernel/cachyos-kernel \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=bind,from=ctx,source=/files/common/usr/share/falcos/sb_cert.der,target=/ctx/files/sb_cert.der \
-    --mount=type=bind,from=ctx,source=/common/core/050-bootloader.sh,target=/ctx/common/core/050-bootloader.sh \
-    --mount=type=bind,from=ctx,source=/common/core/060-kernel.sh,target=/ctx/common/core/060-kernel.sh \
-    --mount=type=bind,from=ctx,source=/common/core/070-hardware.sh,target=/ctx/common/core/070-hardware.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    KERNEL=${KERNEL} /ctx/phase-core.sh 050-bootloader.sh 060-kernel.sh 070-hardware.sh
+    KERNEL=${KERNEL} COMPONENT_VERSION=latest bash /ctx/components/kernel/cachyos-kernel/component.sh
 
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/common/core/090-multimedia.sh,target=/ctx/common/core/090-multimedia.sh \
-    --mount=type=bind,from=ctx,source=/common/core/100-networking.sh,target=/ctx/common/core/100-networking.sh \
-    --mount=type=bind,from=ctx,source=/common/core/110-virtualization.sh,target=/ctx/common/core/110-virtualization.sh \
-    --mount=type=bind,from=ctx,source=/lib/wrap-helpers.sh,target=/ctx/lib/wrap-helpers.sh \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 090-multimedia.sh 100-networking.sh 110-virtualization.sh
-
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/files/common/etc/sudoers.d/99-hardening,target=/ctx/files/99-hardening \
-    --mount=type=bind,from=ctx,source=/common/core/120-security.sh,target=/ctx/common/core/120-security.sh \
-    --mount=type=bind,from=ctx,source=/common/core/130-hardening.sh,target=/ctx/common/core/130-hardening.sh \
-    --mount=type=bind,from=ctx,source=/common/core/140-selinux.sh,target=/ctx/common/core/140-selinux.sh \
-    --mount=type=bind,from=ctx,source=/lib/selinux-helpers.sh,target=/ctx/lib/selinux-helpers.sh \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 120-security.sh 130-hardening.sh 140-selinux.sh
-
-RUN --mount=type=bind,from=ctx,source=/phase-core.sh,target=/ctx/phase-core.sh \
-    --mount=type=bind,from=ctx,source=/common/core/150-copr-extras.sh,target=/ctx/common/core/150-copr-extras.sh \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    /ctx/phase-core.sh 150-copr-extras.sh
-
-## Components (per-component RUN layers for independent BuildKit caching):
-
-# ---- Component: pinned-cli-tools:latest (metapackage) ----
-RUN --mount=type=bind,from=ctx,source=/components/pinned-cli-tools,target=/ctx/components/pinned-cli-tools \
+# ---- Component: firmware:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/hardware/firmware,target=/ctx/components/hardware/firmware \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=latest bash /ctx/components/pinned-cli-tools/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/hardware/firmware/component.sh
 
-# ---- Component: mullvad-vpn:latest ----
-RUN --mount=type=bind,from=ctx,source=/components/mullvad-vpn,target=/ctx/components/mullvad-vpn \
+# ---- Component: gaming:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/hardware/gaming,target=/ctx/components/hardware/gaming \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=latest bash /ctx/components/mullvad-vpn/component.sh
+    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    COMPONENT_VERSION=latest bash /ctx/components/hardware/gaming/component.sh
 
-# ---- Component: netbird:latest ----
-RUN --mount=type=bind,from=ctx,source=/components/netbird,target=/ctx/components/netbird \
+# ---- Component: hardware-tools:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/hardware/tools,target=/ctx/components/hardware/tools \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=latest bash /ctx/components/netbird/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/hardware/tools/component.sh
 
-# ---- Component: tailscale:latest ----
-RUN --mount=type=bind,from=ctx,source=/components/tailscale,target=/ctx/components/tailscale \
+# ---- Component: multimedia:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/multimedia,target=/ctx/components/multimedia \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=latest bash /ctx/components/tailscale/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/multimedia/component.sh
 
-# ---- Component: falcos-bootc-updates:0.1.1 ----
-RUN --mount=type=bind,from=ctx,source=/components/falcos-bootc-updates,target=/ctx/components/falcos-bootc-updates \
+# ---- Component: networking:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/networking,target=/ctx/components/networking \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=0.1.1 bash /ctx/components/falcos-bootc-updates/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/networking/component.sh
 
-# ---- Component: plasma-network-audio:v0.1-alpha.1 ----
-RUN --mount=type=bind,from=ctx,source=/components/plasma-network-audio,target=/ctx/components/plasma-network-audio \
+# ---- Component: libvirt:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/virtualization/libvirt,target=/ctx/components/virtualization/libvirt \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=v0.1-alpha.1 bash /ctx/components/plasma-network-audio/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/virtualization/libvirt/component.sh
 
-# ---- Component: trivalent:latest ----
-RUN --mount=type=bind,from=ctx,source=/components/trivalent,target=/ctx/components/trivalent \
+# ---- Component: incus:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/virtualization/incus,target=/ctx/components/virtualization/incus \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=latest bash /ctx/components/trivalent/component.sh
+    COMPONENT_VERSION=latest bash /ctx/components/virtualization/incus/component.sh
+
+# ---- Component: podman:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/virtualization/podman,target=/ctx/components/virtualization/podman \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/virtualization/podman/component.sh
+
+# ---- Component: security:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/security,target=/ctx/components/security \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/security/component.sh
+
+# ---- Component: hardened-malloc:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/hardening/hardened-malloc,target=/ctx/components/hardening/hardened-malloc \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/hardening/hardened-malloc/component.sh
+
+# ---- Component: sudo-hardening:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/hardening/sudo-hardening,target=/ctx/components/hardening/sudo-hardening \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/hardening/sudo-hardening/component.sh
 
 # ---- Component: affinity:3.2.0 ----
-RUN --mount=type=bind,from=ctx,source=/components/affinity,target=/ctx/components/affinity \
+RUN --mount=type=bind,from=ctx,source=/components/apps/affinity,target=/ctx/components/apps/affinity \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    COMPONENT_VERSION=3.2.0 bash /ctx/components/affinity/component.sh
+    COMPONENT_VERSION=3.2.0 bash /ctx/components/apps/affinity/component.sh
+
+# ---- Component: trivalent:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/apps/trivalent,target=/ctx/components/apps/trivalent \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/apps/trivalent/component.sh
+
+# ---- Component: mullvad-vpn:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/vpn/mullvad-vpn,target=/ctx/components/vpn/mullvad-vpn \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/vpn/mullvad-vpn/component.sh
+
+# ---- Component: netbird:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/vpn/netbird,target=/ctx/components/vpn/netbird \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/vpn/netbird/component.sh
+
+# ---- Component: tailscale:latest ----
+RUN --mount=type=bind,from=ctx,source=/components/vpn/tailscale,target=/ctx/components/vpn/tailscale \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=latest bash /ctx/components/vpn/tailscale/component.sh
+
+# ---- Component: plasma-network-audio:v0.1-alpha.1 ----
+RUN --mount=type=bind,from=ctx,source=/components/de/plasma-network-audio,target=/ctx/components/de/plasma-network-audio \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    COMPONENT_VERSION=v0.1-alpha.1 bash /ctx/components/de/plasma-network-audio/component.sh
+
+### Baked Steps
+
+### Bootloader
+RUN echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
+
+### Kernel Stale-Management
+# bootc container lint hard-fails if more than one kernel is present.
+# Runs after the cachyos-kernel component.
+RUN if rpm -q kernel-cachyos-core &>/dev/null; then \
+        dnf5 -y remove --noautoremove kernel kernel-core kernel-modules kernel-modules-core; \
+    fi
+
+### SELinux Policy: composefs/overlay execmem workaround
+# A composefs/overlay mmap bug mislabels legitimate userspace execmem
+# mappings as kernel_t (ublue-os/akmods#537). Drop once fixed upstream.
+RUN --mount=type=bind,from=ctx,source=/lib/selinux-helpers.sh,target=/ctx/lib/selinux-helpers.sh \
+    cat <<'EOF' > /tmp/composefs_execmem.te
+module composefs_execmem 0.1;
+
+require {
+	type kernel_t;
+	class process execmem;
+}
+
+allow kernel_t self:process execmem;
+EOF
+    source /ctx/lib/selinux-helpers.sh && install_selinux_module /tmp/composefs_execmem.te
 
 ARG FLAVOR=laptop
 # CI passes the YYYYMMDD build date; local builds get it from `just build`
