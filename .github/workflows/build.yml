@@ -231,7 +231,8 @@ jobs:
           # them leaves the package inventory intact while keeping the scan
           # within the runner's memory; nproc parallelism for the same
           # reason.
-          export SYFT_PARALLELISM=$(nproc)
+          SYFT_PARALLELISM=$(nproc)
+          export SYFT_PARALLELISM
           "$SYFT_CMD" scan "oci-archive:${RUNNER_TEMP}/raw-oci.tar" \
             --source-name "${IMAGE_NAME}" \
             --exclude '/usr/lib/modules/**' \
