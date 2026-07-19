@@ -218,9 +218,15 @@ jobs:
         env:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
         run: |
-          export SYFT_PARALLELISM=$(($(nproc) * 2))
+          # Kernel modules and firmware are RPM-owned files, so excluding
+          # them leaves the package inventory intact while keeping the scan
+          # within the runner's memory; nproc parallelism for the same
+          # reason.
+          export SYFT_PARALLELISM=$(nproc)
           "$SYFT_CMD" scan "oci-archive:${RUNNER_TEMP}/raw-oci.tar" \
             --source-name "${IMAGE_NAME}" \
+            --exclude '/usr/lib/modules/**' \
+            --exclude '/usr/lib/firmware/**' \
             -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
           du -sh "${RUNNER_TEMP}/sbom.spdx.json"
 
