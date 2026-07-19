@@ -15,6 +15,10 @@
 #   <name>@<variant>  enable it with its variants/<variant>.sh overrides
 #   # <name>          comment out to disable
 #
+# [flavor] sections gate components to a single flavor. Everything above
+# the first [flavor] header builds on all flavors. Flavor sections must
+# stay at the bottom to preserve the cache fork.
+#
 # Version pins live in each component's versions.sh (Renovate-tracked),
 # not here. A component that needs extra mounts or env (build secrets,
 # ARGs) ships its own Containerfile.part; see cachyos-kernel, gaming and
@@ -64,8 +68,17 @@ mullvad-vpn
 netbird
 tailscale
 
-# Kept last: frequently-bumped or flavor-gated components, so their
-# rebuilds and the desktop/laptop cache fork stay at the bottom of the
-# layer stack.
+# Kept last: frequently-bumped components, so their rebuilds stay at the
+# bottom of the layer stack.
 plasma-network-audio
+
+# ---------------------------------------------------------------------------
+# Flavor-gated components. The generator injects COMPONENT_FLAVORS=<flavor>
+# for components under a [flavor] header so run-component.sh skips them on
+# other flavors. Components with a Containerfile.part (looking-glass) gate
+# themselves; the generator cross-checks the part's COMPONENT_FLAVORS
+# matches the section header and errors on mismatch.
+# ---------------------------------------------------------------------------
+
+[desktop]
 looking-glass

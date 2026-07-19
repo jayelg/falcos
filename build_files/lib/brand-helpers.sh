@@ -1,5 +1,9 @@
 #!/bin/bash
-# os-release branding, sourced by the flavor scripts (flavors/*.sh).
+# os-release branding, sourced by 50-flavor.sh.
+# Defaults NAME, PRETTY_NAME, IMAGE_VERSION and DEFAULT_HOSTNAME from the
+# build environment; each default can be overridden by passing KEY=value
+# arguments. In practice the defaults are always correct — the per-flavor
+# override mechanism exists for future flavors that need different branding.
 
 # NAME=<...> PRETTY_NAME=<...> DEFAULT_HOSTNAME=<...> — keys match the
 # os-release fields they set. Patches branding fields only,
@@ -11,7 +15,7 @@
 # image's name. The ln restores the symlink on images where it was already
 # a detached file.
 brand_os_release() {
-    local name="" pretty_name="" default_hostname="" image_version="" arg
+    local name="Falcos" pretty_name="" default_hostname="${FLAVOR:-laptop}" image_version="${IMAGE_VERSION:-dev}" arg
     for arg in "$@"; do
         case "$arg" in
             NAME=*) name="${arg#NAME=}" ;;
@@ -24,9 +28,8 @@ brand_os_release() {
                 ;;
         esac
     done
-    if [ -z "$name" ] || [ -z "$pretty_name" ] || [ -z "$default_hostname" ] || [ -z "$image_version" ]; then
-        echo "brand_os_release: NAME=, PRETTY_NAME=, DEFAULT_HOSTNAME= and IMAGE_VERSION= are all required" >&2
-        return 1
+    if [ -z "$pretty_name" ]; then
+        pretty_name="Falcos ${image_version}"
     fi
 
     sed -i \

@@ -6,11 +6,11 @@ Files owned by a single component (its units, presets, tmpfiles, udev rules) liv
 
 ### [Common Files](common)
 
-Copied by phase-finalize.sh in the last layer, so edits here never rebuild the component layers.
+Copied by 99-finalize.sh in the last layer, so edits here never rebuild the component layers.
 
 ### [Desktop Files](desktop) / [Laptop Files](laptop)
 
-Flavor overlays, copied by phase-flavor.sh. The desktop overlay carries the VFIO GPU-passthrough config (kargs, modprobe, dracut config, rebind unit + preset).
+Flavor overlays, copied by 50-flavor.sh. The desktop overlay carries the VFIO GPU-passthrough config (kargs, modprobe, dracut config, rebind unit + preset).
 
 ## Notes
 

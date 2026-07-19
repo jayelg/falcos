@@ -1,0 +1,10 @@
+# Falcos Flavor Inventory — single source of truth for available flavors.
+#
+# Syntax:
+#   <flavor>               adds the flavor to the build matrix; hostname
+#                          defaults to the flavor name
+#   <flavor> hostname=<n>  override the default hostname
+#
+# First non-comment line is the default flavor (used by Justfile, CI).
+desktop
+laptop

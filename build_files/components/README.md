@@ -11,7 +11,7 @@ components/<group>/<name>/
   repo                package repo setup, idempotent via REPO_ID (optional)
   files/              overlay copied verbatim into the image, including any
                       usr/lib/systemd/*-preset/45-falcos-<name>.preset files
-                      that phase-finalize.sh applies (optional)
+                      that 99-finalize.sh applies (optional)
   justfile.inc        falcos-cli app recipes, appended at build time (optional)
   variants/<v>.sh     pin/flag overrides, selected as <name>@<v> in the list (optional)
   Containerfile.part  verbatim RUN block when the standard one isn't enough,

@@ -6,17 +6,21 @@ Everything that runs at image build time. These scripts are bind mounted into th
 
 Self-describing, independently cacheable build units, one Containerfile RUN layer each. What gets built is controlled by [COMPONENTS.list](../COMPONENTS.list): edit the list, run `just generate`, commit both. Each layer runs [lib/run-component.sh](lib/run-component.sh), which handles the shared conventions (repo file, version pins, variants, `files/` overlay, justfile recipes).
 
-### [Common Scripts](common)
+### Phase Scripts
 
-The build phases around the components: `phase-setup.sh` (pre-install workarounds), `phase-flavor.sh` (flavor overlay + script) and `phase-finalize.sh` (initramfs, presets, final baked tweaks).
+The build phases around the components, numbered to show their order relative to the component RUN layers that sit between them:
 
-### [Flavor Scripts](flavors)
+- [00-setup.sh](00-setup.sh) -- pre-install workarounds (systemctl stub, `/opt` shuffle) and `dnf5-plugins` for the component repo files. First RUN layer.
+- [50-flavor.sh](50-flavor.sh) -- copies the `files/<flavor>` overlay and applies os-release branding (NAME, PRETTY_NAME, DEFAULT_HOSTNAME) via [lib/brand-helpers.sh](lib/brand-helpers.sh). Runs after all components; the desktop/laptop layer cache forks here.
+- [99-finalize.sh](99-finalize.sh) -- copies `files/common`, restores systemctl, regenerates the initramfs, relocates `/opt` payloads, merges the signing policy, applies the falcos systemd presets and the remaining baked tweaks (GRUB os-prober, composefs SELinux workaround). Last RUN layer, so edits to `files/common` never rebuild the layers above.
 
-`desktop.sh` and `laptop.sh`: per-flavor branding and notes. Hardware-specific config lives in the matching `files/<flavor>` overlay; flavor-gated components (looking-glass) are handled in COMPONENTS.list.
+### Service enablement
+
+Components ship `*falcos*.preset` files (`usr/lib/systemd/system-preset/` and `user-preset/`) in their `files/` overlays. 99-finalize.sh applies only those presets -- not `preset-all` -- so removing a component from [COMPONENTS.list](../COMPONENTS.list) removes its service enablement with it.
 
 ### [Static Files](files)
 
-Config file trees copied verbatim into the image. `common` applies to every build (copied in phase-finalize), the `desktop` and `laptop` overlays are copied per flavor (phase-flavor). Files owned by a single component live in that component's `files/` directory instead.
+Config file trees copied verbatim into the image. `common` applies to every build (copied in 99-finalize), the `desktop` and `laptop` overlays are copied per flavor (50-flavor). Files owned by a single component live in that component's `files/` directory instead.
 
 ### [Shared Libraries](lib)
 

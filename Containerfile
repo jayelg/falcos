@@ -17,7 +17,8 @@ FROM quay.io/fedora/fedora-bootc:44
 # RUN rm /opt && mkdir /opt
 
 ### Build arguments
-# laptop (default) or desktop: selects the files/ overlay and flavors/ script.
+# desktop or laptop: selects the files/ overlay and os-release hostname.
+# Default read from the first line of FLAVORS.list by `just build` and CI.
 ARG FLAVOR=laptop
 # cachyos (default) or stock. stock keeps the Fedora base kernel and is
 # the temporary fallback flipped by .github/workflows/kernel-freshness.yml
@@ -27,11 +28,11 @@ ARG KERNEL=cachyos
 # CI passes the YYYYMMDD build date; local builds get it from `just build`
 ARG IMAGE_VERSION=dev
 
-RUN --mount=type=bind,from=ctx,source=/common/phase-setup.sh,target=/ctx/common/phase-setup.sh \
+RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    /ctx/common/phase-setup.sh
+    /ctx/00-setup.sh
 
 ## Components: one RUN layer each for independent BuildKit caching, run
 ## through lib/run-component.sh (repo file, version pins, files overlay).
@@ -46,24 +47,23 @@ RUN --mount=type=bind,from=ctx,source=/common/phase-setup.sh,target=/ctx/common/
 #
 # ---- END COMPONENTS ----
 
-RUN --mount=type=bind,from=ctx,source=/common/phase-flavor.sh,target=/ctx/common/phase-flavor.sh \
+RUN --mount=type=bind,from=ctx,source=/50-flavor.sh,target=/ctx/50-flavor.sh \
     --mount=type=bind,from=ctx,source=/lib/brand-helpers.sh,target=/ctx/lib/brand-helpers.sh \
-    --mount=type=bind,from=ctx,source=/flavors/${FLAVOR}.sh,target=/ctx/flavors/${FLAVOR}.sh \
     --mount=type=bind,from=ctx,source=/files/${FLAVOR},target=/ctx/files/${FLAVOR} \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} /ctx/common/phase-flavor.sh
+    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} /ctx/50-flavor.sh
 
-RUN --mount=type=bind,from=ctx,source=/common/phase-finalize.sh,target=/ctx/common/phase-finalize.sh \
+RUN --mount=type=bind,from=ctx,source=/99-finalize.sh,target=/ctx/99-finalize.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=bind,from=ctx,source=/files/common,target=/ctx/files/common \
-    /ctx/common/phase-finalize.sh
+    /ctx/99-finalize.sh
 
 ### SIGNING POLICY
 ## Bake cosign public key so bootc upgrade can verify signatures against it.
 ## Policy/registries config lives in build_files/files/common/etc/containers/,
-## copied in by phase-finalize.sh. Kept above LINTING so it's checked too.
+## copied in by 99-finalize.sh. Kept above LINTING so it's checked too.
 COPY cosign.pub /etc/pki/containers/falcos.pub
 
 ### LINTING

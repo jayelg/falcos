@@ -32,9 +32,8 @@ env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 jobs:
-  # PR builds only prove the change still builds, one flavor is enough.
-  # A separate job because the matrix context isn't available in a
-  # job-level if.
+  # Builds every flavor listed in FLAVORS.list. A separate job because the
+  # matrix context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -47,11 +46,9 @@ jobs:
     steps:
       - id: set
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo 'flavors=["laptop"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'flavors=["desktop","laptop"]' >> "$GITHUB_OUTPUT"
-          fi
+          mapfile -t all < <(awk '!/^#/ && !/^[[:space:]]*$/ {print $1}' FLAVORS.list)
+          printf -v joined '","%s' "${all[@]}"
+          printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix

@@ -32,7 +32,7 @@ Compiles and installs a local SELinux policy module from a `.te` file into the t
 
 ### [Brand Helpers](brand-helpers.sh)
 
-Patches the branding fields of `/etc/os-release`, parameterized per flavor.
+Patches the branding fields of `/etc/os-release`. Called directly by [50-flavor.sh](../50-flavor.sh) with defaults derived from the build environment (`FLAVOR`, `IMAGE_VERSION`).
 
 ## Caution
 

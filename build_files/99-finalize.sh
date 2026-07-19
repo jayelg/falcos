@@ -9,7 +9,7 @@ set -ouex pipefail
 # it in this last layer means edits to it never rebuild the layers above.
 [ -d "/ctx/files/common" ] && cp -rT /ctx/files/common "/"
 
-# Restore systemctl (stubbed in phase-setup.sh)
+# Restore systemctl (stubbed in 00-setup.sh)
 rm /usr/bin/systemctl
 mv /usr/bin/systemctl.bak /usr/bin/systemctl
 

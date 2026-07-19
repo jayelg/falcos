@@ -59,7 +59,7 @@ sudoif command *args:
 
 # Build the image using Podman, e.g. `just build falcos latest desktop stock`.
 # Depends on `generate` so the Containerfile always matches COMPONENTS.list.
-build $target_image=image_name $tag=default_tag $flavor="laptop" $kernel="cachyos": generate
+build $target_image=image_name $tag=default_tag $flavor=`awk '!/^#/ && !/^[[:space:]]*$/ {print $1; exit}' FLAVORS.list` $kernel="cachyos": generate
     #!/usr/bin/env bash
     set -euo pipefail
 
