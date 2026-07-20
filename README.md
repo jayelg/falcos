@@ -1,10 +1,10 @@
 # Falcos
 
-Falcos is a self-managed atomic Linux image repo based on a minimal fedora-bootc image. The objectives of this project is to provide a low maintainance 'build your own distro' framework image that users can clone and customize. The minimal base image (Fedora-bootc) ensures the majority of the system's software and configurations live in one place managed by the user rather than in an upstream image allowing for extensive control and visibility. Quality of life tools to manage updates from the running system and github CI automations ensure the system and software stays patched and up to date without excessive active management.  
+Falcos is a framework for a 'build-your-own distro' using an atomic/immutable linux image that is configured and managed in your own git repo. It provides sensible defaults as a starting point for an out-of-the-box desktop OS that demonstrates how the repo can be used. The objectives of this project are to provide a an easy to configure and maintain linux image where the user has full visibility of what is running on their system without the maintainance burden by providing a providing automations, tools and helper scripts that minimizing abstractions that obscure whats happening under the hood.
 
 ## Features
 
-- **Minimal Abstractions**: The repo is a custom linux image framework designed to be easy to learn and understand how it works while still keeping things organised and easy to maintain.
+- **Minimal Abstractions**: The repo is a framework for a custom linux image designed to be easy to learn and understand whats happening under the hood while still keeping things organised and easy to maintain.
 - **Component Modules**: `build_files/components` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuraiton commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash).
 - **Central Component Management**: `COMPONENTS.list` is the definitive list of all components that are enabled in the built images including common components and components specific to different flavor builds (using a `[Flavor_Name]` tag). a containerfile is generated at build time from the base containerfile that inserts these components before running the containerfile.
 - **Flavors**: `FLAVORS.list` is the centralized location to define the different builds you want it to generate eg. specific builds for different systems.
@@ -51,7 +51,7 @@ One-time setup:
 
 1. `just generate-mok-key` — creates the key pair under `~/.local/share/falcos/`.
 2. Copy the public cert into the repo and commit it:
-   `cp ~/.local/share/falcos/sb_cert.der build_files/files/common/usr/share/falcos/sb_cert.der`
+   `cp ~/.local/share/falcos/sb_cert.der build_files/components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
 3. Add the private key contents as the `MOK_PRIVATE_KEY` GitHub Actions secret (for local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`).
 4. On each machine, after deploying a signed image:
    `sudo mokutil --import /usr/share/falcos/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.

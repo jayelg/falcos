@@ -1,0 +1,2 @@
+enable install-default-flatpaks.service
+enable flatpak-update.timer

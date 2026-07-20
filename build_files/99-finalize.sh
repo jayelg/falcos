@@ -1,13 +1,11 @@
 #!/bin/bash
-# Runs after all install phases. Copies files/common, restores systemctl,
-# regenerates the initramfs, applies the falcos systemd presets and the
-# remaining baked tweaks (bootloader, SELinux workaround).
+# Runs after all install phases: restores systemctl, regenerates the
+# initramfs, applies the falcos systemd presets, runs per-component
+# finalize.sh hooks, and the remaining global tweaks (bootloader, SELinux
+# workaround). Only genuinely global, run-once operations live here;
+# component-owned finalize logic lives in each component's finalize.sh.
 
 set -ouex pipefail
-
-# files/common is consumed at boot/runtime, not during the build. Copying
-# it in this last layer means edits to it never rebuild the layers above.
-[ -d "/ctx/files/common" ] && cp -rT /ctx/files/common "/"
 
 # Restore systemctl (stubbed in 00-setup.sh)
 rm /usr/bin/systemctl
@@ -46,19 +44,6 @@ for d in /opt/*/; do
 done
 rm -rf /opt
 mv /opt.bak /opt
-
-### Signing policy
-# Merge a sigstoreSigned entry into the base image policy.json.
-# Namespace-scoped so one entry covers both flavor images.
-python3 << 'PYEOF'
-import json, os
-path = '/etc/containers/policy.json'
-p = json.load(open(path)) if os.path.exists(path) else {'default': [{'type': 'reject'}], 'transports': {}}
-p.setdefault('transports', {}).setdefault('docker', {})['ghcr.io/jayelg'] = [
-    {'type': 'sigstoreSigned', 'keyPath': '/etc/pki/containers/falcos.pub', 'signedIdentity': {'type': 'matchRepository'}}
-]
-json.dump(p, open(path, 'w'), indent=2)
-PYEOF
 
 ### Bootloader
 # Let GRUB discover other installed OSes (dual boot).
@@ -103,8 +88,34 @@ apply_falcos_presets() {
 apply_falcos_presets system /usr/lib/systemd/system-preset
 apply_falcos_presets user /usr/lib/systemd/user-preset
 
-# Fedora countme telemetry, off for this image. Only the timer is masked so
-# `rpm-ostree countme` still works manually. The timer elapses during sleep
-# and fires on resume before the network is up, leaving a failed unit; if
-# unmasked, the rpm-ostree-countme.service.d drop-in adds retries for that.
-systemctl mask rpm-ostree-countme.timer
+### Component finalize hooks
+# Some components need real systemctl or must run after every other
+# component (e.g. service masking, image policy edits). That logic lives in
+# the component's finalize.sh, sourced here in COMPONENTS.list order and
+# flavor-gated exactly like the build layers. COMPDIR points at the
+# component dir, as in run-component.sh.
+run_component_finalize() {
+    local current_flavor="" line entry name d dir
+    while IFS= read -r line; do
+        entry="${line%%#*}"
+        entry="${entry//[[:space:]]/}"
+        [ -z "$entry" ] && continue
+        if [[ "$entry" =~ ^\[([a-z][a-z0-9-]*)\]$ ]]; then
+            current_flavor="${BASH_REMATCH[1]}"
+            continue
+        fi
+        # skip components gated to a different flavor
+        [ -n "$current_flavor" ] && [ "$current_flavor" != "${FLAVOR:?}" ] && continue
+        name="${entry%%@*}"
+        dir=""
+        for d in "/ctx/components/${name}" /ctx/components/*/"${name}"; do
+            [ -d "$d" ] && dir="$d" && break
+        done
+        if [ -n "$dir" ] && [ -f "$dir/finalize.sh" ]; then
+            COMPDIR="$dir"; export COMPDIR
+            # shellcheck source=/dev/null
+            source "$dir/finalize.sh"
+        fi
+    done < /ctx/COMPONENTS.list
+}
+run_component_finalize

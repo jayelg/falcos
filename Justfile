@@ -112,7 +112,7 @@ generate-mok-key dir=(env("HOME") + "/.local/share/falcos"):
     echo "Public cert: $CERT"
     echo
     echo "Next steps:"
-    echo "  1. cp $CERT build_files/files/common/usr/share/falcos/sb_cert.der"
+    echo "  1. cp $CERT build_files/components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
     echo "  2. Commit that cert, and add MOK_PRIVATE_KEY as a GitHub Actions secret (contents of $KEY)."
     echo "  3. After deploying a signed image, on the target machine run:"
     echo "       sudo mokutil --import /usr/share/falcos/sb_cert.der"

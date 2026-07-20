@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+# Executable helpers ship as files too (e.g. under usr/libexec). CI shellchecks
+# scripts under files/{libexec,system-generators}, so keep them lint-clean.
+set -euo pipefail
+
+echo "Hello from a template libexec helper."

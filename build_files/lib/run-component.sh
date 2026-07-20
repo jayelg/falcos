@@ -12,9 +12,11 @@
 #                     as <component>@<name> in COMPONENTS.list
 #   5. component.sh   the component's own install logic (sourced, so it
 #                     inherits strict mode and the pins; COMPDIR points
-#                     at the component directory)
-#   6. files/         overlay copied verbatim into the image
-#   7. justfile.inc   appended to the falcos-cli app recipes
+#                     at the component directory). Optional: a pure-file
+#                     component (just a files/ overlay) omits it.
+#   6. selinux/       each *.te compiled and installed as a policy module
+#   7. files/         overlay copied verbatim into the image
+#   8. justfile.inc   appended to the falcos-cli app recipes
 
 set -ouex pipefail
 
@@ -51,8 +53,25 @@ if [ -n "${COMPONENT_VARIANT:-}" ]; then
     source "$COMPDIR/variants/${COMPONENT_VARIANT}.sh"
 fi
 
-# shellcheck source=/dev/null
-source "$COMPDIR/component.sh"
+# A component may be pure files (no install logic): its component.sh is
+# optional, so a directory drop is as valid a component as an app install.
+if [ -f "$COMPDIR/component.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$COMPDIR/component.sh"
+fi
+
+# Local SELinux policy: every selinux/*.te is compiled and installed at
+# priority 200. Copied to /tmp first because install_selinux_module removes
+# the source and the component dir is a read-only bind mount.
+if [ -d "$COMPDIR/selinux" ]; then
+    # shellcheck source=/dev/null
+    source /ctx/lib/selinux-helpers.sh
+    for te in "$COMPDIR"/selinux/*.te; do
+        [ -f "$te" ] || continue
+        cp "$te" "/tmp/$(basename "$te")"
+        install_selinux_module "/tmp/$(basename "$te")"
+    done
+fi
 
 if [ -d "$COMPDIR/files" ]; then
     cp -rT "$COMPDIR/files" /

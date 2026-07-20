@@ -1,0 +1,19 @@
+# A .te (type-enforcement) module. Every selinux/*.te in a component is
+# auto-compiled and installed by run-component.sh (priority 200) — no code in
+# component.sh required. This declarative drop-in is the preferred way to add
+# rules; see apps/trivalent/selinux for a real module.
+#
+# The module name on line 1 should match the file name. Rules read
+# `allow <source_type> <target_type>:<class> <perm>;`, and each type/class
+# used must be named in the require block. Derive candidate rules from real
+# denials with `ausearch -m avc | audit2allow` (or `audit2allow -a`) after
+# boot-testing, then paste the vetted subset here. Delete this file if the
+# component needs no custom SELinux policy.
+module falcos_template 1.0;
+
+require {
+	type unconfined_t;
+	class process execmem;
+}
+
+allow unconfined_t self:process execmem;

@@ -25,52 +25,68 @@
 # looking-glass.
 # =============================================================================
 
-# Desktop environment (build_files/components/de/)
-kde-desktop
-kde-theming
+# Base + essential falcos framework. Lead the list: the minimal set that
+# makes a buildable image carry this repo's own tooling. base is a pure-file
+# system layer (sshd-off preset, coredump/PAM lockdown, branding);
+# auto-updates is the self-update + signing mechanism; falcos-tools is the
+# falcos-cli OS TUI + `just` recipe engine (KDE-independent, so it leads).
+base
+auto-updates
+falcos-tools
 
 # Core system (build_files/components/core/) -- do not disable
+flatpak
+brew
 cli-tools
-dev-tools
-falcos-bootc-updates
-pinned-cli-tools
+cli-customizations
+manage-dotfiles
 
 # Kernel (build_files/components/kernel/). The KERNEL=stock build arg
 # (ARG in the Containerfile, flipped by kernel-freshness.yml) keeps the
 # Fedora base kernel instead.
 cachyos-kernel
 
+# Security & hardening (build_files/components/{security,hardening}/)
+security
+hardened-malloc
+sudo-hardening
+
 # Hardware support (build_files/components/hardware/)
 firmware
 gaming
 hardware-tools
 
+# Desktop environment (build_files/components/de/)
+kde-desktop
+kde-theming
+
 # Multimedia & networking
 multimedia
 networking
+
+# Dev tools (build_files/components/core/)
+dev-tools
 
 # Virtualization (build_files/components/virtualization/)
 libvirt
 incus
 podman
 
-# Security & hardening (build_files/components/{security,hardening}/)
-security
-hardened-malloc
-sudo-hardening
-
-# Desktop applications (build_files/components/apps/)
-affinity
-trivalent
-
 # VPN (build_files/components/vpn/)
 mullvad-vpn
 netbird
 tailscale
 
+# Desktop applications (build_files/components/apps/)
+affinity
+trivalent
+vscodium
+
 # Kept last: frequently-bumped components, so their rebuilds stay at the
-# bottom of the layer stack.
+# bottom of the layer stack. falcos-plasma-settings also lands here since it
+# must follow kde-desktop (it installs a Plasma/KCM module from an RPM).
 plasma-network-audio
+falcos-plasma-settings
 
 # ---------------------------------------------------------------------------
 # Flavor-gated components. The generator injects COMPONENT_FLAVORS=<flavor>
@@ -81,4 +97,8 @@ plasma-network-audio
 # ---------------------------------------------------------------------------
 
 [desktop]
+vfio-passthrough
 looking-glass
+
+[laptop]
+laptop-tweaks

@@ -1,0 +1,3 @@
+# Applied at build time by 99-finalize.sh (falcos presets only).
+# The base image preset enables sshd, not wanted on a single-user desktop.
+disable sshd.service

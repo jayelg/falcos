@@ -1,5 +1,5 @@
 # dev-tools:latest
 
-Development tools. `just` is a core dependency required by `falcos-cli` and `falcos-bootc-updates` at runtime.
+Development tools. `just` is a hard dependency of the falcos-cli justfile framework, so it is installed by the `falcos-tools` component rather than here.
 
-**Packages:** direnv, git, git-credential-libsecret, git-delta, git-lfs, gum, just
+**Packages:** direnv, git, git-credential-libsecret, git-delta, git-lfs

@@ -4,6 +4,9 @@
 # COMPONENTS.list by scripts/gen-containerfile.sh (`just generate`).
 FROM scratch AS ctx
 COPY build_files /
+# COMPONENTS.list drives the per-component finalize.sh loop in 99-finalize.sh
+# (flavor gate + ordering); it lives at the repo root, outside build_files.
+COPY COMPONENTS.list /COMPONENTS.list
 
 # Base Image
 # No digest pin: quay.io/fedora prunes old untagged manifests within days,
@@ -17,8 +20,8 @@ FROM quay.io/fedora/fedora-bootc:44
 # RUN rm /opt && mkdir /opt
 
 ### Build arguments
-# desktop or laptop: selects the files/ overlay and os-release hostname.
-# Default read from the first line of FLAVORS.list by `just build` and CI.
+# desktop or laptop: gates flavor-specific components and sets the
+# os-release hostname. Default read from FLAVORS.list by `just build` and CI.
 ARG FLAVOR=laptop
 # cachyos (default) or stock. stock keeps the Fedora base kernel and is
 # the temporary fallback flipped by .github/workflows/kernel-freshness.yml
@@ -49,7 +52,6 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
 
 RUN --mount=type=bind,from=ctx,source=/50-flavor.sh,target=/ctx/50-flavor.sh \
     --mount=type=bind,from=ctx,source=/lib/brand-helpers.sh,target=/ctx/lib/brand-helpers.sh \
-    --mount=type=bind,from=ctx,source=/files/${FLAVOR},target=/ctx/files/${FLAVOR} \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
@@ -57,13 +59,15 @@ RUN --mount=type=bind,from=ctx,source=/50-flavor.sh,target=/ctx/50-flavor.sh \
 
 RUN --mount=type=bind,from=ctx,source=/99-finalize.sh,target=/ctx/99-finalize.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=bind,from=ctx,source=/files/common,target=/ctx/files/common \
-    /ctx/99-finalize.sh
+    --mount=type=bind,from=ctx,source=/components,target=/ctx/components \
+    --mount=type=bind,from=ctx,source=/COMPONENTS.list,target=/ctx/COMPONENTS.list \
+    FLAVOR=${FLAVOR} /ctx/99-finalize.sh
 
 ### SIGNING POLICY
 ## Bake cosign public key so bootc upgrade can verify signatures against it.
-## Policy/registries config lives in build_files/files/common/etc/containers/,
-## copied in by 99-finalize.sh. Kept above LINTING so it's checked too.
+## The registries config and the policy.json merge live in the
+## auto-updates component (files/ overlay + finalize.sh). Kept above
+## LINTING so it's checked too.
 COPY cosign.pub /etc/pki/containers/falcos.pub
 
 ### LINTING

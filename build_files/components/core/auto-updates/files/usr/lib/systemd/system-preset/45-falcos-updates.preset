@@ -1,0 +1,3 @@
+# Automatic staged bootc updates (upstream bootc timer; schedule tuned by
+# the bootc-fetch-apply-updates.timer.d drop-in in this overlay).
+enable bootc-fetch-apply-updates.timer

@@ -1,6 +1,6 @@
 ### Looking Glass kvmfr module (shared-memory transport between host and VM)
 # Desktop flavor only (COMPONENT_FLAVORS in Containerfile.part): pairs with
-# the VFIO GPU-passthrough setup shipped by files/desktop.
+# the VFIO GPU-passthrough setup in the vfio-passthrough component.
 source /ctx/lib/dkms-helpers.sh
 kernel_devel_install "${DKMS_BUILD_DEPS[@]}"
 

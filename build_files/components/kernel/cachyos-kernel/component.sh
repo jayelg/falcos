@@ -5,9 +5,10 @@
 # when the COPR falls behind upstream stable.
 source /ctx/lib/kernel-helpers.sh
 
-# Install cert for module signing. sb_cert.der is bind-mounted from
-# files/common by this component's Containerfile.part.
-install -Dm644 /ctx/files/sb_cert.der /usr/share/falcos/sb_cert.der
+# Install cert for module signing. Copied early (before run-component.sh's
+# end-of-run files/ overlay copy) so build-time signing below can read it
+# at the path sign-helpers.sh expects.
+install -Dm644 "$COMPDIR/files/usr/share/falcos/sb_cert.der" /usr/share/falcos/sb_cert.der
 
 mkdir -p /usr/lib/falcos
 if [ "$KERNEL" = "stock" ]; then

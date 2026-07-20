@@ -1,0 +1,6 @@
+# A 45-falcos-<name>.preset in files/ is how a component enables/disables its
+# own units (systemctl is stubbed during the build, so you can't call it in
+# component.sh). 99-finalize.sh applies ONLY *falcos*.preset files, so
+# delisting the component removes its enablement with it. User units go under
+# usr/lib/systemd/user-preset/ instead (see core/brew).
+enable example.service

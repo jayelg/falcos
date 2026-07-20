@@ -1,3 +1,0 @@
-REPO_ID="vscodium"
-dnf5 config-manager addrepo --from-repofile=https://repo.vscodium.dev/vscodium.repo
-dnf5 config-manager setopt vscodium.enabled=0

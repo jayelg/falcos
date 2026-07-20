@@ -1,0 +1,22 @@
+# Containerfile.part — rename to exactly `Containerfile.part` to activate.
+#
+# Use this ONLY when the standard RUN block run-component.sh generates isn't
+# enough — i.e. the component needs an extra bind mount, a build secret, or a
+# build ARG. When present, the generator inlines this file VERBATIM instead of
+# the standard block, so it fully REPLACES the normal flow: you must call
+# run-component.sh yourself and mount everything it needs. See
+# kernel/cachyos-kernel (MOK secret + KERNEL arg) and hardware/gaming.
+#
+# A flavor-gated Containerfile.part must set COMPONENT_FLAVORS itself; the
+# generator cross-checks it against the [flavor] section header and errors on
+# a mismatch (see virtualization/looking-glass).
+#
+# Example skeleton (a component needing a build secret):
+#
+# RUN --mount=type=bind,from=ctx,source=/components/GROUP/template,target=/ctx/components/GROUP/template \
+#     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+#     --mount=type=cache,target=/var/cache \
+#     --mount=type=cache,target=/var/log \
+#     --mount=type=tmpfs,target=/tmp \
+#     --mount=type=secret,id=example_secret,target=/run/secrets/example,required=false \
+#     bash /ctx/lib/run-component.sh /ctx/components/GROUP/template

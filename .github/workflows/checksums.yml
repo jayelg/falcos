@@ -16,9 +16,11 @@ name: Checksums
 on:
   pull_request:
     paths:
-      - 'build_files/components/core/pinned-cli-tools/versions.sh'
+      - 'build_files/components/core/cli-customizations/versions.sh'
+      - 'build_files/components/core/manage-dotfiles/versions.sh'
+      - 'build_files/components/core/falcos-tools/versions.sh'
       - 'build_files/components/apps/affinity/versions.sh'
-      - 'build_files/components/core/falcos-bootc-updates/versions.sh'
+      - 'build_files/components/de/falcos-plasma-settings/versions.sh'
       - 'build_files/components/de/kde-theming/versions.sh'
 
 concurrency:
@@ -51,21 +53,21 @@ jobs:
           # mode "download" hashes the asset itself; "sidecar" fetches an
           # upstream-published .sha256 next to it (URL points at the sidecar).
           entries=(
-            'bw|build_files/components/core/pinned-cli-tools/versions.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
-            'aichat|build_files/components/core/pinned-cli-tools/versions.sh|AICHAT_VERSION|AICHAT_SHA256|download|https://github.com/sigoden/aichat/releases/download/v{v}/aichat-v{v}-x86_64-unknown-linux-musl.tar.gz'
-            'starship|build_files/components/core/pinned-cli-tools/versions.sh|STARSHIP_VERSION|STARSHIP_SHA256|sidecar|https://github.com/starship/starship/releases/download/v{v}/starship-x86_64-unknown-linux-musl.tar.gz.sha256'
+            'bw|build_files/components/core/manage-dotfiles/versions.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
+            'aichat|build_files/components/core/cli-customizations/versions.sh|AICHAT_VERSION|AICHAT_SHA256|download|https://github.com/sigoden/aichat/releases/download/v{v}/aichat-v{v}-x86_64-unknown-linux-musl.tar.gz'
+            'starship|build_files/components/core/cli-customizations/versions.sh|STARSHIP_VERSION|STARSHIP_SHA256|sidecar|https://github.com/starship/starship/releases/download/v{v}/starship-x86_64-unknown-linux-musl.tar.gz.sha256'
             # nerd-fonts pins the release's SHA-256.txt manifest, the build
             # verifies each font archive against it
-            'nerd-fonts|build_files/components/core/pinned-cli-tools/versions.sh|NERD_FONTS_VERSION|NERD_FONTS_SHA256|download|https://github.com/ryanoasis/nerd-fonts/releases/download/v{v}/SHA-256.txt'
+            'nerd-fonts|build_files/components/core/cli-customizations/versions.sh|NERD_FONTS_VERSION|NERD_FONTS_SHA256|download|https://github.com/ryanoasis/nerd-fonts/releases/download/v{v}/SHA-256.txt'
             'darkly|build_files/components/de/kde-theming/versions.sh|DARKLY_VERSION|DARKLY_SHA256|download|https://github.com/Bali10050/Darkly/archive/refs/tags/v{v}.tar.gz'
             'ant|build_files/components/de/kde-theming/versions.sh|ANT_COMMIT|ANT_SHA256|download|https://github.com/EliverLara/Ant/archive/{v}.tar.gz'
             'advanced-weather-widget|build_files/components/de/kde-theming/versions.sh|AWW_VERSION|AWW_SHA256|download|https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/{v}/advanced-weather-widget.plasmoid'
-            'flyline|build_files/components/core/pinned-cli-tools/versions.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
-            'falcos-cli|build_files/components/core/pinned-cli-tools/versions.sh|FALCOS_CLI_VERSION|FALCOS_CLI_SHA256|sidecar|https://github.com/jayelg/falcos-cli/releases/download/v{v}/falcos-cli-v{v}-x86_64-linux-gnu.tar.gz.sha256'
+            'flyline|build_files/components/core/cli-customizations/versions.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
+            'falcos-cli|build_files/components/core/falcos-tools/versions.sh|FALCOS_CLI_VERSION|FALCOS_CLI_SHA256|sidecar|https://github.com/jayelg/falcos-cli/releases/download/v{v}/falcos-cli-v{v}-x86_64-linux-gnu.tar.gz.sha256'
             'wine-affinity|build_files/components/apps/affinity/versions.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
             'dxvk|build_files/components/apps/affinity/versions.sh|DXVK_VERSION|DXVK_SHA256|download|https://github.com/doitsujin/dxvk/releases/download/v{v}/dxvk-{v}.tar.gz'
             'vkd3d-proton|build_files/components/apps/affinity/versions.sh|VKD3D_PROTON_VERSION|VKD3D_PROTON_SHA256|download|https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{v}/vkd3d-proton-{v}.tar.zst'
-            'falcos-bootc-updates|build_files/components/core/falcos-bootc-updates/versions.sh|FALCOS_BOOTC_UPDATES_VERSION|FALCOS_BOOTC_UPDATES_SHA256|download|https://github.com/jayelg/falcos-bootc-updates/releases/download/v{v}/falcos-bootc-updates-{v}-1.fc44.x86_64.rpm'
+            'falcos-bootc-updates|build_files/components/de/falcos-plasma-settings/versions.sh|FALCOS_BOOTC_UPDATES_VERSION|FALCOS_BOOTC_UPDATES_SHA256|download|https://github.com/jayelg/falcos-bootc-updates/releases/download/v{v}/falcos-bootc-updates-{v}-1.fc44.x86_64.rpm'
           )
           # plasma-network-audio (same file) is deliberately absent: its
           # asset filename doesn't derive from the tag, bumps are manual.
