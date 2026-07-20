@@ -18,15 +18,25 @@ affinity-setup:
 	# (32-bit) support that this WoW64 Wine build lacks — it is installed from
 	# the baked-in offline installer below.  Same for vcrun2022.
 	WINEDLLOVERRIDES="mscoree,mshtml=" wineboot --init
-	# Wait for background services to settle before winetricks touches regedit.
-	"$WINESERVER" -w
-	sleep 2
+	# Kill wineserver: lingering services (e.g. services.exe on this WoW64
+	# build) stay resident and cause later wineserver -w calls (winetricks
+	# calls it between verbs) to hang indefinitely.
+	"$WINESERVER" -k
+
+	# WoW64-only build has no syswow64 directory; winetricks corefonts
+	# and tahoma call C:\windows\syswow64\regedit.exe to import .reg
+	# font registration files. Copy the 64-bit system32 stub so Wine
+	# resolves the built-in regedit at the path winetricks expects.
+	mkdir -p "$WINEPREFIX/drive_c/windows/syswow64"
+	cp "$WINEPREFIX/drive_c/windows/system32/regedit.exe" "$WINEPREFIX/drive_c/windows/syswow64/regedit.exe"
 
 	echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
 	# dotnet48 and vcrun2022 are not installed via winetricks because their
 	# prerequisites need syswow64 (32-bit) support that this WoW64 Wine build
 	# lacks.  Both are installed from baked-in offline installers below.
-	winetricks --unattended --force remove_mono corefonts win11 tahoma renderer=vulkan
+	# --no-isolate skips winetricks' between-verb wineserver -w calls which
+	# hang on this WoW64-only Wine build when a service stays resident.
+	winetricks --unattended --force --no-isolate remove_mono corefonts win11 tahoma renderer=vulkan
 
 	# .NET 4.8 offline installer (baked into the image, replaces winetricks
 	# dotnet48 which would call the failing dotnet40 prerequisite).
@@ -45,13 +55,13 @@ affinity-setup:
 		WINEDLLOVERRIDES=fusion=b "$WINE" /usr/share/wine-affinity/ndp48-x86-x64-allos-enu.exe /sfxlang:1027 /q /norestart || true
 	fi
 	rm -rf "$DOTNET48_TMP"
-	"$WINESERVER" -w
+	"$WINESERVER" -k
 
 	# vcrun2022 is installed from the baked-in 64-bit redist instead of
 	# winetricks, because this WoW64 Wine build has no syswow64 (32-bit) path.
 	echo "==> Installing VC++ 2022 redistributable..."
 	"$WINE" /usr/share/wine-affinity/vc_redist.x64.exe /install /quiet /norestart
-	"$WINESERVER" -w
+	"$WINESERVER" -k
 	winecfg -v win11
 
 	echo "==> Installing DLLs + WinRT metadata from the image..."
