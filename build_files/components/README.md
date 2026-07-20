@@ -51,9 +51,11 @@ To start a new component, copy [`_template/component-name/`](_template) — a co
 - `cachyos-kernel` -- CachyOS kernel + companions + module signing (KERNEL=stock build arg keeps the Fedora kernel)
 
 ### Hardware (`hardware/`)
-- `firmware` -- iwlwifi firmware
+- `intel-wifi` -- Intel WiFi firmware (iwlwifi)
 - `gaming` -- xone driver + gamemode
 - `hardware-tools` -- alsa-ucm, dmidecode, intel-lpmd, lm_sensors, etc.
+- `logitech` -- Solaar udev rules for Logitech wireless peripherals
+- `yubikey` -- hardware token / smartcard auth stack (YubiKey, FIDO2, PAM, PC/SC)
 - `laptop-tweaks` -- s2idle sleep karg (laptop flavor only)
 
 ### Multimedia (`multimedia/`)
@@ -69,8 +71,8 @@ To start a new component, copy [`_template/component-name/`](_template) — a co
 - `vfio-passthrough` -- VFIO kargs, modprobe binds, dracut + GPU/USB rebind service (desktop flavor only)
 - `looking-glass` -- kvmfr DKMS module for GPU passthrough (desktop flavor only)
 
-### Security (`security/`)
-- `security` -- borg, rclone, restic, yubikey, pam-u2f
+### Backup (`backup/`)
+- `backup-tools` -- borgbackup, rclone, restic
 
 ### Hardening (`hardening/`)
 - `hardened-malloc` -- hardened_malloc + no_rlimit_as

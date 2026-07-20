@@ -46,15 +46,19 @@ manage-dotfiles
 # Fedora base kernel instead.
 cachyos-kernel
 
-# Security & hardening (build_files/components/{security,hardening}/)
-security
+# Security & hardening (build_files/components/hardening/)
 hardened-malloc
 sudo-hardening
 
+# Backup (build_files/components/backup/)
+backup-tools
+
 # Hardware support (build_files/components/hardware/)
-firmware
+intel-wifi
 gaming
 hardware-tools
+logitech
+yubikey
 
 # Desktop environment (build_files/components/de/)
 kde-desktop

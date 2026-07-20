@@ -1,4 +1,4 @@
-# firmware:latest
+# intel-wifi:latest
 
 Intel WiFi firmware.
 
