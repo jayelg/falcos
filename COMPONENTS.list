@@ -59,6 +59,7 @@ hardware-tools
 # Desktop environment (build_files/components/de/)
 kde-desktop
 kde-theming
+bazaar
 
 # Multimedia & networking
 multimedia
@@ -81,6 +82,7 @@ tailscale
 affinity
 trivalent
 vscodium
+bitwarden
 
 # Kept last: frequently-bumped components, so their rebuilds stay at the
 # bottom of the layer stack. falcos-plasma-settings also lands here since it

@@ -1,0 +1,6 @@
+# Flatpaks to install on first boot.
+# One flatpak ID per line. Blank lines and # comments are ignored.
+# Processed at build time by run-component.sh: each component's
+# flatpaks.list is concatenated into /usr/share/falcos/default-flatpaks
+# and installed by the flatpak component's first-boot service.
+io.github.kolunmi.Bazaar

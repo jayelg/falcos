@@ -2,7 +2,7 @@
 Description=Update system Flatpaks
 Documentation=man:flatpak(1)
 Wants=network-online.target
-After=network-online.target install-default-flatpaks.service
+After=network-online.target install-flatpaks.service
 StartLimitIntervalSec=600
 StartLimitBurst=5
 

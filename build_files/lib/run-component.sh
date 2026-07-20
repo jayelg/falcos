@@ -17,6 +17,8 @@
 #   6. selinux/       each *.te compiled and installed as a policy module
 #   7. files/         overlay copied verbatim into the image
 #   8. justfile.inc   appended to the falcos-cli app recipes
+#   9. flatpaks.list  appended to /usr/share/falcos/default-flatpaks;
+#                     one flatpak ID per line, installed at first boot
 
 set -ouex pipefail
 
@@ -80,4 +82,9 @@ fi
 if [ -f "$COMPDIR/justfile.inc" ]; then
     mkdir -p /usr/share/falcos
     cat "$COMPDIR/justfile.inc" >> /usr/share/falcos/justfile.apps
+fi
+
+if [ -f "$COMPDIR/flatpaks.list" ]; then
+    mkdir -p /usr/share/falcos
+    cat "$COMPDIR/flatpaks.list" >> /usr/share/falcos/default-flatpaks
 fi

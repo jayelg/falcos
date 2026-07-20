@@ -9,6 +9,10 @@ update timer.
 
 ## Files
 
-- `install-default-flatpaks.service` + `usr/libexec/install-default-flatpaks` -- first-boot Flathub remote + default apps (Bazaar, Bitwarden)
+- `install-flatpaks.service` + `usr/libexec/install-flatpaks` -- first-boot Flathub remote add, then installs every flatpak listed in `/usr/share/falcos/default-flatpaks` (aggregated at build time from each component's `flatpaks.list` by `run-component.sh`).
 - `flatpak-update.{timer,service}` -- daily `flatpak update --system`
 - `45-falcos-flatpak.preset` -- enables both units
+
+## Adding default flatpaks
+
+Add a `flatpaks.list` file to the component directory (one flatpak ID per line, `#` comments and blank lines ignored). At build time `run-component.sh` concatenates it into `/usr/share/falcos/default-flatpaks`; the first-boot service installs each one.
