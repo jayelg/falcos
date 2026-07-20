@@ -109,6 +109,27 @@ jobs:
           # build-arg so they can't disagree across a midnight boundary
           echo "version=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
+      # Record which base each image was built on. The FROM tracks the :44
+      # tag on purpose — quay.io prunes old fedora-bootc digests within days,
+      # so a git digest pin 404s before Renovate can bump it (renovate.json5
+      # documents this), and pinning would freeze out the daily Fedora
+      # updates the rebuild exists to pull. Fedora doesn't cosign-sign the
+      # base yet, so the pull can't be gated either. Until it can, resolve
+      # the tag and stamp the digest onto the image as the OCI base
+      # annotations: no gate, but every published falcos image then carries
+      # an auditable record of exactly which fedora-bootc digest produced it.
+      # Base ref is read from the Containerfile FROM so the two can't drift.
+      # Resolved seconds before the build; quay only moves the tag on a new
+      # compose, so the window doesn't realistically race.
+      - name: Resolve base image digest
+        id: base
+        run: |
+          set -euo pipefail
+          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile | head -1)"
+          digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
+          echo "name=${base}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
       - name: Image Metadata
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: metadata
@@ -129,6 +150,8 @@ jobs:
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
             org.opencontainers.image.version=${{ steps.date.outputs.version }}
+            org.opencontainers.image.base.name=${{ steps.base.outputs.name }}
+            org.opencontainers.image.base.digest=${{ steps.base.outputs.digest }}
             io.artifacthub.package.deprecated=false
             io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}
             io.artifacthub.package.license=Apache-2.0
@@ -245,15 +268,22 @@ jobs:
           #
           # Mount the already-imported image and point syft at the rootfs
           # directory: a "dir:" source streams files from the overlay on
-          # disk instead of holding an assembled image, and the RPM
-          # cataloger only reads the RPM DB. Peak memory drops from OOM to a
-          # few hundred MB. Run as root — the merged mount and mode-0000
-          # files (e.g. /etc/shadow) are root-only; chown the output back so
-          # the later attest step can read it.
+          # disk instead of holding an assembled image. Peak memory drops
+          # from OOM to a few hundred MB. Run as root — the merged mount and
+          # mode-0000 files (e.g. /etc/shadow) are root-only; chown the
+          # output back so the later attest step can read it.
+          #
+          # The 'rpm' cataloger tag (resolves to just rpm-db-cataloger in
+          # the default dir set) is scope, not an OOM mitigation: RPMs are
+          # the supply-chain inventory this SBOM exists to attest, reading
+          # only the RPM DB keeps the scan to seconds instead of walking the
+          # multi-GB rootfs, and the SPDX output stays small enough to
+          # attest (see Rekor note below). --select-catalogers takes tags
+          # here, not cataloger names (a bare name errors out).
           mnt="$(sudo podman image mount "localhost/${IMAGE_NAME}:raw")"
-          sudo env SYFT_PARALLELISM=1 "$SYFT_CMD" scan "dir:${mnt}" \
+          sudo "$SYFT_CMD" scan "dir:${mnt}" \
             --source-name "${IMAGE_NAME}" \
-            --select-catalogers 'rpm-db-cataloger' \
+            --select-catalogers 'rpm' \
             -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
           sudo podman image umount "localhost/${IMAGE_NAME}:raw"
           sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/sbom.spdx.json"
