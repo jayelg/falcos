@@ -214,50 +214,50 @@ jobs:
             ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
                 && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
 
-      # Scans the raw archive rather than the chunked image: same
-      # filesystem (chunking only repartitions layers), but readable
-      # without root and no second multi-GB rootfs copy.
       - name: Setup Syft
         id: setup-syft
         if: env.PUBLISH == 'true'
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
 
-      - name: Generate SBOM
-        if: env.PUBLISH == 'true'
-        env:
-          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
-        run: |
-          # Scanning a multi-GB bootc archive OOM-killed the 16GB runner
-          # here. Three mitigations, and swap as a backstop:
-          #   - select-catalogers=package limits the scan to the RPM
-          #     inventory (all a supply-chain SBOM needs) and skips the
-          #     file-digest cataloger that hashed the entire rootfs, the
-          #     real memory and time sink.
-          #   - parallelism=1: concurrent catalogers each hold a working
-          #     set, so parallelism raises peak memory, not lowers it.
-          #   - swapfile lets any residual spike spill to disk on /mnt
-          #     (the large runner volume) instead of tripping the OOM
-          #     killer, which shows up as "runner lost communication".
-          sudo fallocate -l 8G /mnt/syft.swap
-          sudo chmod 600 /mnt/syft.swap
-          sudo mkswap /mnt/syft.swap
-          sudo swapon /mnt/syft.swap
-          SYFT_PARALLELISM=1
-          export SYFT_PARALLELISM
-          "$SYFT_CMD" scan "oci-archive:${RUNNER_TEMP}/raw-oci.tar" \
-            --source-name "${IMAGE_NAME}" \
-            --select-catalogers 'package' \
-            -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
-          du -sh "${RUNNER_TEMP}/sbom.spdx.json"
-
       # build-chunked-oci reads from root containers-storage. :latest
       # selects one image — the buildx export indexes one entry per tag.
+      # Imported before the SBOM step so syft can scan the mounted rootfs
+      # instead of the compressed archive (see below).
       - name: Import image into containers-storage
         if: env.PUBLISH == 'true'
         run: |
           sudo skopeo copy "oci-archive:${RUNNER_TEMP}/raw-oci.tar:latest" \
             "containers-storage:localhost/${IMAGE_NAME}:raw"
           rm -f "${RUNNER_TEMP}/raw-oci.tar"
+
+      - name: Generate SBOM
+        if: env.PUBLISH == 'true'
+        env:
+          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
+        run: |
+          # Scanning an "oci-archive:" source made syft/stereoscope
+          # decompress and assemble the whole multi-GB bootc image tree in
+          # memory *before* any cataloger ran — that image assembly, not the
+          # catalogers, is what OOM-killed the 16GB runner (it thrashed for
+          # ~16 min, then the host lost its heartbeat and the job was
+          # cancelled). Cataloger/parallelism/swap tuning never touched that
+          # sink because it happens during source loading.
+          #
+          # Mount the already-imported image and point syft at the rootfs
+          # directory: a "dir:" source streams files from the overlay on
+          # disk instead of holding an assembled image, and the RPM
+          # cataloger only reads the RPM DB. Peak memory drops from OOM to a
+          # few hundred MB. Run as root — the merged mount and mode-0000
+          # files (e.g. /etc/shadow) are root-only; chown the output back so
+          # the later attest step can read it.
+          mnt="$(sudo podman image mount "localhost/${IMAGE_NAME}:raw")"
+          sudo env SYFT_PARALLELISM=1 "$SYFT_CMD" scan "dir:${mnt}" \
+            --source-name "${IMAGE_NAME}" \
+            --select-catalogers 'rpm-db-cataloger' \
+            -o "spdx-json=${RUNNER_TEMP}/sbom.spdx.json"
+          sudo podman image umount "localhost/${IMAGE_NAME}:raw"
+          sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/sbom.spdx.json"
+          du -sh "${RUNNER_TEMP}/sbom.spdx.json"
 
       # Repack into content-stable chunks (one layer per package group) so
       # bootc upgrade only downloads what changed. rpm-ostree runs from the
