@@ -1,0 +1,21 @@
+# vim: set ft=make :
+# System justfile behind the os-name alias (etc/profile.d/falcos-cli.sh).
+# Ships in the image so recipes are always current; personal additions go
+# in ~/.config/just/user.justfile via the import at the bottom.
+# Comments above recipes provide the description for falcos-cli.
+#
+# Recipes that need runtime UI interactions (progress, confirm, prompt)
+# source /usr/share/falcos/falcos-helpers.sh which provides prog, confirm,
+# prompt, and choose functions that emit OSC 9 sequences handled by
+# falcos-cli's TUI.
+set allow-duplicate-recipes := true
+set ignore-comments := true
+
+_default:
+	@just --justfile '{{ justfile() }}' --list --list-heading $'Available commands:\n' --list-prefix $' - '
+
+# === Component recipes (populated at build time from component justfile.inc snippets) ===
+import? "/usr/share/falcos/justfile.apps"
+
+# Personal additions, not managed by the image
+import? "~/.config/just/user.justfile"

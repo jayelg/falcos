@@ -24,15 +24,15 @@ jobs:
       - name: Run shellcheck
         run: |
           mapfile -t scripts < <(
-            find build_files scripts -name '*.sh' -type f
-            find build_files/components -path '*/files/*' -type f \
+            find build-phases scripts lib -name '*.sh' -type f
+            find components -path '*/files/*' -type f \
               \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
           )
           shellcheck -s bash "${scripts[@]}"
 
       # Catches list entries that don't resolve to a component directory
       # and skeleton marker damage, without needing a full image build.
-      - name: Validate COMPONENTS.list against the component tree
+      - name: Validate components.list against the component tree
         run: ./scripts/gen-containerfile.sh
 
   actionlint:
@@ -46,7 +46,7 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
 
-  # Unit tests for the kernel-freshness workflow's decision logic
+  # Unit tests for kernel-freshness scripts discovered in component dirs
   script-tests:
     runs-on: ubuntu-24.04
     permissions:
@@ -55,5 +55,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Run kernel_freshness tests
-        run: python3 -m unittest discover -s .github/scripts -v
+      - name: Discover and run kernel-freshness tests
+        run: |
+          dirs=($(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u))
+          for d in "${dirs[@]}"; do
+            echo "==> Running tests in ${d}..."
+            python3 -m unittest discover -s "$d" -v
+          done

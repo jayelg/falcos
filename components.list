@@ -1,0 +1,75 @@
+# Falcos Component Inventory — source of truth for what goes in the image.
+#
+# Each entry below is the path to a component directory relative to
+# components/. Entries are listed in build order: one Containerfile RUN
+# layer each. Heavy or rarely-changing components first for better layer
+# caching.
+#
+# Flavor section headers gate components to specific builds:
+#   [common]           included in all flavors
+#   [<flavor-name>]    included only in that flavor's build
+#
+# Syntax:
+#   <path>              enable the component at components/<path>
+#   <path>@<variant>    enable it with its variants/<variant>.sh overrides
+#   # <path>            disable a component by commenting it out
+
+[common]
+base
+core/auto-updates
+core/system-just-scripts
+core/falcos-tools
+core/flatpak
+core/brew
+core/cli-tools
+
+cli-customizations
+manage-dotfiles
+
+kernel/cachyos-kernel
+
+hardening/hardened-malloc
+hardening/sudo-hardening
+
+backup/backup-tools
+
+hardware/intel-wifi
+hardware/gaming
+hardware/hardware-tools
+hardware/logitech
+hardware/yubikey
+
+de/kde-desktop
+de/falcos-plasma-settings
+de/plasma-network-audio
+de/bazaar
+de/kde-theming
+
+media-codecs
+networking
+
+dev-tools
+
+virtualization/libvirt
+virtualization/incus
+virtualization/podman
+
+vpn/mullvad-vpn
+vpn/netbird
+vpn/tailscale
+
+apps/affinity
+apps/trivalent
+apps/vscodium
+apps/bitwarden
+
+[desktop]
+virtualization/vfio-passthrough
+virtualization/looking-glass
+
+[laptop]
+hardware/laptop-tweaks
+
+# Switching back to common to run across all flavors last
+[common]
+core/power-just-scripts

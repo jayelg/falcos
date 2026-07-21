@@ -1,59 +1,60 @@
 #!/usr/bin/env bash
 # Generates Containerfile.generated (the file builds actually use) from the
-# committed Containerfile skeleton plus COMPONENTS.list. Runs automatically
+# committed Containerfile skeleton plus components.list. Runs automatically
 # before every build (`just build` dependency, CI build step); `just
 # generate` runs it standalone. Containerfile.generated is gitignored: the
 # committed Containerfile stays an honest skeleton with an empty component
 # section, so nothing generated is ever committed.
 #
-# Each list entry becomes one RUN layer that calls lib/run-component.sh.
-# Components under a [flavor] section get COMPONENT_FLAVORS=<flavor>
-# injected (so run-component.sh skips them on other flavors). A component
-# that needs extra mounts or env (build secrets, ARGs) ships a
-# Containerfile.part in its directory, inlined verbatim instead of the
-# standard block; if listed under a [flavor] section the generator
-# cross-checks the part's COMPONENT_FLAVORS matches.
+# Each list entry is a path relative to components/. It becomes one RUN
+# layer that calls lib/run-component.sh. Components under a [flavor]
+# section get COMPONENT_FLAVORS=<flavor> injected (so run-component.sh
+# skips them on other flavors). A component that needs extra mounts or env
+# (build secrets, ARGs) ships a Containerfile.part in its directory,
+# inlined verbatim instead of the standard block; if listed under a
+# [flavor] section the generator cross-checks the part's
+# COMPONENT_FLAVORS matches.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # shellcheck disable=SC2016  # the backticks are literal marker text
-begin='# ---- BEGIN COMPONENTS (generated at build time from COMPONENTS.list; see scripts/gen-containerfile.sh) ----'
+begin='# ---- BEGIN COMPONENTS (generated at build time from components.list; see scripts/gen-containerfile.sh) ----'
 end='# ---- END COMPONENTS ----'
 
-list=COMPONENTS.list
-flavors_file=FLAVORS.list
-skeleton=Containerfile
+list=components.list
+skeleton=Containerfile.base
 out=Containerfile.generated
 
-# ---- read valid flavor names from FLAVORS.list --------------------------
+# ---- read valid flavor names from Containerfile ARG FLAVORS -------------
 declare -A valid_flavors=()
-while IFS= read -r fline; do
-    entry="${fline%%#*}"
-    entry="${entry//[[:space:]]/}"
-    [ -z "$entry" ] && continue
-    # strip optional hostname=<x> suffix
-    name="${entry%%hostname=*}"
-    valid_flavors["$name"]=1
-done < "$flavors_file"
+flavors_raw="$(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' "$skeleton")"
+if [ -z "$flavors_raw" ]; then
+    echo "gen-containerfile: ARG FLAVORS not found in ${skeleton}" >&2
+    exit 1
+fi
+IFS=',' read -ra flavor_list <<< "$flavors_raw"
+declare first_flavor=""
+for name in "${flavor_list[@]}"; do
+    name="${name## }"   # strip leading space
+    name="${name%% }"   # strip trailing space
+    [ -n "$name" ] && valid_flavors["$name"]=1
+    [ -z "$first_flavor" ] && [ -n "$name" ] && first_flavor="$name"
+done
 
 if [ "${#valid_flavors[@]}" -eq 0 ]; then
-    echo "gen-containerfile: no flavors found in ${flavors_file}" >&2
+    echo "gen-containerfile: no flavors found in ARG FLAVORS in ${skeleton}" >&2
     exit 1
 fi
 
 # ---- emit one component block -------------------------------------------
 # <name> <variant> <flavor> — flavor is "" for universal
 emit_block() {
-    local name="$1" variant="$2" flavor="$3" dir rel d matches=()
-    for d in "build_files/components/${name}" build_files/components/*/"${name}"; do
-        [ -d "$d" ] && matches+=("$d")
-    done
-    if [ "${#matches[@]}" -ne 1 ]; then
-        echo "gen-containerfile: '${name}' matches ${#matches[@]} directories under build_files/components/" >&2
+    local name="$1" variant="$2" flavor="$3" dir
+    dir="components/${name}"
+    if [ ! -d "$dir" ]; then
+        echo "gen-containerfile: '${name}' does not resolve to a component directory (expected ${dir})" >&2
         exit 1
     fi
-    dir="${matches[0]}"
-    rel="${dir#build_files/}"
 
     if [ -f "${dir}/Containerfile.part" ]; then
         # Containerfile.part component: cross-check flavor gate if listed
@@ -71,7 +72,7 @@ emit_block() {
             fi
             printf '# ---- [%s] ----\n' "$flavor"
         fi
-        printf '# ---- %s (verbatim from %s/Containerfile.part) ----\n' "$name" "$rel"
+        printf '# ---- %s (verbatim from %s/Containerfile.part) ----\n' "$name" "$dir"
         cat "${dir}/Containerfile.part"
         return
     fi
@@ -84,29 +85,33 @@ emit_block() {
     fi
     cat <<EOF
 # ---- ${name} ----
-RUN --mount=type=bind,from=ctx,source=/${rel},target=/ctx/${rel} \\
+RUN --mount=type=bind,from=ctx,source=/${dir},target=/ctx/${dir} \\
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \\
     --mount=type=cache,target=/var/cache \\
     --mount=type=cache,target=/var/log \\
     --mount=type=tmpfs,target=/tmp \\
-    ${env_prefix}bash /ctx/lib/run-component.sh /ctx/${rel}
+    ${env_prefix}bash /ctx/lib/run-component.sh /ctx/${dir}
 EOF
 }
 
-# ---- parse COMPONENTS.list ----------------------------------------------
-section=""
+# ---- parse components.list -----------------------------------------------
 current_flavor=""
 while IFS= read -r line; do
     entry="${line%%#*}"
     entry="${entry//[[:space:]]/}"
     [ -z "$entry" ] && continue
 
-    # INI section header: [flavor]
+    # INI section header: [flavor] or [common]
     if [[ "$entry" =~ ^\[([a-z][a-z0-9-]*)\]$ ]]; then
-        current_flavor="${BASH_REMATCH[1]}"
-        if [ -z "${valid_flavors[$current_flavor]:-}" ]; then
-            echo "gen-containerfile: [${current_flavor}] is not a flavor in ${flavors_file}" >&2
-            exit 1
+        section_name="${BASH_REMATCH[1]}"
+        if [ "$section_name" = "common" ]; then
+            current_flavor=""
+        else
+            current_flavor="$section_name"
+            if [ -z "${valid_flavors[$current_flavor]:-}" ]; then
+                echo "gen-containerfile: [${current_flavor}] is not a flavor in ARG FLAVORS in ${skeleton}" >&2
+                exit 1
+            fi
         fi
         continue
     fi
@@ -118,6 +123,13 @@ while IFS= read -r line; do
     section+="$(emit_block "$name" "$variant" "$current_flavor")"$'\n\n'
 done < "$list"
 
+# ---- inject ARG FLAVOR default (first entry in FLAVORS) ------------------
+# Containerfile.base omits ARG FLAVOR; the generator declares it as the
+# first line of the generated section so it is in scope for the downstream
+# flavor and finalize phases.
+flavor_arg="ARG FLAVOR=${first_flavor}"
+section="${flavor_arg}"$'\n\n'"${section}"
+
 # ---- splice into skeleton -----------------------------------------------
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
     echo "gen-containerfile: BEGIN/END COMPONENTS markers not found in ${skeleton}" >&2
@@ -128,7 +140,7 @@ section_file="$(mktemp)"
 printf '%s' "$section" > "$section_file"
 {
     echo '# GENERATED FILE — do not edit. Produced by scripts/gen-containerfile.sh'
-    echo '# from the Containerfile skeleton and COMPONENTS.list.'
+    echo '# from the Containerfile skeleton and components.list.'
     echo
     awk -v begin="$begin" -v end="$end" -v sec="$section_file" '
         $0 == begin {

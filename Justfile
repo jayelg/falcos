@@ -21,7 +21,7 @@ fix:
     just --unstable --fmt -f Justfile
 
 # Generate Containerfile.generated from the Containerfile skeleton +
-# COMPONENTS.list. Runs automatically as a dependency of `build`.
+# components.list. Runs automatically as a dependency of `build`.
 [group('Utility')]
 generate:
     ./scripts/gen-containerfile.sh
@@ -58,14 +58,15 @@ sudoif command *args:
     sudoif {{ command }} {{ args }}
 
 # Build the image using Podman, e.g. `just build falcos latest desktop stock`.
-# Depends on `generate` so the Containerfile always matches COMPONENTS.list.
-build $target_image=image_name $tag=default_tag $flavor=`awk '!/^#/ && !/^[[:space:]]*$/ {print $1; exit}' FLAVORS.list` $kernel="cachyos": generate
+# Depends on `generate` so the Containerfile always matches components.list.
+build $target_image=image_name $tag=default_tag $flavor=`grep -oP '^ARG FLAVORS="\K[^,"]+' Containerfile.base | head -1` $kernel="cachyos": generate
     #!/usr/bin/env bash
     set -euo pipefail
 
     # Local buildah keys the RUN cache on the whole ctx stage, so any
-    # build_files change rebuilds every layer. Correct, just coarser than
-    # CI's BuildKit which scopes invalidation to the mounted files.
+    # change to build-phases/, lib/, or components/ rebuilds every layer.
+    # Correct, just coarser than CI's BuildKit which scopes invalidation
+    # to the mounted files.
 
     # Optional Secure Boot signing key; see `just generate-mok-key`.
     SECRET_ARGS=()
@@ -112,7 +113,7 @@ generate-mok-key dir=(env("HOME") + "/.local/share/falcos"):
     echo "Public cert: $CERT"
     echo
     echo "Next steps:"
-    echo "  1. cp $CERT build_files/components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
+    echo "  1. cp $CERT components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
     echo "  2. Commit that cert, and add MOK_PRIVATE_KEY as a GitHub Actions secret (contents of $KEY)."
     echo "  3. After deploying a signed image, on the target machine run:"
     echo "       sudo mokutil --import /usr/share/falcos/sb_cert.der"
@@ -294,12 +295,12 @@ lint:
     # -s bash because the component scripts and versions files are sourced
     # fragments without shebangs
     mapfile -t scripts < <(
-        find build_files scripts -name '*.sh' -type f
-        find build_files/files -type f \
+        find build-phases scripts lib -name '*.sh' -type f
+        find components -path '*/files/*' -type f \
             \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
     )
     shellcheck -s bash "${scripts[@]}"
-    # Validate COMPONENTS.list resolves (bad names, missing dirs, markers)
+    # Validate components.list resolves (bad names, missing dirs, markers)
     ./scripts/gen-containerfile.sh >/dev/null
 
 # Runs shfmt on all Bash scripts

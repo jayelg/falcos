@@ -32,8 +32,8 @@ env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 jobs:
-  # Builds every flavor listed in FLAVORS.list. A separate job because the
-  # matrix context isn't available in a job-level if.
+  # Builds every flavor listed in Containerfile ARG FLAVORS. A separate job
+  # because the matrix context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          mapfile -t all < <(awk '!/^#/ && !/^[[:space:]]*$/ {print $1}' FLAVORS.list)
+          IFS=',' read -ra all < <(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' Containerfile.base)
           printf -v joined '","%s' "${all[@]}"
           printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
 
@@ -93,9 +93,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # The committed Containerfile is a skeleton; this writes the real
-      # build file (one RUN layer per COMPONENTS.list entry) to
+      # build file (one RUN layer per components.list entry) to
       # Containerfile.generated. Editing the list alone changes the image.
-      - name: Generate Containerfile from COMPONENTS.list
+      - name: Generate Containerfile from components.list
         run: ./scripts/gen-containerfile.sh
 
       - name: Maximize build space
@@ -125,7 +125,7 @@ jobs:
         id: base
         run: |
           set -euo pipefail
-          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile | head -1)"
+          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.base | head -1)"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
           echo "name=${base}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
@@ -145,7 +145,7 @@ jobs:
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.flavor }})
             org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.base
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}

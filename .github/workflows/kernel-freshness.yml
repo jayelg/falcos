@@ -1,32 +1,33 @@
 ---
-# Watches the bieszczaders/kernel-cachyos COPR, which the image consumes
-# unpinned: a stall there (it has historically failed to build for weeks
-# at a time) silently freezes the shipped kernel while CVE fixes keep
-# landing upstream. Escalates without ever blocking the image build:
+# Discovers kernel-freshness.py scripts in component directories and runs
+# each one. A kernel component that wants freshness tracking ships a
+# kernel-freshness.py in its directory; the script writes a JSON sidecar
+# next to its report with status, kernel_id and component_path.
+#
+# The workflow is source-agnostic: each script knows how to check its own
+# upstream (COPR, RPM repo, GitHub releases, etc.). The escalation
+# (fallback PR flipping ARG KERNEL to stock, restore PR flipping it back)
+# is the same for every kernel.
 #
 #   lag > 7 days            open/update a tracking issue
-#   lag > 14 days / EOL /   also open a PR flipping the Containerfile to
-#   unpatched KEV CVE       KERNEL=stock (Fedora kernel) as a temp fix,
-#                           validated by a dispatched build on the branch
-#   COPR catches up         close issue; if the fallback was merged, open
-#                           the restore PR back to KERNEL=cachyos
+#   lag > 14 days / EOL /   also open a PR changing the component's
+#   unpatched KEV CVE       Containerfile.part ARG KERNEL to stock
+#   upstream catches up     close issue; if fallback was merged, open
+#                           restore PR back to custom kernel
 #
 # The monthly job builds the stock path even when healthy so the fallback
-# can't rot unnoticed. PRs and dispatches use GITHUB_TOKEN: bot-created
-# PRs don't trigger the pull_request build, hence the explicit
-# workflow_dispatch validation runs.
+# can't rot unnoticed. PRs use GITHUB_TOKEN: bot-created PRs don't trigger
+# the pull_request build, hence the explicit workflow_dispatch validation.
 name: Kernel freshness
 
 on:
   schedule:
-    - cron: '15 9 * * *'  # daily COPR freshness check
+    - cron: '15 9 * * *'  # daily freshness check
     - cron: '45 9 1 * *'  # monthly stock-kernel fallback validation build
   workflow_dispatch:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  FALLBACK_BRANCH: kernel-stock-fallback
-  RESTORE_BRANCH: kernel-cachyos-restore
 
 permissions:
   contents: write
@@ -42,88 +43,114 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Check COPR against upstream stable
+      - name: Discover and run kernel freshness scripts
         id: fresh
-        run: python3 .github/scripts/kernel_freshness.py "$RUNNER_TEMP/report.md"
-
-      - name: Escalate or stand down
         run: |
           set -euo pipefail
-          status="${{ steps.fresh.outputs.status }}"
-          report="$RUNNER_TEMP/report.md"
-
-          default_kernel=cachyos
-          if grep -qx 'ARG KERNEL=stock' Containerfile; then
-            default_kernel=stock
+          mapfile -t scripts < <(find components -name kernel-freshness.py -type f | sort)
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No kernel-freshness.py scripts found — nothing to check."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "count=${#scripts[@]}" >> "$GITHUB_OUTPUT"
+          for script in "${scripts[@]}"; do
+            comp_dir="$(dirname "$script")"
+            kernel_id="$(basename "$comp_dir")"
+            echo "==> Running ${script}..."
+            python3 "$script" "$RUNNER_TEMP/report-${kernel_id}.md"
+          done
 
-          issue="$(gh issue list --label kernel-freshness --state open --json number --jq '.[0].number // empty')"
-          fallback_pr="$(gh pr list --head "$FALLBACK_BRANCH" --state open --json number --jq '.[0].number // empty')"
-          restore_pr="$(gh pr list --head "$RESTORE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+      - name: Escalate or stand down (per kernel)
+        if: steps.fresh.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          for json in "$RUNNER_TEMP"/report-*.json; do
+            [ -f "$json" ] || continue
+            kernel_id="$(jq -r .kernel_id "$json")"
+            comp_path="$(jq -r .component_path "$json")"
+            status="$(jq -r .status "$json")"
+            copr_ver="$(jq -r .copr_version "$json")"
+            report="${json%.json}.md"
 
-          # <branch> <from> <to> <title>: PR flipping the Containerfile
-          # kernel default, plus a dispatched validation build (the branch's
-          # Containerfile default is what that build uses)
-          flip_kernel_pr() {
-            local branch="$1" from="$2" to="$3" title="$4"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git checkout -B "$branch"
-            sed -i "s/^ARG KERNEL=${from}\$/ARG KERNEL=${to}/" Containerfile
-            if git diff --quiet Containerfile; then
-              echo "expected 'ARG KERNEL=${from}' in Containerfile" >&2
-              exit 1
+            echo "==> ${kernel_id}: status=${status}"
+
+            part_file="${comp_path}/Containerfile.part"
+            fallback_branch="kernel-${kernel_id}-stock-fallback"
+            restore_branch="kernel-${kernel_id}-restore"
+            label="kernel-freshness-${kernel_id}"
+
+            # Current default: read the ARG KERNEL line from the component's
+            # Containerfile.part. stock means the fallback is active.
+            default_kernel="custom"
+            if grep -qx 'ARG KERNEL=stock' "$part_file"; then
+              default_kernel="stock"
             fi
-            git commit -am "$title"
-            git push -f origin "$branch"
-            {
-              echo "Automated by the kernel-freshness workflow. Merging switches the published images to the ${to} kernel."
-              echo
-              cat "$report"
-            } > "$RUNNER_TEMP/pr-body.md"
-            gh pr create --head "$branch" --title "$title" \
-              --label kernel-freshness --body-file "$RUNNER_TEMP/pr-body.md"
-            gh workflow run build.yml --ref "$branch"
-            git checkout -
-          }
 
-          gh label create kernel-freshness \
-            --description "CachyOS kernel COPR freshness tracking" \
-            --color D93F0B --force
+            issue="$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')"
+            fallback_pr="$(gh pr list --head "$fallback_branch" --state open --json number --jq '.[0].number // empty')"
+            restore_pr="$(gh pr list --head "$restore_branch" --state open --json number --jq '.[0].number // empty')"
 
-          case "$status" in
-            current)
-              if [ -n "$issue" ]; then
-                gh issue close "$issue" \
-                  --comment "COPR caught up (now on ${{ steps.fresh.outputs.copr_version }})."
+            flip_kernel_pr() {
+              local branch="$1" from="$2" to="$3" title="$4"
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git checkout -B "$branch"
+              sed -i "s/^ARG KERNEL=${from}\$/ARG KERNEL=${to}/" "$part_file"
+              if git diff --quiet "$part_file"; then
+                echo "expected 'ARG KERNEL=${from}' in ${part_file}" >&2
+                exit 1
               fi
-              if [ -n "$fallback_pr" ]; then
-                gh pr close "$fallback_pr" --delete-branch \
-                  --comment "COPR caught up before the fallback was needed."
-              fi
-              if [ "$default_kernel" = "stock" ] && [ -z "$restore_pr" ]; then
-                flip_kernel_pr "$RESTORE_BRANCH" stock cachyos \
-                  "kernel: restore CachyOS kernel, COPR caught up"
-              fi
-              ;;
-            lagging|stale)
-              if [ -n "$issue" ]; then
-                gh issue edit "$issue" --body-file "$report"
-              else
-                gh issue create --title "CachyOS kernel COPR is behind upstream stable" \
-                  --label kernel-freshness --body-file "$report"
-              fi
-              if [ "$status" = "stale" ] && [ "$default_kernel" = "cachyos" ] && [ -z "$fallback_pr" ]; then
-                flip_kernel_pr "$FALLBACK_BRANCH" cachyos stock \
-                  "kernel: temporary stock-kernel fallback, CachyOS COPR stale"
-              fi
-              # an open restore PR is now premature; the COPR fell behind again
-              if [ "$status" = "stale" ] && [ -n "$restore_pr" ]; then
-                gh pr close "$restore_pr" --delete-branch \
-                  --comment "COPR fell behind again before this was merged."
-              fi
-              ;;
-          esac
+              git commit -am "$title"
+              git push -f origin "$branch"
+              {
+                echo "Automated by the kernel-freshness workflow. Merging switches the ${kernel_id} component to the ${to} kernel."
+                echo
+                cat "$report"
+              } > "$RUNNER_TEMP/pr-body.md"
+              gh pr create --head "$branch" --title "$title" \
+                --label "$label" --body-file "$RUNNER_TEMP/pr-body.md"
+              gh workflow run build.yml --ref "$branch"
+              git checkout -
+            }
+
+            gh label create "$label" \
+              --description "${kernel_id} kernel freshness tracking" \
+              --color D93F0B --force
+
+            case "$status" in
+              current)
+                if [ -n "$issue" ]; then
+                  gh issue close "$issue" \
+                    --comment "Upstream caught up (now on ${copr_ver})."
+                fi
+                if [ -n "$fallback_pr" ]; then
+                  gh pr close "$fallback_pr" --delete-branch \
+                    --comment "Upstream caught up before the fallback was needed."
+                fi
+                if [ "$default_kernel" = "stock" ] && [ -z "$restore_pr" ]; then
+                  flip_kernel_pr "$restore_branch" stock "$kernel_id" \
+                    "kernel: restore ${kernel_id} kernel, upstream caught up"
+                fi
+                ;;
+              lagging|stale)
+                if [ -n "$issue" ]; then
+                  gh issue edit "$issue" --body-file "$report"
+                else
+                  gh issue create --title "${kernel_id} kernel is behind upstream" \
+                    --label "$label" --body-file "$report"
+                fi
+                if [ "$status" = "stale" ] && [ "$default_kernel" != "stock" ] && [ -z "$fallback_pr" ]; then
+                  flip_kernel_pr "$fallback_branch" "$kernel_id" stock \
+                    "kernel: temporary stock-kernel fallback, ${kernel_id} upstream stale"
+                fi
+                if [ "$status" = "stale" ] && [ -n "$restore_pr" ]; then
+                  gh pr close "$restore_pr" --delete-branch \
+                    --comment "Upstream fell behind again before this was merged."
+                fi
+                ;;
+            esac
+          done
 
   # Builds (without publishing) the KERNEL=stock path monthly so the
   # fallback PR is never the first time it has compiled in months.

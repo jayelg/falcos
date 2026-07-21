@@ -1,0 +1,14 @@
+# repo — third-party package repo setup. OPTIONAL: only when component.sh
+# installs from a repo the base image doesn't ship. Sourced before
+# component.sh, and made idempotent by REPO_ID: run-component.sh skips it if
+# /etc/yum.repos.d/<REPO_ID>.repo already exists, so two components sharing a
+# repo don't configure it twice. REPO_ID must equal the repo's section id.
+#
+# add_disabled_repo installs the .repo DISABLED; component.sh then enables it
+# just for its install with `dnf5 install --enablerepo='<repo-id>' ...` (see
+# apps/vscodium). For a repo you want left ENABLED (rare), call
+# `dnf5 config-manager addrepo --from-repofile=<url>` directly instead (see
+# vpn/mullvad-vpn, media-codecs).
+REPO_ID="<repo-id>"
+source /ctx/lib/repo-helpers.sh
+add_disabled_repo "https://example.com/<repo-id>.repo"
