@@ -25,10 +25,15 @@ affinity-setup:
 
 	# WoW64-only build has no syswow64 directory; winetricks corefonts
 	# and tahoma call C:\windows\syswow64\regedit.exe to import .reg
-	# font registration files. Copy the 64-bit system32 stub so Wine
-	# resolves the built-in regedit at the path winetricks expects.
+	# font registration files.  On both standard and WoW64 Wine the
+	# regedit stub lives at C:\windows\regedit.exe, not system32.
 	mkdir -p "$WINEPREFIX/drive_c/windows/syswow64"
-	cp "$WINEPREFIX/drive_c/windows/system32/regedit.exe" "$WINEPREFIX/drive_c/windows/syswow64/regedit.exe"
+	REGEDIT_SRC="$WINEPREFIX/drive_c/windows/regedit.exe"
+	if [ -f "$REGEDIT_SRC" ]; then
+		cp "$REGEDIT_SRC" "$WINEPREFIX/drive_c/windows/syswow64/regedit.exe"
+	else
+		echo "Warning: regedit.exe stub not found at $REGEDIT_SRC; font registration may fail" >&2
+	fi
 
 	echo "==> Installing Windows components via winetricks (slow, downloads ~1 GB)..."
 	# dotnet48 and vcrun2022 are not installed via winetricks because their
