@@ -2,23 +2,15 @@
 
 Falcos is a framework for a 'build-your-own distro' using an atomic/immutable linux image that is configured and managed in your own git repo. It provides sensible defaults as a starting point for an out-of-the-box desktop OS that demonstrates how the repo can be used. The objectives of this project are to provide a an easy to configure and maintain linux image where the user has full visibility of what is running on their system without the maintainance burden by providing a providing automations, tools and helper scripts that minimizing abstractions that obscure whats happening under the hood.
 
-## Philosophy
+## Features
 
 - **Minimal Abstractions**: The repo is a framework for a custom linux image designed to be easy to learn and understand whats happening under the hood while still keeping things organised and easy to maintain.
-- **Component Modules**: `components/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash).
-- **Central Component Management**: `components.list` is the definitive list of all components that are enabled in the built images including common components and components specific to different flavor builds (using a `[Flavor_Name]` tag). a containerfile is generated at build time from the base containerfile that inserts these components before running the containerfile.
-- **Flavors**: Image flavors are defined in `Containerfile.base` via `ARG FLAVORS` (valid names) and `ARG FLAVOR` (default). Flavor-specific components are gated by `[flavor]` sections in `components.list`.
-- **Secure-Boot & MOK signing for custom kernels**: A script to enrol and use custom kernels with secure-boot enabled.
-- **Minimal Base image**: [fedora-bootc](https://quay.io/repository/fedora/fedora-bootc) provides a minimal base image so that the majority of the system configuration is centralized and visible to the user.
-- **Kernel freshness automation**: An automation script for custom kernels that will fallback to the stock Fedora kernel if the custom kernel (from COPR) falls behind the upstream stable kernel's security patches.
-- **BuildKit Caching**: build layer cache per flavor. Each component caches independently.
-- **SBOM**: Syft SPDX scan of the built image.
- - **Chunked OCI**: rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
- - **Dependency tracking**: Renovate pins component versions and GitHub Actions hashes.
-- **Sensible Defaults**: Configured as a ready to go system. with KDE Plasma DE, Package Managers (Bazaar (Flatpak), Homebrew and Distrobox), Hardening cherry-picked from  [secureblue](https://secureblue.dev/) (hardened_malloc system-wide, the Trivalent browser, and sudo/PAM tightening). These components can be easily disabled (comment out in components.list) or removed as desired.
-- **Tools**: `falcos-cli` is TUI tool for system information and running the just scripts. `falcos-bootc-update` provides a tab in System Settings for managing system updates.
-- **Automatic Updates**: `bootc-fetch-apply-updates.timer` applies image updates automatically; The image build and flatpaks are updated daily.
-- **Image Signing**:Images are cosign-signed and verified against the key baked into the image. 
+- **Component based architecture**: `components/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `components.list` then defines a definitive list of all components that are enabled in the built images including common components and components specific to different flavor builds (using a `[Flavor_Name]` tags). Components are then spliced into a generated containerfile at build time.
+- **System visibility**: The default base image is [fedora-bootc](https://quay.io/repository/fedora/fedora-bootc) which provides a minimal starting point so that the majority of the system configuration is centralized and visible to the user.
+- **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening components are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
+- **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each component cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
+- **Dependency tracking**: Renovate pins component versions and GitHub Actions hashes.
+- **Update managment tools baked in** `bootc-fetch-apply-updates.timer` applies image updates automatically. The image build and flatpaks are updated daily.`falcos-bootc-update` for KDE Plasma provides a GUI tab in KDE Plasma System Settings for managing system updates. `falcos-cli` provides a TUI tool for system information and running system updates and other included just scripts.
 
 ## How it works
 
