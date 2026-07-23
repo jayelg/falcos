@@ -1,24 +1,20 @@
 # falcos-tools
 
-The essential falcos CLI framework: the `falcos-cli` OS TUI and the `just`
-engine behind the component `justfile.inc` recipe mechanism. Deliberately
-KDE-independent, so it can sit early in [components.list](../../../../components.list)
-as part of a minimal build.
+The essential tools for managing the live image.
 
 Related components: the OS self-update + signing *mechanism* lives in
 [auto-updates](../auto-updates); the bootc-updates KDE System Settings GUI
 lives in [de/falcos-plasma-settings](../../de/falcos-plasma-settings).
 
-## Build
+## goojust
+the `goojust` OS TUI for running the justfiles
 
-- `dnf5 install just fastfetch` -- framework runtime deps installed here (not
-  in cli-tools or dev-tools) so a minimal base+falcos-tools build stays
-  self-contained: `just` drives the justfile.inc mechanism, `fastfetch` backs
-  the TUI system panel.
-- Downloads + SHA256-verifies the falcos-cli release and runs its install.sh
-  (also drops the runtime helper `falcos-helpers.sh`).
+### Build
+
+- `dnf5 install just fastfetch` dependency required by goojust
+- Downloads + SHA256-verifies the goojust release and runs its install.sh. 
+This adds the executable tool and the runtime helper `goojust-helpers.sh` into the image.
 
 ## Files
 
-- `etc/profile.d/falcos-cli.sh` -- aliases the OS name (lowercased) to `falcos-cli`
-- `usr/libexec/falcos-progress`, `usr/share/falcos/justfile` -- CLI runtime helpers
+- `etc/profile.d/goojust.sh` — aliases the OS name (lowercased) to `goojust`
