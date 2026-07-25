@@ -10,7 +10,7 @@ COPY components.list /components.list
 
 # Base Image
 # Must use major version tag with quay.io/fedora as it prunes old untagged manifests within days so Renovate with pinned fedora-bootc digest tags doesn't work here
-FROM quay.io/fedora/fedora-bootc:44
+FROM quay.io/fedora/fedora-bootc:45
 
 ### Build arguments
 # Comma-separated list of valid flavor names. Used by the generator,
