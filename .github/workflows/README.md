@@ -6,7 +6,7 @@ The GitHub Actions pipelines.
 
 Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the first flavor in `ARG FLAVORS`, for build testing, and do not push.
 
-Lint runs first and gates the build: shellcheck over the build and runtime scripts, actionlint over the workflows, and the kernel freshness unit tests. A lint failure stops the matrix before any image is built.
+Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the component scripts, plus a generator dry run over `components.list`), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
 Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
 

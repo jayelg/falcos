@@ -120,7 +120,7 @@ The [Build disk images](.github/workflows/build-disk.yml) workflow produces an A
 just build              # build the container image (first flavor in ARG FLAVORS by default)
 just build-qcow2        # convert it to a bootable qcow2 via bootc-image-builder
 just run-vm-qcow2       # boot it in a browser-accessible VM
-just lint               # shellcheck, same file set as CI
+just lint               # shellcheck every Bash script and validate components.list, the same script CI gates on
 ```
 
 ## Secure Boot
