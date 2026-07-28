@@ -4,7 +4,7 @@ The GitHub Actions pipelines.
 
 ### [Build Container Image](build.yml)
 
-Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build the laptop flavour only for build testing and does not push.
+Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the first flavor in `ARG FLAVORS`, for build testing, and do not push.
 
 Lint runs first and gates the build: shellcheck over the build and runtime scripts, actionlint over the workflows, and the kernel freshness unit tests. A lint failure stops the matrix before any image is built.
 

@@ -107,6 +107,13 @@ jobs:
       - id: set
         run: |
           IFS=',' read -ra all < <(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' Containerfile.base)
+          # Pull requests build the first flavor only, for half the runner
+          # time. It is the better single choice because its flavor-gated
+          # components include a DKMS build, so it covers more build surface
+          # than the others.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            all=("${all[0]}")
+          fi
           printf -v joined '","%s' "${all[@]}"
           printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
 
