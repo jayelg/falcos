@@ -1,7 +1,7 @@
 ---
-# Discovers kernel-freshness.py scripts in component directories and runs
+# Discovers kernel_freshness.py scripts in component directories and runs
 # each one. A kernel component that wants freshness tracking ships a
-# kernel-freshness.py in its directory; the script writes a JSON sidecar
+# kernel_freshness.py in its directory; the script writes a JSON sidecar
 # next to its report with status, kernel_id and component_path.
 #
 # The workflow is source-agnostic: each script knows how to check its own
@@ -47,9 +47,9 @@ jobs:
         id: fresh
         run: |
           set -euo pipefail
-          mapfile -t scripts < <(find components -name kernel-freshness.py -type f | sort)
+          mapfile -t scripts < <(find components -name kernel_freshness.py -type f | sort)
           if [ "${#scripts[@]}" -eq 0 ]; then
-            echo "No kernel-freshness.py scripts found — nothing to check."
+            echo "No kernel_freshness.py scripts found — nothing to check."
             echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi

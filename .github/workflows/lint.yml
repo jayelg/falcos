@@ -57,7 +57,7 @@ jobs:
 
       - name: Discover and run kernel-freshness tests
         run: |
-          dirs=($(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u))
+          mapfile -t dirs < <(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
           for d in "${dirs[@]}"; do
             echo "==> Running tests in ${d}..."
             python3 -m unittest discover -s "$d" -v
