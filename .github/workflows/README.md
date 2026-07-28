@@ -1,4 +1,4 @@
-[root](../../README.md) / [.github](../README.md) / **workflows**
+[root](../../README.md) / **workflows**
 
 The GitHub Actions pipelines.
 
@@ -18,11 +18,11 @@ Turns the built image into installable disk images (qcow2 and Anaconda ISO) via 
 
 ### [Kernel Freshness](kernel-freshness.yml)
 
-Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../scripts/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
+Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../../components/kernel/cachyos-kernel/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
 
 ### [Checksums](checksums.yml)
 
-Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs, the falcos-bootc-updates RPM) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. Consolidated from the former per-asset workflows, which could race pushing fixups to the same branch.
+Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs, the falcos-bootc-updates RPM) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. One workflow covers every asset so concurrent fixup pushes to the same branch cannot race.
 
 ### [Clean up Registry](cleanup-registry.yml)
 
