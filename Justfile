@@ -59,7 +59,7 @@ sudoif command *args:
 
 # Build the image using Podman, e.g. `just build falcos latest desktop stock`.
 # Depends on `generate` so the Containerfile always matches components.list.
-build $target_image=image_name $tag=default_tag $flavor=`grep -oP '^ARG FLAVORS="\K[^,"]+' Containerfile.base | head -1` $kernel="cachyos": generate
+build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="cachyos": generate
     #!/usr/bin/env bash
     set -euo pipefail
 

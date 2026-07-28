@@ -106,16 +106,17 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          IFS=',' read -ra all < <(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' Containerfile.base)
-          # Pull requests build the first flavor only, for half the runner
+          # Pull requests build the default flavor only, for half the runner
           # time. It is the better single choice because its flavor-gated
           # components include a DKMS build, so it covers more build surface
           # than the others.
+          selection=list
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            all=("${all[0]}")
+            selection=default
           fi
-          printf -v joined '","%s' "${all[@]}"
-          printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
+          flavors="$(./scripts/flavors.sh "$selection" \
+            | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          echo "flavors=${flavors}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
