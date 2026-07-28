@@ -3,7 +3,7 @@
 affinity-setup:
 	#!/usr/bin/env bash
 	set -eou pipefail
-	source /usr/share/falcos/falcos-helpers.sh
+	source /usr/share/goojust/goojust-helpers.sh
 
 	export WINEPREFIX="$HOME/.local/share/affinity"
 	export WINE=/usr/lib/wine-affinity/bin/wine

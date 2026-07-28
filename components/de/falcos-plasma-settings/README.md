@@ -6,7 +6,7 @@ RPM. Runs after [kde-desktop](../kde-desktop) so its Plasma/KCM dependencies
 are already present.
 
 The update *mechanism* this surfaces (auto-update timer, sigstore policy)
-lives in [core/auto-updates](../../core/auto-updates); the falcos-cli/`just`
+lives in [core/auto-updates](../../core/auto-updates); the goojust/`just`
 framework lives in [core/falcos-tools](../../core/falcos-tools).
 
 ## Build

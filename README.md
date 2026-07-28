@@ -10,7 +10,7 @@ Falcos is a framework for a 'build-your-own distro' using an atomic/immutable li
 - **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening components are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
 - **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each component cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
 - **Dependency tracking**: Renovate pins component versions and GitHub Actions hashes.
-- **Update managment tools baked in** `bootc-fetch-apply-updates.timer` applies image updates automatically. The image build and flatpaks are updated daily.`falcos-bootc-update` for KDE Plasma provides a GUI tab in KDE Plasma System Settings for managing system updates. `falcos-cli` provides a TUI tool for system information and running system updates and other included just scripts.
+- **Update managment tools baked in** `bootc-fetch-apply-updates.timer` applies image updates automatically. The image build and flatpaks are updated daily.`falcos-bootc-update` for KDE Plasma provides a GUI tab in KDE Plasma System Settings for managing system updates. `goojust` provides a TUI tool for system information and running system updates and other included just scripts.
 
 ## How it works
 

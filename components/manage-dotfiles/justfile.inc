@@ -3,7 +3,7 @@
 setup-dotfiles:
 	#!/usr/bin/env bash
 	set -eou pipefail
-	source /usr/share/falcos/falcos-helpers.sh
+	source /usr/share/goojust/goojust-helpers.sh
 
 	# ── Phase 1: Check status, collect only what's needed ────
 	echo "==> Checking Bitwarden status..."

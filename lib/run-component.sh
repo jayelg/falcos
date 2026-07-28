@@ -16,7 +16,7 @@
 #                     component (just a files/ overlay) omits it.
 #   6. selinux/       each *.te compiled and installed as a policy module
 #   7. files/         overlay copied verbatim into the image
-#   8. justfile.inc   appended to the falcos-cli app recipes
+#   8. justfile.inc   appended to the goojust app recipes
 #   9. flatpaks.list  appended to /usr/share/falcos/default-flatpaks;
 #                     one flatpak ID per line, installed at first boot
 
@@ -80,8 +80,8 @@ if [ -d "$COMPDIR/files" ]; then
 fi
 
 if [ -f "$COMPDIR/justfile.inc" ]; then
-    mkdir -p /usr/share/falcos
-    cat "$COMPDIR/justfile.inc" >> /usr/share/falcos/justfile.apps
+    mkdir -p /usr/share/goojust
+    cat "$COMPDIR/justfile.inc" >> /usr/share/goojust/justfile.apps
 fi
 
 if [ -f "$COMPDIR/flatpaks.list" ]; then

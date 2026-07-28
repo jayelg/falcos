@@ -18,3 +18,7 @@ This adds the executable tool and the runtime helper `goojust-helpers.sh` into t
 ## Files
 
 - `etc/profile.d/goojust.sh` — aliases the OS name (lowercased) to `goojust`
+- `usr/share/goojust/justfile` — the system justfile goojust loads by
+  default. Imports `justfile.apps`, which `run-component.sh` builds at
+  build time from each component's `justfile.inc`, plus an optional
+  `~/.config/just/user.justfile` for personal recipes.

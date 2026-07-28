@@ -2,7 +2,7 @@
 
 New-machine user setup: dotfiles via chezmoi and secrets via the Bitwarden
 CLI (against a self-hosted Vaultwarden). The interactive flow ships as the
-`setup-dotfiles` recipe (justfile.inc), surfaced in falcos-cli under the
+`setup-dotfiles` recipe (justfile.inc), surfaced in goojust under the
 Configuration group.
 
 ## Build

@@ -42,7 +42,7 @@ Run order within a component: `repo` → `versions.sh` → `variants/<v>.sh` →
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in component.sh. |
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |
-| `justfile.inc` | falcos-cli recipes, appended to `/usr/share/falcos/justfile.apps`. |
+| `justfile.inc` | goojust recipes, appended to `/usr/share/goojust/justfile.apps`. |
 | `Containerfile.part` | Verbatim RUN block replacing the standard one — only for extra mounts, build secrets, or ARGs. |
 | `README.md` | Every component has one; the copy here is a fill-in skeleton. |
 

@@ -18,7 +18,7 @@ components/<group-or-name>/<name>/
   finalize.sh         run-once logic needing real systemctl or the final
                       image (e.g. service masking, policy.json edits), sourced
                       by 99-finalize.sh in list order and flavor-gated (optional)
-  justfile.inc        falcos-cli app recipes, appended at build time (optional)
+  justfile.inc        goojust app recipes, appended at build time (optional)
   variants/<v>.sh     pin/flag overrides, selected as <path>@<v> in the list (optional)
   Containerfile.part  verbatim RUN block when the standard one isn't enough,
                       e.g. build secrets or ARGs (optional)
@@ -39,7 +39,7 @@ To start a new component, copy [`_template/component-name/`](_template/component
 
 ### Core System (`core/`) -- do not disable
 - `core/auto-updates` -- staged bootc auto-update timer + sigstore signature policy (pure-file + finalize.sh)
-- `core/falcos-tools` -- falcos-cli OS TUI + `just` justfile engine + fastfetch (KDE-independent CLI framework)
+- `core/falcos-tools` -- goojust OS TUI + `just` justfile engine + fastfetch (KDE-independent CLI framework)
 - `core/flatpak` -- flatpak client + first-boot default apps + daily update timer
 - `core/brew` -- Homebrew first-login setup + PATH shim
 - `core/cli-tools` -- traditional CLI utilities (tmux, htop, rsync, vim, etc.)
