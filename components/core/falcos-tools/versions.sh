@@ -5,5 +5,5 @@
 # binary; publishes a .sha256 sidecar per asset, so checksums.yml keeps
 # GOOJUST_SHA256 in sync with version bumps.
 # renovate: datasource=github-releases depName=jayelg/goojust
-GOOJUST_VERSION="0.1.4"
-GOOJUST_SHA256="809dafd10d429f0f1d316cb3978b4a212f3ed588b6f1bdd1d233f5ae4def8ef3"
+GOOJUST_VERSION="0.1.5"
+GOOJUST_SHA256="b5555c822de33e74793d43d99df27adaebc9f4be08dc956e8d7cbfb2a5121375"

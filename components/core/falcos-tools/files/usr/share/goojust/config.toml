@@ -1,0 +1,14 @@
+# goojust configuration for this image.
+#
+# goojust has no built-in justfile location, so this file is what connects it
+# to our recipes. Shipped from the falcos-tools files/ overlay, not by
+# goojust's own install.sh.
+#
+# Deliberately under /usr rather than /etc: a locally-modified /etc file is
+# frozen by ostree's config merge and would silently pin an old justfile path
+# across image updates.
+
+# The system justfile, also shipped by this component's files/ overlay. It
+# imports justfile.apps, which run-component.sh builds at image build time
+# from each component's justfile.inc.
+justfile = "/usr/share/goojust/justfile"
