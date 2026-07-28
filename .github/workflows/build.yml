@@ -444,5 +444,19 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
+      # Verify what was just published the same way a client does: key-based
+      # against the cosign.pub this image bakes in, with no transparency-log
+      # check, which is what the baked policy.json actually enforces. Catches
+      # a broken sign or attest step in the run that caused it rather than on
+      # the next bootc upgrade.
+      - name: Verify signature and attestation
+        if: env.PUBLISH == 'true'
+        run: |
+          IMAGE_DIGEST="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+          cosign verify --key cosign.pub --insecure-ignore-tlog=true \
+            "${IMAGE_DIGEST}"
+          cosign verify-attestation --key cosign.pub --type spdxjson \
+            --insecure-ignore-tlog=true "${IMAGE_DIGEST}"
+
       # Old versions are pruned daily by cleanup-registry.yml, which keeps
       # the newest tagged builds and their cosign signatures/attestations.
