@@ -40,13 +40,14 @@ WINTYPES_SHIM_SHA256="a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bf
 # 64-bit VC++ 2022 redistributable, needed by dotnet48 and Affinity itself.
 # aka.ms/vs/17/release/vc_redist.x64.exe is the permanent latest-version URL.
 # No official checksum published; trust-on-first-use like the Wine tarball.
-# .github/workflows/checksums.yml recomputes this on bumps.
-# renovate: datasource=github-releases depName=Microsoft/vc-redist
+# Manual pin: there is no version to track, and Microsoft repoints that URL at
+# every VS servicing release, so the SHA needs recomputing by hand when the
+# build starts failing its checksum.
 VC_REDIST_X64_SHA256="cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b"
 
 # .NET Framework 4.8 offline installer, needed by Affinity itself.
 # Downloaded directly instead of through winetricks (whose dotnet48 verb calls
 # dotnet40 which needs syswow64 32-bit support that this WoW64 Wine build lacks).
 # SHA256 from winetricks' own metadata for ndp48-x86-x64-allos-enu.exe.
-# renovate: datasource=git-tags depName=https://github.com/dotnet/runtime extractVersion=^v(?<version>.*)$
+# Manual pin: 4.8 is a final release, the installer bytes do not move.
 DOTNET48_SHA256="95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53"
