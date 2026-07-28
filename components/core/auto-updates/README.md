@@ -17,6 +17,6 @@ Runs in the finalize layer (needs the final image / real systemctl):
 
 - Merges a `sigstoreSigned` entry for `ghcr.io/jayelg` into
   `/etc/containers/policy.json`, so `bootc upgrade` verifies signatures
-  against the baked `falcos.pub`.
+  against the baked `cosign.pub`.
 - Masks `rpm-ostree-countme.timer` (Fedora telemetry off; manual
   `rpm-ostree countme` still works).
