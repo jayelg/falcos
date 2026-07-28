@@ -32,6 +32,63 @@ env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
 
 jobs:
+  # Lint gates the build: compute-matrix needs all three, so a failure here
+  # stops the matrix before any image is built. They live in this workflow
+  # rather than their own so the gate is a job dependency on the same commit.
+  shellcheck:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # -s bash because the component scripts and versions files are sourced
+      # fragments without shebangs. Extensionless runtime scripts (libexec,
+      # systemd generators) are included explicitly. Repo-wide excludes
+      # live in .shellcheckrc.
+      - name: Run shellcheck
+        run: |
+          mapfile -t scripts < <(
+            find build-phases scripts lib -name '*.sh' -type f
+            find components -path '*/files/*' -type f \
+              \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
+          )
+          shellcheck -s bash "${scripts[@]}"
+
+      # Catches list entries that don't resolve to a component directory
+      # and skeleton marker damage, without needing a full image build.
+      - name: Validate components.list against the component tree
+        run: ./scripts/gen-containerfile.sh
+
+  actionlint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+
+  # Unit tests for kernel-freshness scripts discovered in component dirs
+  script-tests:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Discover and run kernel-freshness tests
+        run: |
+          mapfile -t dirs < <(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
+          for d in "${dirs[@]}"; do
+            echo "==> Running tests in ${d}..."
+            python3 -m unittest discover -s "$d" -v
+          done
+
   # Builds every flavor listed in Containerfile ARG FLAVORS. A separate job
   # because the matrix context isn't available in a job-level if.
   #
@@ -39,6 +96,7 @@ jobs:
   # skipped here; the daily scheduled build picks them up together with
   # upstream drift (see .github/renovate.json5).
   compute-matrix:
+    needs: [shellcheck, actionlint, script-tests]
     if: github.event_name != 'push' || github.actor != 'renovate[bot]'
     runs-on: ubuntu-24.04
     outputs:
@@ -49,6 +107,13 @@ jobs:
       - id: set
         run: |
           IFS=',' read -ra all < <(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' Containerfile.base)
+          # Pull requests build the first flavor only, for half the runner
+          # time. It is the better single choice because its flavor-gated
+          # components include a DKMS build, so it covers more build surface
+          # than the others.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            all=("${all[0]}")
+          fi
           printf -v joined '","%s' "${all[@]}"
           printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
 
@@ -159,10 +224,10 @@ jobs:
             io.artifacthub.package.prerelease=false
             containers.bootc=1
 
-      # Optional Secure Boot signing key; only written on pushes to the
-      # default branch, same gate as the cosign steps below.
+      # Optional Secure Boot signing key. Gated on PUBLISH so a build that
+      # never ships an image never has the private key on disk.
       - name: Write MOK signing key
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: env.PUBLISH == 'true'
         run: |
           umask 077
           printf '%s' "$MOK_PRIVATE_KEY" > "${RUNNER_TEMP}/mok_privkey.pem"
@@ -234,8 +299,7 @@ jobs:
           cache-from: ${{ steps.cache-args.outputs.cache-from }}
           cache-to: ${{ steps.cache-args.outputs.cache-to }}
           secret-files: |
-            ${{ (github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-                && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
+            ${{ env.PUBLISH == 'true' && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
 
       - name: Setup Syft
         id: setup-syft
@@ -303,6 +367,11 @@ jobs:
             --bootc --max-layers 127 --format-version=2 \
             --from "localhost/${IMAGE_NAME}:raw" \
             --output "containers-storage:localhost/${IMAGE_NAME}:chunked"
+          # Peak disk: :raw and :chunked both exist here, on top of the
+          # BuildKit cache. Measured to judge whether the Maximize build
+          # space step is still earning its ~2 min (see the df after push).
+          echo "==> Disk at peak (raw + chunked both present)"
+          df -h /
           sudo podman rmi "localhost/${IMAGE_NAME}:raw"
 
       # The docker login above only covers the runner user; the sudo
@@ -334,6 +403,12 @@ jobs:
             fi
           done <<< "${{ steps.metadata.outputs.tags }}"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Report disk usage
+        if: env.PUBLISH == 'true'
+        run: |
+          echo "==> Disk after push"
+          df -h /
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -368,6 +443,20 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+
+      # Verify what was just published the same way a client does: key-based
+      # against the cosign.pub this image bakes in, with no transparency-log
+      # check, which is what the baked policy.json actually enforces. Catches
+      # a broken sign or attest step in the run that caused it rather than on
+      # the next bootc upgrade.
+      - name: Verify signature and attestation
+        if: env.PUBLISH == 'true'
+        run: |
+          IMAGE_DIGEST="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+          cosign verify --key cosign.pub --insecure-ignore-tlog=true \
+            "${IMAGE_DIGEST}"
+          cosign verify-attestation --key cosign.pub --type spdxjson \
+            --insecure-ignore-tlog=true "${IMAGE_DIGEST}"
 
       # Old versions are pruned daily by cleanup-registry.yml, which keeps
       # the newest tagged builds and their cosign signatures/attestations.

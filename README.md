@@ -51,9 +51,9 @@ An optional workflow that runs after the build workflow to prune old image relea
 #### Stale custom kernel fall-back to stock 
 This is an optional workflow for security paranoia that ensures the images don't ship with a stale custom kernel that may introduce known exploited vulnerabilites.
 
-When specifying a custom kernel component and enabling the kernel fresheness workflow `.github/workflows/kernel-freshness.yml`, the kernel freshness workflow runs daily. For this to work, the custom kernel component needs to include a `kernel-freshness.py` file.
+When specifying a custom kernel component and enabling the kernel fresheness workflow `.github/workflows/kernel-freshness.yml`, the kernel freshness workflow runs daily. For this to work, the custom kernel component needs to include a `kernel_freshness.py` file.
 
-Eg. For `components/kernel/cachyos-kernel/`, the `kernel-freshness.py` script checks COPR against upstream stable releases and CISA's Known Exploited Vulnerabilities catalog. If the COPR stalls it opens a tracking issue, then a pre-validated PR that temporarily switches the image to the stock Fedora kernel (the `KERNEL` arg in `Containerfile.base`), and a restore PR once the COPR catches up.
+Eg. For `components/kernel/cachyos-kernel/`, the `kernel_freshness.py` script checks COPR against upstream stable releases and CISA's Known Exploited Vulnerabilities catalog. If the COPR stalls it opens a tracking issue, then a pre-validated PR that temporarily switches the image to the stock Fedora kernel (the `KERNEL` arg in the component's Containerfile fragment), and a restore PR once the COPR catches up.
 
 #### [Shared libraries](lib)
 
@@ -115,7 +115,7 @@ The [Build disk images](.github/workflows/build-disk.yml) workflow produces an A
 ### Local builds
 
 ```bash
-just build              # build the container image (FLAVOR=laptop by default)
+just build              # build the container image (first flavor in ARG FLAVORS by default)
 just build-qcow2        # convert it to a bootable qcow2 via bootc-image-builder
 just run-vm-qcow2       # boot it in a browser-accessible VM
 just lint               # shellcheck, same file set as CI
