@@ -139,12 +139,19 @@ jobs:
       packages: write
 
     steps:
+      # These stage versions are pinned by https://github.com/renovatebot/renovate
+      # Checked out first because the steps below read scripts/flavors.sh.
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
       # Separate image per flavor so tag history is independent and
       # bootc switch targets are unambiguous
       - name: Prepare environment
+        env:
+          FLAVOR: ${{ matrix.flavor }}
         run: |
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
-          echo "IMAGE_NAME=falcos-${{ matrix.flavor }}" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=$(./scripts/flavors.sh image "$FLAVOR")" >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
              && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] \
@@ -153,10 +160,6 @@ jobs:
           else
             echo "PUBLISH=false" >> "${GITHUB_ENV}"
           fi
-
-      # These stage versions are pinned by https://github.com/renovatebot/renovate
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # The committed Containerfile is a skeleton; this writes the real
       # build file (one RUN layer per components.list entry) to
@@ -248,24 +251,28 @@ jobs:
       #   pull_request: read-only, anonymous (public package)
       # Per-flavor cache tags since a buildx cache export is one manifest
       # per ref and the matrix jobs would clobber a shared tag. Each flavor
-      # reads both tags, the sibling still serves the flavor-agnostic prefix.
+      # reads its own tag first, then every sibling tag: those still serve
+      # the flavor-agnostic layers, which are most of the build.
       - name: Determine build cache args
         id: cache-args
+        env:
+          FLAVOR: ${{ matrix.flavor }}
         run: |
-          cache_repo="${{ env.IMAGE_REGISTRY }}/falcos-cache"
-          sibling="$([ "${{ matrix.flavor }}" = "laptop" ] && echo desktop || echo laptop)"
+          cache_repo="${IMAGE_REGISTRY}/$(./scripts/flavors.sh cache-image)"
           {
             echo 'cache-from<<EOF'
             if [ "${{ github.event_name }}" != "schedule" ]; then
-              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }}"
-              echo "type=registry,ref=${cache_repo}:${sibling}"
+              echo "type=registry,ref=${cache_repo}:${FLAVOR}"
+              while IFS= read -r sibling; do
+                echo "type=registry,ref=${cache_repo}:${sibling}"
+              done < <(./scripts/flavors.sh siblings "$FLAVOR")
             fi
             echo 'EOF'
             echo 'cache-to<<EOF'
             # stock-kernel validation builds must not clobber the cache
             # the daily cachyos builds rely on
             if [ "${{ github.event.inputs.kernel }}" != "stock" ] && { [ "${{ github.event_name }}" = "schedule" ] || { [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; }; }; then
-              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }},mode=max"
+              echo "type=registry,ref=${cache_repo}:${FLAVOR},mode=max"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
