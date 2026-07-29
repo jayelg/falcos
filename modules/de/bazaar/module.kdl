@@ -1,3 +1,7 @@
 description "Bazaar, the Flatpak storefront"
 
 supports "fedora"
+
+// Ships nothing but a flatpak ID, so it needs the client that
+// installs it, not merely the list that names it.
+requires "flatpak"
