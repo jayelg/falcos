@@ -112,7 +112,9 @@ sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
 
 ### Fresh install
 
-The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches itself to track your repo ie. `ghcr.io/[your username]/falcos-laptop:latest`.
+The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches the installed system to track it, ie. `ghcr.io/[your username]/falcos-laptop:latest`.
+
+Which flavor that is comes from one declaration in `scripts/flavors.sh`, and the namespace from your `origin` remote, so a fork's ISO installs the fork's own image with no edit. `just build-iso` renders the same reference locally.
 
 ### Local builds
 
