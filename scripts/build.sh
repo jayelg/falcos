@@ -186,13 +186,6 @@ cache_repo() {
 
 cache_import_refs=()
 cache_export_ref=""
-# The buildkit backend has no registry cache wiring yet: it builds against
-# the cache in its own volume only.
-if [ "$backend" = buildkit ]; then
-    [ "$cache_to" = 0 ] \
-        || die "the buildkit backend cannot export to the registry cache yet"
-    cache_from=0
-fi
 if [ "$cache_from" = 1 ] || [ "$cache_to" = 1 ]; then
     if repo="$(cache_repo)"; then
         if [ "$cache_from" = 1 ]; then
@@ -299,10 +292,15 @@ build_buildkit() {
         --local "dockerfile=${buildkit_context}"
         --opt "filename=${containerfile}"
     )
-    local arg label tag first
+    local arg label ref tag first
 
     for arg in "${build_args[@]}"; do args+=(--opt "build-arg:${arg}"); done
     for label in "${labels[@]}"; do args+=(--opt "label:${label}"); done
+    for ref in "${cache_import_refs[@]}"; do
+        args+=(--import-cache "type=registry,ref=${ref}")
+    done
+    [ -z "$cache_export_ref" ] \
+        || args+=(--export-cache "type=registry,ref=${cache_export_ref}")
     [ -z "$mok_key" ] \
         || args+=(--secret "id=mok_privkey,src=${buildkit_secret}")
 
