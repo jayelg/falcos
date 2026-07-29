@@ -34,8 +34,24 @@ echo "lint: shellcheck passed on ${#scripts[@]} scripts"
 
 # Then the splice itself, which is the part manifest.sh does not own:
 # skeleton marker damage would otherwise only surface at build time.
+#
+# Regenerating in place also checks the committed file, which is what a
+# reviewer reads and what a build of this commit produces. Those have to
+# be the same file, so a stale one is a diff here rather than a surprise
+# in the next review.
 ./scripts/gen-containerfile.sh > /dev/null
-echo "lint: the Containerfile generates"
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo "lint: the Containerfile generates (no checkout, so no drift check)"
+elif ! git ls-files --error-unmatch Containerfile.generated > /dev/null 2>&1; then
+    echo "lint: Containerfile.generated is untracked, so nothing reviews it" >&2
+    exit 1
+elif ! git diff --quiet -- Containerfile.generated; then
+    echo "lint: Containerfile.generated is stale, stage the regenerated file" >&2
+    git --no-pager diff --stat -- Containerfile.generated >&2
+    exit 1
+else
+    echo "lint: the Containerfile generates and matches the committed one"
+fi
 
 # Renders the installer config the way a disk build does, so a template
 # that stopped substituting, or an installer flavor that is no longer
