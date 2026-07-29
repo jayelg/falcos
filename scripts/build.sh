@@ -173,25 +173,15 @@ mok_key="${MOK_KEY_PATH:-}"
 # per ref, so flavors sharing a tag would clobber each other). Each build
 # reads its own tag first, then every sibling: those still serve the
 # flavor-agnostic layers, which are most of the build.
-cache_repo() {
-    local registry="${IMAGE_REGISTRY:-}"
-    if [ -z "$registry" ]; then
-        # Derived from the remote so a fork's local build reads the fork's
-        # own CI cache with no configuration.
-        local url owner
-        url="$(git config --get remote.origin.url 2> /dev/null || true)"
-        owner="$(printf '%s\n' "$url" \
-            | sed -n 's#^\(git@github\.com:\|ssh://git@github\.com/\|https://github\.com/\)\([^/]*\)/.*#\2#p')"
-        [ -n "$owner" ] || return 1
-        registry="ghcr.io/${owner,,}"
-    fi
-    printf '%s/%s\n' "${registry,,}" "$(./scripts/flavors.sh cache-image)"
-}
-
+#
+# The namespace comes from scripts/registry.sh, so a fork's local build
+# reads the fork's own CI cache with no configuration. It fails when there
+# is nothing to derive one from, which is fatal for an export and only a
+# missed cache for an import.
 cache_import_refs=()
 cache_export_ref=""
 if [ "$cache_from" = 1 ] || [ "$cache_to" = 1 ]; then
-    if repo="$(cache_repo)"; then
+    if repo="$(./scripts/registry.sh ref "$(./scripts/flavors.sh cache-image)")"; then
         if [ "$cache_from" = 1 ]; then
             cache_import_refs+=("${repo}:${flavor}")
             while IFS= read -r sibling; do
@@ -200,9 +190,8 @@ if [ "$cache_from" = 1 ] || [ "$cache_to" = 1 ]; then
         fi
         [ "$cache_to" = 0 ] || cache_export_ref="${repo}:${flavor},mode=max"
     else
-        [ "$cache_to" = 0 ] \
-            || die "--cache-to needs IMAGE_REGISTRY set (no github origin remote to derive it from)"
-        echo "build: no github origin remote, skipping the registry cache" >&2
+        [ "$cache_to" = 0 ] || die "--cache-to needs a registry namespace"
+        echo "build: skipping the registry layer cache" >&2
     fi
 fi
 

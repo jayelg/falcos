@@ -48,11 +48,12 @@ jobs:
           USER_GID=$(id -g)
           # Concatenate the types with a hyphen
           DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
+          # scripts/registry.sh owns the namespace and the lowercasing that
+          # ghcr.io requires, scripts/flavors.sh owns the image name.
           IMAGE_NAME="$(./scripts/flavors.sh image "$FLAVOR")"
+          IMAGE_REF="$(./scripts/registry.sh ref "$IMAGE_NAME"):${DEFAULT_TAG}"
           {
-            # Lowercase the image uri
-            echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}"
-            echo "IMAGE_NAME=${IMAGE_NAME,,}"
+            echo "IMAGE_REF=${IMAGE_REF}"
             echo "DISK_TYPE=${DISK_TYPE}"
             echo "USER_UID=${USER_UID}"
             echo "USER_GID=${USER_GID}"
@@ -69,7 +70,7 @@ jobs:
         with:
           builder-image: ${{ env.BIB_IMAGE }}
           config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso.toml' || './disk_config/disk.toml' }}
-          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+          image: ${{ env.IMAGE_REF }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}
           rootfs: btrfs
