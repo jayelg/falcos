@@ -8,9 +8,13 @@
 #             local default: the same builder CI uses, so a local build
 #             resolves the same cache keys
 #   buildx    the runner's buildx builder, used by the workflow
-#   buildah   podman build. No BuildKit, so the RUN cache keys on the whole
-#             ctx stage instead of the mounted files and nothing is shared
-#             with CI. Kept while the BuildKit path settles.
+#   buildah   podman build. Not BuildKit: the RUN cache keys on the whole
+#             ctx stage instead of the mounted files, nothing is shared
+#             with CI, and the Containerfile's syntax directive is ignored.
+#             It is the fallback for a host where a privileged buildkitd
+#             container cannot run, kept permanently rather than during a
+#             migration, and it fails loudly on anything it cannot do
+#             rather than quietly producing a different image.
 #
 # Everything else — which Containerfile is built, which build args and
 # secret it gets, which cache refs are read and written — is decided here
