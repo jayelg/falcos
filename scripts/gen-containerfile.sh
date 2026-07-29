@@ -125,13 +125,24 @@ if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
     exit 1
 fi
 
+# A parser directive is only a directive on the first line, so the
+# skeleton's is hoisted above the generated-file header rather than being
+# copied in place, where the header would push it down and BuildKit would
+# read it as an ordinary comment.
+directive=""
+case "$(head -1 "$skeleton")" in
+    '# syntax='*) directive="$(head -1 "$skeleton")" ;;
+esac
+
 section_file="$(mktemp)"
 printf '%s' "$section" > "$section_file"
 {
+    [ -z "$directive" ] || echo "$directive"
     echo '# GENERATED FILE — do not edit. Produced by scripts/gen-containerfile.sh'
     echo '# from the Containerfile skeleton and components.list.'
     echo
-    awk -v begin="$begin" -v end="$end" -v sec="$section_file" '
+    awk -v begin="$begin" -v end="$end" -v sec="$section_file" -v directive="$directive" '
+        NR == 1 && directive != "" && $0 == directive { next }
         $0 == begin {
             print
             print ""

@@ -1,3 +1,14 @@
+# syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
+# A parser directive, so it must stay the first line of the file and of
+# the generated one; the generator hoists it above its own header. It
+# pins the frontend that turns this file into a build graph, so CI (the
+# buildx builder the runner provisions) and a local build (the pinned
+# moby/buildkit container) compute the same cache keys no matter which
+# daemon each runs. Without it the two agree only by coincidence, and a
+# bump of either daemon shows up as an unexplained cache miss rather than
+# an error. buildah ignores the directive, which is one of the reasons
+# that backend shares no cache with CI.
+#
 # Every build goes through scripts/build.sh, which CI and `just build`
 # both call. The component section between the BEGIN/END COMPONENTS
 # markers is generated from components.list by
