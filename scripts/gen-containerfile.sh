@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # Generates Containerfile.generated (the file builds actually use) from the
-# committed Containerfile skeleton plus components.list. scripts/build.sh
+# committed Containerfile skeleton plus modules.list. scripts/build.sh
 # runs it before every build, locally and in CI, so no build can use a
 # stale one; `just generate` runs it standalone. Containerfile.generated
 # is gitignored: the committed Containerfile stays an honest skeleton with
-# an empty component section, so nothing generated is ever committed.
+# an empty module section, so nothing generated is ever committed.
 #
-# Each list entry is a path relative to components/. It becomes one RUN
-# layer that calls lib/run-component.sh. Components under a [flavor]
-# section get COMPONENT_FLAVORS=<flavor> injected (so run-component.sh
-# skips them on other flavors). A component that needs extra mounts or env
-# (build secrets, ARGs) ships a Containerfile.part in its directory,
+# Each list entry is a path relative to modules/. It becomes one RUN
+# layer that calls lib/run-module.sh. Modules under a [flavor]
+# section get FLAVOR_GATE=<flavor> injected (so run-module.sh
+# skips them on other flavors). A module that needs extra mounts or env
+# (build secrets, ARGs) ships a Containerfile.inc in its directory,
 # inlined verbatim instead of the standard block; if listed under a
 # [flavor] section the generator cross-checks the part's
-# COMPONENT_FLAVORS matches.
+# FLAVOR_GATE matches.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # shellcheck disable=SC2016  # the backticks are literal marker text
-begin='# ---- BEGIN COMPONENTS (generated at build time from components.list; see scripts/gen-containerfile.sh) ----'
-end='# ---- END COMPONENTS ----'
+begin='# ---- BEGIN MODULES (generated at build time from modules.list; see scripts/gen-containerfile.sh) ----'
+end='# ---- END MODULES ----'
 
-list=components.list
-skeleton=Containerfile.base
+list=modules.list
+skeleton=Containerfile.template
 out=Containerfile.generated
 
 # ---- read valid flavor names --------------------------------------------
@@ -36,18 +36,18 @@ while IFS= read -r name; do
 done <<< "$flavors_out"
 
 # ---- ARG FLAVOR ----------------------------------------------------------
-# Containerfile.base omits it because where it goes depends on the list.
+# Containerfile.template omits it because where it goes depends on the list.
 # An ARG in scope is part of the cache key of every RUN below it, whether
 # or not that RUN mentions it, so declaring it at the top of the section
-# would fork the cache at the first component and leave two flavors
+# would fork the cache at the first module and leave two flavors
 # sharing no layers at all. It is emitted directly above the first
 # flavor-gated block instead, which is the first layer that can read it,
 # and at the end of the section when nothing is gated, since the flavor
 # and finalize phases below the section still need it.
 #
 # Everything above that point is flavor independent by construction: an
-# ungated block's RUN never mentions FLAVOR, and run-component.sh only
-# reads it when the generator set COMPONENT_FLAVORS. A Containerfile.part
+# ungated block's RUN never mentions FLAVOR, and run-module.sh only
+# reads it when the generator set FLAVOR_GATE. A Containerfile.inc
 # that breaks that is caught in emit_block.
 flavor_arg_emitted=0
 emit_flavor_arg() {
@@ -60,48 +60,48 @@ ARG FLAVOR=${first_flavor}
 EOF
 }
 
-# ---- emit one component block -------------------------------------------
+# ---- emit one module block -------------------------------------------
 # <name> <variant> <flavor> — flavor is "" for universal
 emit_block() {
     local name="$1" variant="$2" flavor="$3" dir
-    dir="components/${name}"
+    dir="modules/${name}"
     if [ ! -d "$dir" ]; then
-        echo "gen-containerfile: '${name}' does not resolve to a component directory (expected ${dir})" >&2
+        echo "gen-containerfile: '${name}' does not resolve to a module directory (expected ${dir})" >&2
         exit 1
     fi
 
-    if [ -f "${dir}/Containerfile.part" ]; then
+    if [ -f "${dir}/Containerfile.inc" ]; then
         # A part above the ARG that expands FLAVOR would get an empty
         # string, silently, so it is an error rather than a surprise in
         # the built image.
         if [ "$flavor_arg_emitted" = 0 ] \
-            && grep -qE '\$\{?FLAVOR\}?' "${dir}/Containerfile.part"; then
-            echo "gen-containerfile: '${name}' expands FLAVOR in its Containerfile.part but is listed above the first flavor-gated component, where ARG FLAVOR is not yet declared" >&2
+            && grep -qE '\$\{?FLAVOR\}?' "${dir}/Containerfile.inc"; then
+            echo "gen-containerfile: '${name}' expands FLAVOR in its Containerfile.inc but is listed above the first flavor-gated module, where ARG FLAVOR is not yet declared" >&2
             exit 1
         fi
-        # Containerfile.part component: cross-check flavor gate if listed
+        # Containerfile.inc module: cross-check flavor gate if listed
         # under a [flavor] section, then emit verbatim.
         if [ -n "$flavor" ]; then
             local part_flavor
-            part_flavor="$(sed -n 's/.*COMPONENT_FLAVORS=\([^[:space:]]*\).*/\1/p' "${dir}/Containerfile.part" | head -1)"
+            part_flavor="$(sed -n 's/.*FLAVOR_GATE=\([^[:space:]]*\).*/\1/p' "${dir}/Containerfile.inc" | head -1)"
             if [ -z "$part_flavor" ]; then
-                echo "gen-containerfile: '${name}' is listed under [${flavor}] but its Containerfile.part has no COMPONENT_FLAVORS — the flavor gate would be silently ignored" >&2
+                echo "gen-containerfile: '${name}' is listed under [${flavor}] but its Containerfile.inc has no FLAVOR_GATE — the flavor gate would be silently ignored" >&2
                 exit 1
             fi
             if [ "$part_flavor" != "$flavor" ]; then
-                echo "gen-containerfile: '${name}' is listed under [${flavor}] but its Containerfile.part has COMPONENT_FLAVORS=${part_flavor}" >&2
+                echo "gen-containerfile: '${name}' is listed under [${flavor}] but its Containerfile.inc has FLAVOR_GATE=${part_flavor}" >&2
                 exit 1
             fi
             printf '# ---- [%s] ----\n' "$flavor"
         fi
-        printf '# ---- %s (verbatim from %s/Containerfile.part) ----\n' "$name" "$dir"
-        cat "${dir}/Containerfile.part"
+        printf '# ---- %s (verbatim from %s/Containerfile.inc) ----\n' "$name" "$dir"
+        cat "${dir}/Containerfile.inc"
         return
     fi
 
     local env_prefix=""
-    [ -n "$variant" ] && env_prefix="COMPONENT_VARIANT=${variant} "
-    [ -n "$flavor" ] && env_prefix+="COMPONENT_FLAVORS=${flavor} "
+    [ -n "$variant" ] && env_prefix="MODULE_VARIANT=${variant} "
+    [ -n "$flavor" ] && env_prefix+="FLAVOR_GATE=${flavor} "
     if [ -n "$flavor" ]; then
         printf '# ---- [%s] ----\n' "$flavor"
     fi
@@ -112,11 +112,11 @@ RUN --mount=type=bind,from=ctx,source=/${dir},target=/ctx/${dir} \\
     --mount=type=cache,target=/var/cache \\
     --mount=type=cache,target=/var/log \\
     --mount=type=tmpfs,target=/tmp \\
-    ${env_prefix}bash /ctx/lib/run-component.sh /ctx/${dir}
+    ${env_prefix}bash /ctx/lib/run-module.sh /ctx/${dir}
 EOF
 }
 
-# ---- parse components.list -----------------------------------------------
+# ---- parse modules.list -----------------------------------------------
 current_flavor=""
 while IFS= read -r line; do
     entry="${line%%#*}"
@@ -157,7 +157,7 @@ fi
 
 # ---- splice into skeleton -----------------------------------------------
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
-    echo "gen-containerfile: BEGIN/END COMPONENTS markers not found in ${skeleton}" >&2
+    echo "gen-containerfile: BEGIN/END MODULES markers not found in ${skeleton}" >&2
     exit 1
 fi
 
@@ -175,7 +175,7 @@ printf '%s' "$section" > "$section_file"
 {
     [ -z "$directive" ] || echo "$directive"
     echo '# GENERATED FILE — do not edit. Produced by scripts/gen-containerfile.sh'
-    echo '# from the Containerfile skeleton and components.list.'
+    echo '# from the Containerfile skeleton and modules.list.'
     echo
     awk -v begin="$begin" -v end="$end" -v sec="$section_file" -v directive="$directive" '
         NR == 1 && directive != "" && $0 == directive { next }
@@ -191,4 +191,4 @@ printf '%s' "$section" > "$section_file"
     ' "$skeleton"
 } > "$out"
 rm -f "$section_file"
-echo "gen-containerfile: wrote ${out} ($(grep -c 'run-component.sh /ctx' "$out") component RUN layers)"
+echo "gen-containerfile: wrote ${out} ($(grep -c 'run-module.sh /ctx' "$out") module RUN layers)"

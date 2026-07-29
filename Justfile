@@ -21,7 +21,7 @@ fix:
     just --unstable --fmt -f Justfile
 
 # Generate Containerfile.generated from the Containerfile skeleton +
-# components.list. Every build regenerates it first, so this is only for
+# modules.list. Every build regenerates it first, so this is only for
 # inspecting what a build would use.
 [group('Utility')]
 generate:
@@ -70,7 +70,7 @@ build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh de
 
 # Fallback for a host where the BuildKit container can't run. Caches on
 # the whole ctx stage, so it rebuilds every layer after any change under
-# components/, lib/ or build-phases/.
+# modules/, lib/ or build-phases/.
 
 # Build the image with buildah instead of BuildKit
 [group('Utility')]
@@ -124,7 +124,7 @@ generate-mok-key dir=(env("HOME") + "/.local/share/falcos"):
     echo "Public cert: $CERT"
     echo
     echo "Next steps:"
-    echo "  1. cp $CERT components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
+    echo "  1. cp $CERT modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
     echo "  2. Commit that cert, and add MOK_PRIVATE_KEY as a GitHub Actions secret (contents of $KEY)."
     echo "  3. After deploying a signed image, on the target machine run:"
     echo "       sudo mokutil --import /usr/share/falcos/sb_cert.der"
@@ -312,7 +312,7 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
 
-# Runs shellcheck over every Bash script, validates components.list and
+# Runs shellcheck over every Bash script, validates modules.list and
 # renders the installer config, the same script the build workflow gates on
 lint:
     ./scripts/lint.sh

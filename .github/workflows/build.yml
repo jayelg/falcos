@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # shellcheck over every Bash script in the repo, then a generator dry
-      # run that validates components.list without a full image build. The
+      # run that validates modules.list without a full image build. The
       # script owns the file set, so `just lint` checks exactly what this
       # gate checks. shellcheck is preinstalled on the runner image.
       - name: Run lint
@@ -61,7 +61,7 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
 
-  # Unit tests for kernel-freshness scripts discovered in component dirs
+  # Unit tests for kernel-freshness scripts discovered in module dirs
   script-tests:
     runs-on: ubuntu-24.04
     permissions:
@@ -72,7 +72,7 @@ jobs:
 
       - name: Discover and run kernel-freshness tests
         run: |
-          mapfile -t dirs < <(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
+          mapfile -t dirs < <(find modules -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
           for d in "${dirs[@]}"; do
             echo "==> Running tests in ${d}..."
             python3 -m unittest discover -s "$d" -v
@@ -97,7 +97,7 @@ jobs:
         run: |
           # Pull requests build the default flavor only, for half the runner
           # time. It is the better single choice because its flavor-gated
-          # components include a DKMS build, so it covers more build surface
+          # modules include a DKMS build, so it covers more build surface
           # than the others.
           selection=list
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
@@ -177,7 +177,7 @@ jobs:
         id: base
         run: |
           set -euo pipefail
-          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.base | head -1)"
+          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.template | head -1)"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
           echo "name=${base}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
@@ -197,7 +197,7 @@ jobs:
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.flavor }})
             org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.base
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.template
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}

@@ -1,18 +1,18 @@
 [root](../../README.md) / [build-phases](../build-phases/README.md) / **lib**
 
-Shell helpers sourced by the build scripts, not run on their own (except `run-component.sh`, the entry point the generated Containerfile blocks call).
+Shell helpers sourced by the build scripts, not run on their own (except `run-module.sh`, the entry point the generated Containerfile blocks call).
 
-### [Component Runner](run-component.sh)
+### [Module Runner](run-module.sh)
 
-Runs one component per RUN layer: flavor gate, repo file, `versions.sh` pins, variant overrides, `component.sh`, `selinux/*.te` policy modules, `files/` overlay, `justfile.inc` append. Keeps the per-component conventions in one place.
+Runs one module per RUN layer: flavor gate, repo file, `versions.sh` pins, variant overrides, `module.sh`, `selinux/*.te` policy modules, `files/` overlay, `justfile.inc` append. Keeps the per-module conventions in one place.
 
 ### [Fetch Helpers](fetch-helpers.sh)
 
-Download-verify-install for pinned upstream release assets: `fetch_verified`, `fetch_extract`, `fetch_install_bin`, `fetch_install_rpm`. Every asset is SHA256-checked against the component's `versions.sh`.
+Download-verify-install for pinned upstream release assets: `fetch_verified`, `fetch_extract`, `fetch_install_bin`, `fetch_install_rpm`. Every asset is SHA256-checked against the module's `versions.sh`.
 
 ### [Repo Helpers](repo-helpers.sh)
 
-`add_disabled_repo <url>` for component `repo` files: installs a third-party `.repo` left disabled (uses `$REPO_ID`), so components opt in per-install with `dnf5 --enablerepo`.
+`add_disabled_repo <url>` for module `repo` files: installs a third-party `.repo` left disabled (uses `$REPO_ID`), so modules opt in per-install with `dnf5 --enablerepo`.
 
 ### [Kernel Helpers](kernel-helpers.sh)
 
@@ -32,7 +32,7 @@ Wraps a binary to strip the system-wide hardened_malloc `LD_PRELOAD` for apps th
 
 ### [SELinux Helpers](selinux-helpers.sh)
 
-Compiles and installs a local SELinux policy module from a `.te` file into the targeted store. Standalone so RUN layers can mount just this file. Components normally just drop `selinux/*.te` files (run-component.sh installs them automatically); call `install_selinux_module` directly only for a build-time-generated policy.
+Compiles and installs a local SELinux policy module from a `.te` file into the targeted store. Standalone so RUN layers can mount just this file. Modules normally just drop `selinux/*.te` files (run-module.sh installs them automatically); call `install_selinux_module` directly only for a build-time-generated policy.
 
 ### [Brand Helpers](brand-helpers.sh)
 
@@ -40,4 +40,4 @@ Patches the branding fields of `/etc/os-release`. Called directly by [50-flavor.
 
 ## Caution
 
-Every component layer bind-mounts this directory, so editing any file here rebuilds all component layers in CI. Keep it small and stable; batch helper changes.
+Every module layer bind-mounts this directory, so editing any file here rebuilds all module layers in CI. Keep it small and stable; batch helper changes.

@@ -14,23 +14,23 @@ if ! command -v shellcheck > /dev/null 2>&1; then
     exit 1
 fi
 
-# -s bash because component scripts, versions files and variant overrides
+# -s bash because module scripts, versions files and variant overrides
 # are sourced fragments without shebangs. Extensionless runtime scripts
 # (libexec helpers, systemd generators) are matched by path instead of
 # extension. Repo-wide excludes live in .shellcheckrc.
 mapfile -t scripts < <(
-    find build-phases scripts lib components -name '*.sh' -type f
-    find components -path '*/files/*' -type f \
+    find build-phases scripts lib modules -name '*.sh' -type f
+    find modules -path '*/files/*' -type f \
         \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
 )
 shellcheck -s bash "${scripts[@]}"
 echo "lint: shellcheck passed on ${#scripts[@]} scripts"
 
-# Catches components.list entries that don't resolve to a component
+# Catches modules.list entries that don't resolve to a module
 # directory, an undeclared flavor section and skeleton marker damage,
 # without needing a full image build.
 ./scripts/gen-containerfile.sh > /dev/null
-echo "lint: components.list resolves"
+echo "lint: modules.list resolves"
 
 # Renders the installer config the way a disk build does, so a template
 # that stopped substituting, or an installer flavor that is no longer

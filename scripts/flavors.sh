@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The only reader of ARG FLAVORS in Containerfile.base. Everything that
+# The only reader of ARG FLAVORS in Containerfile.template. Everything that
 # needs to know which flavors exist asks this script: the Containerfile
 # generator, the CI build matrix, the per-flavor cache tags, the registry
 # cleanup, the disk build and the Justfile. Adding or renaming a flavor is
@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-skeleton=Containerfile.base
+skeleton=Containerfile.template
 
 # Published images are <prefix>-<flavor>; the buildx registry cache is
 # <prefix>-cache, one tag per flavor.
@@ -59,7 +59,7 @@ for name in "${parts[@]}"; do
     # tolerates "desktop, laptop" spacing in the ARG.
     name="${name//[[:space:]]/}"
     [ -n "$name" ] || continue
-    # Same shape components.list section headers accept; a name outside it
+    # Same shape modules.list section headers accept; a name outside it
     # could never be matched by a [flavor] section.
     [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] \
         || die "invalid flavor name '${name}' in ARG FLAVORS (expected lowercase, digits and dashes)"

@@ -1,0 +1,22 @@
+# Containerfile.inc — rename to exactly `Containerfile.inc` to activate.
+#
+# Use this ONLY when the standard RUN block run-module.sh generates isn't
+# enough — i.e. the module needs an extra bind mount, a build secret, or a
+# build ARG. When present, the generator inlines this file VERBATIM instead of
+# the standard block, so it fully REPLACES the normal flow: you must call
+# run-module.sh yourself and mount everything it needs. See
+# kernel/cachyos-kernel (MOK secret + KERNEL arg) and hardware/gaming.
+#
+# A flavor-gated Containerfile.inc must set FLAVOR_GATE itself; the
+# generator cross-checks it against the [flavor] section header and errors on
+# a mismatch (see virtualization/looking-glass).
+#
+# Example skeleton (a module needing a build secret):
+#
+# RUN --mount=type=bind,from=ctx,source=/modules/GROUP/template,target=/ctx/modules/GROUP/template \
+#     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+#     --mount=type=cache,target=/var/cache \
+#     --mount=type=cache,target=/var/log \
+#     --mount=type=tmpfs,target=/tmp \
+#     --mount=type=secret,id=example_secret,target=/run/secrets/example,required=false \
+#     bash /ctx/lib/run-module.sh /ctx/modules/GROUP/template

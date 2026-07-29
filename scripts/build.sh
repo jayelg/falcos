@@ -339,7 +339,7 @@ build_buildx() {
 
 # No BuildKit, so no --mount cache scoping and no shared cache: buildah
 # keys the RUN cache on the whole ctx stage and rebuilds every layer after
-# any change under components/, lib/ or build-phases/.
+# any change under modules/, lib/ or build-phases/.
 build_buildah() {
     local args=(build --file "$containerfile")
     local arg tag label

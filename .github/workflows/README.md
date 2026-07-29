@@ -6,7 +6,7 @@ The GitHub Actions pipelines.
 
 Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the first flavor in `ARG FLAVORS`, for build testing, and do not push.
 
-Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the component scripts, a generator dry run over `components.list`, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
+Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a generator dry run over `modules.list`, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
 The build itself is [build.sh](../../scripts/build.sh), which `just build` also runs. It owns the Containerfile generation, the build args, the registry cache refs and the Secure Boot secret, so a local build and a CI build of the same commit differ only in the backend that reaches BuildKit. The workflow keeps the policy around it: which events may read and write the cache, and which produce a publishable artifact.
 
@@ -22,7 +22,7 @@ Turns the built image into installable disk images (qcow2 and Anaconda ISO) via 
 
 ### [Kernel Freshness](kernel-freshness.yml)
 
-Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../../components/kernel/cachyos-kernel/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
+Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../../modules/kernel/cachyos-kernel/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
 
 ### [Checksums](checksums.yml)
 

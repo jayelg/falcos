@@ -1,11 +1,11 @@
 #!/bin/bash
-# Helpers for component `repo` files. Standalone so RUN layers can mount just
+# Helpers for module `repo` files. Standalone so RUN layers can mount just
 # this file.
 
 # <repofile-url> — install a third-party .repo but leave it DISABLED, so
-# nothing in the image resolves packages from it unless a component opts in
+# nothing in the image resolves packages from it unless a module opts in
 # per-install with `dnf5 install --enablerepo='<id>' ...`. Uses $REPO_ID (the
-# id run-component.sh keys its idempotency check on, == the repo's section id)
+# id run-module.sh keys its idempotency check on, == the repo's section id)
 # as the repo to disable.
 add_disabled_repo() {
     dnf5 config-manager addrepo --from-repofile="$1"

@@ -1,7 +1,7 @@
 # Keeps the build context identical to a clean checkout, so a local build
 # can reuse the CI layer cache (see scripts/build.sh). Anything listed here
-# that appears under build-phases/, lib/ or components/ would otherwise
-# change the ctx stage and invalidate every component layer below it.
+# that appears under build-phases/, lib/ or modules/ would otherwise
+# change the ctx stage and invalidate every module layer below it.
 #
 # Patterns match from the context root, so a nested directory needs the
 # **/ prefix: __pycache__ alone would only exclude one at the root.

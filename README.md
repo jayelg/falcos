@@ -5,46 +5,46 @@ Falcos is a framework for a 'build-your-own distro' using an atomic/immutable li
 ## Features
 
 - **Minimal Abstractions**: The repo is a framework for a custom linux image designed to be easy to learn and understand whats happening under the hood while still keeping things organised and easy to maintain.
-- **Component based architecture**: `components/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `components.list` then defines a definitive list of all components that are enabled in the built images including common components and components specific to different flavor builds (using a `[Flavor_Name]` tags). Components are then spliced into a generated containerfile at build time.
+- **Module based architecture**: `modules/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `modules.list` then defines a definitive list of all modules that are enabled in the built images including common modules and modules specific to different flavor builds (using a `[Flavor_Name]` tags). Modules are then spliced into a generated containerfile at build time.
 - **System visibility**: The default base image is [fedora-bootc](https://quay.io/repository/fedora/fedora-bootc) which provides a minimal starting point so that the majority of the system configuration is centralized and visible to the user.
-- **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening components are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
-- **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each component cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
-- **Dependency tracking**: Renovate pins component versions and GitHub Actions hashes.
+- **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening modules are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
+- **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each module cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
+- **Dependency tracking**: Renovate pins module versions and GitHub Actions hashes.
 - **Update managment tools baked in** `bootc-fetch-apply-updates.timer` applies image updates automatically. The image build and flatpaks are updated daily.`falcos-bootc-update` for KDE Plasma provides a GUI tab in KDE Plasma System Settings for managing system updates. `goojust` provides a TUI tool for system information and running system updates and other included just scripts.
 
 ## How it works
 
-### Components
-Anything that you want to include in an image can be packaged into a component. A component is a structured directory that can include scripts, direct file overlays, justfiles, flatpaks, Containerfile segments, and versioning.
+### Modules
+Anything that you want to include in an image can be packaged into a module. A module is a structured directory that can include scripts, direct file overlays, justfiles, flatpaks, Containerfile segments, and versioning.
 
-Components are then explicity defined for inclusion in the image through the `components.list` file.
+Modules are then explicity defined for inclusion in the image through the `modules.list` file.
 
 ### The Containerfile is generated at build time
 (`Containerfile.generated`).
-During the build `scripts/gen-containerfile.sh` takes `Containerfile.base` and splices in each component as a single RUN layer as they are ordered in the `components.list` file and outputs a `Containerfile.generated` file for use in the build.
+During the build `scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer as they are ordered in the `modules.list` file and outputs a `Containerfile.generated` file for use in the build.
 
 ### Image Flavors
 Flavours refers to image variants that that the build script/Build CI workflow will generate. 
 
-Images flavours are defined by adding a comma delinated list into `Containerfile.base` > `ARG FLAVORS=""`.
+Images flavours are defined by adding a comma delinated list into `Containerfile.template` > `ARG FLAVORS=""`.
 
-Flavors are configured by using the `[<Flavor-Name>]` header tag before a list of components in `components.list`.
+Flavors are configured by using the `[<Flavor-Name>]` header tag before a list of modules in `modules.list`.
 
-The `[Common]` header tag is used for components targeting all built images,
+The `[Common]` header tag is used for modules targeting all built images,
 
-The generated `Containerfile.generated` file is not flavor specific and includes all components listed in the `components.list` file for use in all flavor builds. The build workflow parses the `components.list` file during the build to gate what is installed during each flavor build workflow.
+The generated `Containerfile.generated` file is not flavor specific and includes all modules listed in the `modules.list` file for use in all flavor builds. The build workflow parses the `modules.list` file during the build to gate what is installed during each flavor build workflow.
 
-Every layer above the first flavor section is shared by all flavor builds: the flavor is only declared as a build arg at that point, and an arg in scope is part of the cache key of every layer below it. Adding a flavor therefore costs its own gated components rather than a whole extra build.
+Every layer above the first flavor section is shared by all flavor builds: the flavor is only declared as a build arg at that point, and an arg in scope is part of the cache key of every layer below it. Adding a flavor therefore costs its own gated modules rather than a whole extra build.
 
 ### Image Building
 Images are build using the `.github/workflows/build.yml` workflow, signed and published for bootc images to track updates.
-The workflow runs daily to rebuild with any updates to the base image and components (that aren't pinned to a version).
-Renovate monitors each component's `versions.sh` file and  generates a daily batch update PR with build test checks if any new versions of component dependancies are available.
+The workflow runs daily to rebuild with any updates to the base image and modules (that aren't pinned to a version).
+Renovate monitors each module's `versions.sh` file and  generates a daily batch update PR with build test checks if any new versions of module dependancies are available.
 
 ### Other quality-of-life CI automations
 
-#### Automatically update SHA256 hash for pinned component version bumps 
-the `.github/workflows/checksums.yml` workflow runs after approved Renovate version bump PRs to update the components `versions.sh` SHA256 hash properties.
+#### Automatically update SHA256 hash for pinned module version bumps 
+the `.github/workflows/checksums.yml` workflow runs after approved Renovate version bump PRs to update the modules `versions.sh` SHA256 hash properties.
 
 #### Cleanup registry
 
@@ -53,13 +53,13 @@ An optional workflow that runs after the build workflow to prune old image relea
 #### Stale custom kernel fall-back to stock 
 This is an optional workflow for security paranoia that ensures the images don't ship with a stale custom kernel that may introduce known exploited vulnerabilites.
 
-When specifying a custom kernel component and enabling the kernel fresheness workflow `.github/workflows/kernel-freshness.yml`, the kernel freshness workflow runs daily. For this to work, the custom kernel component needs to include a `kernel_freshness.py` file.
+When specifying a custom kernel module and enabling the kernel fresheness workflow `.github/workflows/kernel-freshness.yml`, the kernel freshness workflow runs daily. For this to work, the custom kernel module needs to include a `kernel_freshness.py` file.
 
-Eg. For `components/kernel/cachyos-kernel/`, the `kernel_freshness.py` script checks COPR against upstream stable releases and CISA's Known Exploited Vulnerabilities catalog. If the COPR stalls it opens a tracking issue, then a pre-validated PR that temporarily switches the image to the stock Fedora kernel (the `KERNEL` arg in the component's Containerfile fragment), and a restore PR once the COPR catches up.
+Eg. For `modules/kernel/cachyos-kernel/`, the `kernel_freshness.py` script checks COPR against upstream stable releases and CISA's Known Exploited Vulnerabilities catalog. If the COPR stalls it opens a tracking issue, then a pre-validated PR that temporarily switches the image to the stock Fedora kernel (the `KERNEL` arg in the module's Containerfile fragment), and a restore PR once the COPR catches up.
 
 #### [Shared libraries](lib)
 
-Shell helpers sourced by the build scripts: component runner, fetch/verify helpers, kernel variant resolution, Secure Boot signing, DKMS module builds, hardened_malloc wrappers, SELinux module install, and os-release branding.
+Shell helpers sourced by the build scripts: module runner, fetch/verify helpers, kernel variant resolution, Secure Boot signing, DKMS module builds, hardened_malloc wrappers, SELinux module install, and os-release branding.
 
 ### [Disk config](disk_config)
 
@@ -71,7 +71,7 @@ Dev scripts for building and testing outside CI.
 
 ### What to customize
 
-#### [Containerfile.base](Containerfile.base)
+#### [Containerfile.template](Containerfile.template)
 Define the base image to use with:
 `FROM <base-image>` eg. `FROM quay.io/fedora/fedora-bootc:44`
 
@@ -82,27 +82,27 @@ This is the only place flavors are declared. `scripts/flavors.sh` is the only th
 
 That script also declares which flavor a fresh installer lays down, the one flavor choice that is a policy rather than a derivation.
 
-#### [Components Directory](components)
+#### [Modules Directory](modules)
 
-To add any new app, customization or feature you can make a copy of the  `components/_template/component-name` directory and rename it to a descriptive component name to be used in the `components.list` file. `components/_template/readme.md` explains how to use the component template.
+To add any new app, customization or feature you can make a copy of the  `modules/_template/module-name` directory and rename it to a descriptive module name to be used in the `modules.list` file. `modules/_template/readme.md` explains how to use the module template.
 
-Component directories can also be organised into groups eg. `components/core/brew`. Grouped components must be formatted as `<group-name>/<component-name>` in the components.list eg. `core/brew`.
+Module directories can also be organised into groups eg. `modules/core/brew`. Grouped modules must be formatted as `<group-name>/<module-name>` in the modules.list eg. `core/brew`.
 
-You can use components in a variety of ways:
+You can use modules in a variety of ways:
 - As a single application installation eg. a browser
 - A group of related and interdependant applications eg. virtualization
 - For any just scripts you want to include ie. justfile.inc
 - Layering files trees into the immutable system
 
-#### [components.list](components.list)
+#### [modules.list](modules.list)
 
-This is a list of all components that will be included in the build images.
+This is a list of all modules that will be included in the build images.
 
-To include a component from the `components/` directory, you can just add a line with the component name in the order that you would like it to run. If the component is grouped into a directory, it must be formatted as `<group-name>/<component-name>`.
+To include a module from the `modules/` directory, you can just add a line with the module name in the order that you would like it to run. If the module is grouped into a directory, it must be formatted as `<group-name>/<module-name>`.
 
-To exclude a component from the build, you can either delete it or comment it out. Component directories in `components/` will not be included unless it is defined in `components.list`.
+To exclude a module from the build, you can either delete it or comment it out. Module directories in `modules/` will not be included unless it is defined in `modules.list`.
 
-To include a component for a specific image flavor only, add a `[Flavor-name}` header tag with the flavor name specified in `Containerfile.base` `ARG FLAVORS` list. all components below this flavor header tag will be included only in the specified flavor image. to include component that should be applied to all images after the flavor components have been included, add the `[common]` header tag. This is useful for any scripts that need to run last.
+To include a module for a specific image flavor only, add a `[Flavor-name}` header tag with the flavor name specified in `Containerfile.template` `ARG FLAVORS` list. all modules below this flavor header tag will be included only in the specified flavor image. to include module that should be applied to all images after the flavor modules have been included, add the `[common]` header tag. This is useful for any scripts that need to run last.
 
 ## Installation
 
@@ -134,14 +134,14 @@ Which flavor the installer lays down comes from one declaration in `scripts/flav
 just build              # build the container image (first flavor in ARG FLAVORS by default)
 just build-qcow2        # convert it to a bootable qcow2 via bootc-image-builder
 just run-vm-qcow2       # boot it in a browser-accessible VM
-just lint               # shellcheck every Bash script and validate components.list, the same script CI gates on
+just lint               # shellcheck every Bash script and validate modules.list, the same script CI gates on
 ```
 
 `just build` and the build workflow both run [scripts/build.sh](scripts/build.sh), so a local build gets the same Containerfile, build args, cache refs and signing secret as CI.
 
-Local builds use BuildKit, running as a `podman` container (`moby/buildkit`) driven by `buildctl`, and the built image is loaded into podman storage as `localhost/falcos:latest`. This is the same builder CI uses, so each `RUN` layer is invalidated by the files that layer mounts rather than by any change to the build context: editing one component rebuilds one layer. BuildKit's state, which is both the layer cache and every `RUN --mount=type=cache`, lives in the `falcos-buildkit` podman volume; `just buildkit-reset` deletes it and the daemon container. `just build-buildah` builds with buildah instead, for a host where the BuildKit container cannot run.
+Local builds use BuildKit, running as a `podman` container (`moby/buildkit`) driven by `buildctl`, and the built image is loaded into podman storage as `localhost/falcos:latest`. This is the same builder CI uses, so each `RUN` layer is invalidated by the files that layer mounts rather than by any change to the build context: editing one module rebuilds one layer. BuildKit's state, which is both the layer cache and every `RUN --mount=type=cache`, lives in the `falcos-buildkit` podman volume; `just buildkit-reset` deletes it and the daemon container. `just build-buildah` builds with buildah instead, for a host where the BuildKit container cannot run.
 
-Because it is the same builder, a local build also reads the registry layer cache that CI writes (`falcos-cache`, one tag per flavor, read anonymously). A build of a commit CI has already built is then a full cache hit, minutes rather than the ~50 a cold build takes, and a working tree that differs from it only rebuilds the layers that actually changed. What it can hit depends on the build context matching a clean checkout, which is what [.dockerignore](.dockerignore) is for: a stray `__pycache__` under `components/` changes the layer every component build mounts from and costs the entire cache. `IMAGE_REGISTRY` overrides where the cache is read from; it otherwise follows the `origin` remote, so a fork reads its own.
+Because it is the same builder, a local build also reads the registry layer cache that CI writes (`falcos-cache`, one tag per flavor, read anonymously). A build of a commit CI has already built is then a full cache hit, minutes rather than the ~50 a cold build takes, and a working tree that differs from it only rebuilds the layers that actually changed. What it can hit depends on the build context matching a clean checkout, which is what [.dockerignore](.dockerignore) is for: a stray `__pycache__` under `modules/` changes the layer every module build mounts from and costs the entire cache. `IMAGE_REGISTRY` overrides where the cache is read from; it otherwise follows the `origin` remote, so a fork reads its own.
 
 ## Secure Boot
 
@@ -151,7 +151,7 @@ One-time setup:
 
 1. `just generate-mok-key` — creates the key pair under `~/.local/share/falcos/`.
 2. Copy the public cert into the repo and commit it:
-   `cp ~/.local/share/falcos/sb_cert.der components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
+   `cp ~/.local/share/falcos/sb_cert.der modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
 3. Add the private key contents as the `MOK_PRIVATE_KEY` GitHub Actions secret (for local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`).
 4. On each machine, after deploying a signed image:
    `sudo mokutil --import /usr/share/falcos/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.
@@ -162,4 +162,4 @@ The private key never enters the repo or the image; CI mounts it as a BuildKit s
 
 This project was initially built from the [ublue-os/image-template](https://github.com/ublue-os/image-template) which provided the initial structure, build just scripts and github CI workflows.
 
-Some of the default components for hardening and software were cherry-picked from [secureblue](https://secureblue.dev/).
+Some of the default modules for hardening and software were cherry-picked from [secureblue](https://secureblue.dev/).
