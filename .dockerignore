@@ -12,3 +12,5 @@
 **/__pycache__
 output
 _build*
+# Generated files, not build-phases/ which the pattern does not match
+build

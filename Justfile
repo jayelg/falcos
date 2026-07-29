@@ -183,7 +183,7 @@ _build-bib $target_image $tag $type $config: (_rootful_load_image target_image t
       --pull=newer \
       --net=host \
       --security-opt label=type:unconfined_t \
-      -v $(pwd)/${config}:/config.toml:ro \
+      -v "$(realpath "${config}")":/config.toml:ro \
       -v $BUILDTMP:/output \
       -v /var/lib/containers/storage:/var/lib/containers/storage \
       "${bib_image}" \
@@ -206,9 +206,23 @@ build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_bui
 [group('Build Virtual Machine Image')]
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Build an ISO virtual machine image
+# Wraps whatever image target_image names, but renders the kickstart from
+# the installer flavor, the same declaration CI renders from, so the
+# reference a local ISO installs is the one CI ships. Pass a flavor to
+# override it.
+
+# Build an ISO installer image
 [group('Build Virtual Machine Image')]
-build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "disk_config/iso.toml")
+build-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    args=()
+    if [[ -n "${flavor}" ]]; then
+        args+=(--flavor "${flavor}")
+    fi
+    config="$(./scripts/render-iso-config.sh "${args[@]}")"
+    just _build-bib "${target_image}" "${tag}" iso "${config}"
 
 # Rebuild a QCOW2 virtual machine image
 [group('Build Virtual Machine Image')]
@@ -218,12 +232,16 @@ rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_r
 [group('Build Virtual Machine Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Rebuild an ISO virtual machine image
-[group('Build Virtual Machine Image')]
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "disk_config/iso.toml")
+# Builds the installer flavor rather than the flavor list default, so the
+# payload and the kickstart reference agree.
 
-# Run a virtual machine with the specified image type and configuration
-_run-vm $target_image $tag $type $config:
+# Rebuild an ISO installer image
+[group('Build Virtual Machine Image')]
+rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor=`./scripts/flavors.sh installer`: (build target_image tag flavor)
+    just build-iso "${target_image}" "${tag}" "${flavor}"
+
+# Run a virtual machine with the specified image type
+_run-vm $target_image $tag $type:
     #!/usr/bin/bash
     set -eoux pipefail
 
@@ -266,15 +284,15 @@ _run-vm $target_image $tag $type $config:
 
 # Run a virtual machine from a QCOW2 image
 [group('Run Virtual Machine')]
-run-vm-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "qcow2" "disk_config/disk.toml")
+run-vm-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "qcow2")
 
 # Run a virtual machine from a RAW image
 [group('Run Virtual Machine')]
-run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "raw" "disk_config/disk.toml")
+run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "raw")
 
 # Run a virtual machine from an ISO
 [group('Run Virtual Machine')]
-run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso" "disk_config/iso.toml")
+run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso")
 
 # Run a virtual machine using systemd-vmspawn
 [group('Run Virtual Machine')]
@@ -294,8 +312,8 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
 
-# Runs shellcheck over every Bash script and validates components.list,
-# the same script the build workflow gates on
+# Runs shellcheck over every Bash script, validates components.list and
+# renders the installer config, the same script the build workflow gates on
 lint:
     ./scripts/lint.sh
 

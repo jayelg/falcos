@@ -8,14 +8,11 @@ on:
       - main
     paths:
       - 'disk_config/disk.toml'
-      - 'disk_config/iso.toml'
+      - 'disk_config/iso.template.toml'
+      - 'scripts/render-iso-config.sh'
       - '.github/workflows/build-disk.yml'
 
 env:
-  # Flavor the installer ISO ships and switches the installed system to
-  # (disk_config/iso.toml names the same one). Its image name is derived
-  # from the flavor list, so it cannot drift from what build.yml publishes.
-  FLAVOR: "laptop"
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
   DEFAULT_TAG: "latest"
   BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest"
@@ -48,11 +45,17 @@ jobs:
           USER_GID=$(id -g)
           # Concatenate the types with a hyphen
           DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
+          # The flavor a disk image carries is declared once, in
+          # scripts/flavors.sh, and the ISO kickstart below is rendered
+          # from that same declaration, so the installed system cannot
+          # track an image other than the one it was installed from.
+          # scripts/registry.sh owns the namespace and the lowercasing
+          # ghcr.io requires, scripts/flavors.sh owns the image name.
+          FLAVOR="$(./scripts/flavors.sh installer)"
           IMAGE_NAME="$(./scripts/flavors.sh image "$FLAVOR")"
+          IMAGE_REF="$(./scripts/registry.sh ref "$IMAGE_NAME"):${DEFAULT_TAG}"
           {
-            # Lowercase the image uri
-            echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}"
-            echo "IMAGE_NAME=${IMAGE_NAME,,}"
+            echo "IMAGE_REF=${IMAGE_REF}"
             echo "DISK_TYPE=${DISK_TYPE}"
             echo "USER_UID=${USER_UID}"
             echo "USER_GID=${USER_GID}"
@@ -63,13 +66,20 @@ jobs:
         with:
           remove-codeql: true
 
+      # bootc-image-builder has no flag for the image an anaconda-iso
+      # installs, so the reference is rendered into the config first. The
+      # script prints where it wrote it, so the path lives in one place.
+      - name: Render the installer config
+        if: matrix.disk-type == 'anaconda-iso'
+        run: echo "ISO_CONFIG=$(./scripts/render-iso-config.sh)" >> "${GITHUB_ENV}"
+
       - name: Build disk images
         id: build
         uses: osbuild/bootc-image-builder-action@30960621b85c9e76c653082f9ef4cab5a10210d5 # main
         with:
           builder-image: ${{ env.BIB_IMAGE }}
-          config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso.toml' || './disk_config/disk.toml' }}
-          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+          config-file: ${{ matrix.disk-type == 'anaconda-iso' && env.ISO_CONFIG || './disk_config/disk.toml' }}
+          image: ${{ env.IMAGE_REF }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}
           rootfs: btrfs

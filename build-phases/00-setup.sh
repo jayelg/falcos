@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pre-install workarounds. Flavor agnostic so the core layer cache is
-# shared between the desktop and laptop builds.
+# shared by every flavor build.
 
 set -ouex pipefail
 

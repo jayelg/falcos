@@ -13,6 +13,18 @@ skeleton=Containerfile.base
 # <prefix>-cache, one tag per flavor.
 prefix=falcos
 
+# The flavor a fresh installer lays down, and the one its kickstart makes
+# the installed system track. Declared here rather than inferred from the
+# list: the first entry is a build-order default (the local build, the PR
+# build) and carries no claim about which image belongs on a machine
+# nobody has inspected.
+#
+# laptop, not desktop, because the desktop flavor ships VFIO kargs that
+# bind devices to vfio-pci at boot. On unknown hardware that can hand the
+# GPU to a driver nothing is using, which is exactly the situation an
+# installer is in. Do not "fix" this to the default flavor.
+installer=laptop
+
 die() {
     echo "flavors: $*" >&2
     exit 1
@@ -26,6 +38,7 @@ All output is one item per line, in declaration order.
 
   list                every flavor
   default             the first flavor, which builds use when none is given
+  installer           the flavor a fresh installer ISO lays down
   check <flavor>      succeeds if <flavor> is declared, fails loudly if not
   siblings <flavor>   every flavor except <flavor>
   image [<flavor>]    published image name for a flavor (default: default)
@@ -70,6 +83,11 @@ case "${1:-}" in
         ;;
     default)
         printf '%s\n' "${flavors[0]}"
+        ;;
+    installer)
+        [ -n "${seen[$installer]:-}" ] \
+            || die "the installer flavor '${installer}' is not in ARG FLAVORS in ${skeleton} (have: ${flavors[*]})"
+        printf '%s\n' "$installer"
         ;;
     check)
         require_flavor "${2:-}"
