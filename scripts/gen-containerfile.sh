@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Generates Containerfile.generated (the file builds actually use) from the
-# committed Containerfile skeleton plus components.list. Runs automatically
-# before every build (`just build` dependency, CI build step); `just
-# generate` runs it standalone. Containerfile.generated is gitignored: the
-# committed Containerfile stays an honest skeleton with an empty component
-# section, so nothing generated is ever committed.
+# committed Containerfile skeleton plus components.list. scripts/build.sh
+# runs it before every build, locally and in CI, so no build can use a
+# stale one; `just generate` runs it standalone. Containerfile.generated
+# is gitignored: the committed Containerfile stays an honest skeleton with
+# an empty component section, so nothing generated is ever committed.
 #
 # Each list entry is a path relative to components/. It becomes one RUN
 # layer that calls lib/run-component.sh. Components under a [flavor]
@@ -125,13 +125,24 @@ if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
     exit 1
 fi
 
+# A parser directive is only a directive on the first line, so the
+# skeleton's is hoisted above the generated-file header rather than being
+# copied in place, where the header would push it down and BuildKit would
+# read it as an ordinary comment.
+directive=""
+case "$(head -1 "$skeleton")" in
+    '# syntax='*) directive="$(head -1 "$skeleton")" ;;
+esac
+
 section_file="$(mktemp)"
 printf '%s' "$section" > "$section_file"
 {
+    [ -z "$directive" ] || echo "$directive"
     echo '# GENERATED FILE — do not edit. Produced by scripts/gen-containerfile.sh'
     echo '# from the Containerfile skeleton and components.list.'
     echo
-    awk -v begin="$begin" -v end="$end" -v sec="$section_file" '
+    awk -v begin="$begin" -v end="$end" -v sec="$section_file" -v directive="$directive" '
+        NR == 1 && directive != "" && $0 == directive { next }
         $0 == begin {
             print
             print ""

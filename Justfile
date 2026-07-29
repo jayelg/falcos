@@ -21,7 +21,8 @@ fix:
     just --unstable --fmt -f Justfile
 
 # Generate Containerfile.generated from the Containerfile skeleton +
-# components.list. Runs automatically as a dependency of `build`.
+# components.list. Every build regenerates it first, so this is only for
+# inspecting what a build would use.
 [group('Utility')]
 generate:
     ./scripts/gen-containerfile.sh
@@ -57,32 +58,42 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using Podman, e.g. `just build falcos latest desktop stock`.
-# Depends on `generate` so the Containerfile always matches components.list.
-build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="cachyos": generate
+# Runs scripts/build.sh, the same invocation CI uses, so the build args,
+# cache refs and signing secret are identical to a CI build of the same
+# commit. An empty kernel leaves the choice to the Containerfile, which is
+# what CI does and what the kernel-freshness fallback rewrites. BuildKit
+# runs in a podman container, so a RUN layer is invalidated by the files
+# it mounts rather than by any change to the build context.
+
+# Build the image with BuildKit, e.g. `just build falcos latest desktop stock`
+build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildkit" target_image tag flavor kernel)
+
+# Fallback for a host where the BuildKit container can't run. Caches on
+# the whole ctx stage, so it rebuilds every layer after any change under
+# components/, lib/ or build-phases/.
+
+# Build the image with buildah instead of BuildKit
+[group('Utility')]
+build-buildah $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildah" target_image tag flavor kernel)
+
+[private]
+_build backend $target_image $tag $flavor $kernel:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Local buildah keys the RUN cache on the whole ctx stage, so any
-    # change to build-phases/, lib/, or components/ rebuilds every layer.
-    # Correct, just coarser than CI's BuildKit which scopes invalidation
-    # to the mounted files.
-
-    # Optional Secure Boot signing key; see `just generate-mok-key`.
-    SECRET_ARGS=()
-    if [[ -n "${MOK_KEY_PATH:-}" && -f "${MOK_KEY_PATH}" ]]; then
-        SECRET_ARGS+=("--secret" "id=mok_privkey,src=${MOK_KEY_PATH}")
+    args=(--backend "{{ backend }}" --flavor "${flavor}" --tag "${target_image}:${tag}")
+    if [[ -n "${kernel}" ]]; then
+        args+=(--kernel "${kernel}")
     fi
+    ./scripts/build.sh "${args[@]}"
 
-    podman build \
-        "${SECRET_ARGS[@]}" \
-        --build-arg "FLAVOR=${flavor}" \
-        --build-arg "KERNEL=${kernel}" \
-        --build-arg "IMAGE_VERSION=$(date -u +%Y%m%d)" \
-        --pull=newer \
-        --tag "${target_image}:${tag}" \
-        -f Containerfile.generated \
-        .
+# The volume holds the layer cache and every RUN --mount=type=cache, so
+# the next build starts cold.
+
+# Remove the BuildKit daemon container and its cache volume
+[group('Utility')]
+buildkit-reset:
+    ./scripts/build.sh --reset
 
 # Generate a one-time Secure Boot (MOK) module-signing key pair. Keep the
 # private key out of the repo; commit the public cert.

@@ -1,7 +1,18 @@
-# CI builds with BuildKit (docker/build-push-action); local `just build`
-# uses buildah with coarser caching (see Justfile). The component section
-# between the BEGIN/END COMPONENTS markers is generated from
-# components.list by scripts/gen-containerfile.sh (`just generate`).
+# syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
+# A parser directive, so it must stay the first line of the file and of
+# the generated one; the generator hoists it above its own header. It
+# pins the frontend that turns this file into a build graph, so CI (the
+# buildx builder the runner provisions) and a local build (the pinned
+# moby/buildkit container) compute the same cache keys no matter which
+# daemon each runs. Without it the two agree only by coincidence, and a
+# bump of either daemon shows up as an unexplained cache miss rather than
+# an error. buildah ignores the directive, which is one of the reasons
+# that backend shares no cache with CI.
+#
+# Every build goes through scripts/build.sh, which CI and `just build`
+# both call. The component section between the BEGIN/END COMPONENTS
+# markers is generated from components.list by
+# scripts/gen-containerfile.sh (`just generate` runs it standalone).
 FROM scratch AS ctx
 COPY build-phases/ /
 COPY lib/ /lib/
@@ -21,8 +32,6 @@ ARG FLAVORS="desktop,laptop"
 # The below ARG does not need to be updated for custom kernels defined in components.list
 # Kernel components contain their own Containerfile fragment that overrides this value
 ARG KERNEL=stock
-# CI passes the YYYYMMDD build date; local builds get it from `just build`
-ARG IMAGE_VERSION=dev
 
 RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
     --mount=type=cache,target=/var/cache \
@@ -36,12 +45,21 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
 # ---- BEGIN COMPONENTS (generated at build time from components.list; see scripts/gen-containerfile.sh) ----
 #
 # Intentionally empty in git. This committed file is the build skeleton:
-# at build time (`just build` locally, the Sync step in CI) one RUN layer
-# per components.list entry is spliced in here and the result is written
-# to Containerfile.generated, which is what actually builds. To change
-# what the image contains, edit components.list, not this file.
+# at build time (scripts/build.sh, locally and in CI) one RUN layer per
+# components.list entry is spliced in here and the result is written to
+# Containerfile.generated, which is what actually builds. To change what
+# the image contains, edit components.list, not this file.
 #
 # ---- END COMPONENTS ----
+
+# CI passes the YYYYMMDD build date; local builds get it from `just build`.
+# Declared here, immediately above its only consumer, and not with the
+# other args: an ARG in scope is part of the cache key of every RUN below
+# it, whether or not that RUN mentions it. Declared at the top, a value
+# that changes daily by construction invalidated every component layer
+# once a day, which is most of what made cross-day builds rebuild from
+# scratch. Keep any new arg as low in the file as its first use allows.
+ARG IMAGE_VERSION=dev
 
 RUN --mount=type=bind,from=ctx,source=/50-flavor.sh,target=/ctx/50-flavor.sh \
     --mount=type=bind,from=ctx,source=/lib/brand-helpers.sh,target=/ctx/lib/brand-helpers.sh \

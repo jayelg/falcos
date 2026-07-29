@@ -150,12 +150,6 @@ jobs:
             echo "PUBLISH=false" >> "${GITHUB_ENV}"
           fi
 
-      # The committed Containerfile is a skeleton; this writes the real
-      # build file (one RUN layer per components.list entry) to
-      # Containerfile.generated. Editing the list alone changes the image.
-      - name: Generate Containerfile from components.list
-        run: ./scripts/gen-containerfile.sh
-
       - name: Maximize build space
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
 
@@ -227,44 +221,13 @@ jobs:
         env:
           MOK_PRIVATE_KEY: ${{ secrets.MOK_PRIVATE_KEY }}
 
-      # BuildKit content-addresses each RUN --mount by the mounted path,
-      # which the Containerfile's narrow per-group mounts rely on for
-      # caching. Buildah keys on the whole ctx stage and never cache-hits.
+      # The runner's BuildKit builder. BuildKit content-addresses each RUN
+      # --mount by the mounted path, which the Containerfile's narrow
+      # per-group mounts rely on for caching. Local builds run their own
+      # buildkitd in a podman container, so both resolve the same cache
+      # keys and can share the registry cache written below.
       - name: Setup Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      # Registry layer cache, gated by event so caching doesn't mask
-      # upstream drift in unpinned packages:
-      #   schedule: write-only, exists to catch drift and refresh the cache
-      #   push/workflow_dispatch on main: read and write
-      #   pull_request: read-only, anonymous (public package)
-      # Per-flavor cache tags since a buildx cache export is one manifest
-      # per ref and the matrix jobs would clobber a shared tag. Each flavor
-      # reads its own tag first, then every sibling tag: those still serve
-      # the flavor-agnostic layers, which are most of the build.
-      - name: Determine build cache args
-        id: cache-args
-        env:
-          FLAVOR: ${{ matrix.flavor }}
-        run: |
-          cache_repo="${IMAGE_REGISTRY}/$(./scripts/flavors.sh cache-image)"
-          {
-            echo 'cache-from<<EOF'
-            if [ "${{ github.event_name }}" != "schedule" ]; then
-              echo "type=registry,ref=${cache_repo}:${FLAVOR}"
-              while IFS= read -r sibling; do
-                echo "type=registry,ref=${cache_repo}:${sibling}"
-              done < <(./scripts/flavors.sh siblings "$FLAVOR")
-            fi
-            echo 'EOF'
-            echo 'cache-to<<EOF'
-            # stock-kernel validation builds must not clobber the cache
-            # the daily cachyos builds rely on
-            if [ "${{ github.event.inputs.kernel }}" != "stock" ] && { [ "${{ github.event_name }}" = "schedule" ] || { [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; }; }; then
-              echo "type=registry,ref=${cache_repo}:${FLAVOR},mode=max"
-            fi
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
 
       # Runner-user login, used by the buildx cache-to registry writes
       - name: Login to GitHub Container Registry
@@ -275,28 +238,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # provenance: false keeps the output a single image manifest rather
-      # than an attestation index, the shape bootc and cosign expect.
+      # scripts/build.sh owns the Containerfile generation, the build args,
+      # the cache refs and the secret wiring; `just build` runs the same
+      # script, so a local build of this commit and this one cannot differ
+      # in anything but the backend that reaches BuildKit. What stays here
+      # is CI policy: which events may read and write the registry cache,
+      # and which produce a publishable artifact.
+      #
+      # Registry layer cache, gated by event so caching doesn't mask
+      # upstream drift in unpinned packages:
+      #   schedule: write-only, exists to catch drift and refresh the cache
+      #   push/workflow_dispatch on main: read and write
+      #   pull_request: read-only, anonymous (public package)
+      #
       # Publishing builds export an OCI archive rather than pushing; the
       # chunked repack below is what gets published.
-      - name: Build Image
-        id: build_image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          file: ./Containerfile.generated
-          outputs: ${{ env.PUBLISH == 'true' && format('type=oci,dest={0}/raw-oci.tar', runner.temp) || '' }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          build-args: |
-            FLAVOR=${{ matrix.flavor }}
-            IMAGE_VERSION=${{ steps.date.outputs.version }}
-            ${{ github.event.inputs.kernel && format('KERNEL={0}', github.event.inputs.kernel) || '' }}
-          provenance: false
-          cache-from: ${{ steps.cache-args.outputs.cache-from }}
-          cache-to: ${{ steps.cache-args.outputs.cache-to }}
-          secret-files: |
-            ${{ env.PUBLISH == 'true' && format('mok_privkey={0}/mok_privkey.pem', runner.temp) || '' }}
+      - name: Build image
+        env:
+          FLAVOR: ${{ matrix.flavor }}
+          KERNEL_INPUT: ${{ github.event.inputs.kernel }}
+          EVENT: ${{ github.event_name }}
+          ON_DEFAULT_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+          IMAGE_VERSION: ${{ steps.date.outputs.version }}
+          TAGS: ${{ steps.metadata.outputs.tags }}
+          LABELS: ${{ steps.metadata.outputs.labels }}
+          MOK_KEY_PATH: ${{ env.PUBLISH == 'true' && format('{0}/mok_privkey.pem', runner.temp) || '' }}
+        run: |
+          args=(--backend buildx --flavor "$FLAVOR")
+          if [ -n "$KERNEL_INPUT" ]; then
+            args+=(--kernel "$KERNEL_INPUT")
+          fi
+          if [ "$EVENT" = "schedule" ]; then
+            args+=(--no-cache-from)
+          fi
+          # stock-kernel validation builds must not clobber the cache the
+          # daily cachyos builds rely on
+          if [ "$KERNEL_INPUT" != "stock" ] \
+             && { [ "$EVENT" = "schedule" ] \
+                  || { [ "$EVENT" != "pull_request" ] && [ "$ON_DEFAULT_BRANCH" = "true" ]; }; }; then
+            args+=(--cache-to)
+          fi
+          if [ "$PUBLISH" = "true" ]; then
+            args+=(--oci-output "${RUNNER_TEMP}/raw-oci.tar")
+          fi
+          ./scripts/build.sh "${args[@]}"
 
       - name: Setup Syft
         id: setup-syft
@@ -336,11 +321,17 @@ jobs:
           #
           # The 'rpm' cataloger tag (resolves to just rpm-db-cataloger in
           # the default dir set) is scope, not an OOM mitigation: RPMs are
-          # the supply-chain inventory this SBOM exists to attest, reading
-          # only the RPM DB keeps the scan to seconds instead of walking the
-          # multi-GB rootfs, and the SPDX output stays small enough to
-          # attest (see Rekor note below). --select-catalogers takes tags
-          # here, not cataloger names (a bare name errors out).
+          # the supply-chain inventory this SBOM exists to attest, and
+          # reading only the RPM DB keeps package discovery to the DB
+          # rather than fingerprinting a multi-GB rootfs.
+          # --select-catalogers takes tags here, not cataloger names (a
+          # bare name errors out).
+          #
+          # This document is the file-level one: cataloger selection does
+          # not stop syft capturing the files those packages own, so it
+          # carries an entry per owned path (220k of them, 148MB) on top of
+          # the ~2.2k packages. That is why it is uploaded as an artifact
+          # and reduced before being attested, in the steps below.
           mnt="$(sudo podman image mount "localhost/${IMAGE_NAME}:raw")"
           sudo "$SYFT_CMD" scan "dir:${mnt}" \
             --source-name "${IMAGE_NAME}" \
@@ -349,6 +340,64 @@ jobs:
           sudo podman image umount "localhost/${IMAGE_NAME}:raw"
           sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/sbom.spdx.json"
           du -sh "${RUNNER_TEMP}/sbom.spdx.json"
+
+      # cosign base64-encodes the predicate into the attestation layer and
+      # refuses a layer over 128MiB, so the file-level SBOM (148MB, 197MB
+      # encoded) has never been verifiable: `cosign verify-attestation`
+      # fails on it for us and for anyone consuming these images. Raising
+      # COSIGN_MAX_ATTACHMENT_SIZE is not a fix, it is an environment
+      # variable every consumer would have to set too.
+      #
+      # So attest the package inventory, which is what the SBOM is for and
+      # is a few MB, and keep the file-level document as the artifact
+      # uploaded below. syft can drop the file data at source
+      # (relationships.package-file-ownership=false) but that would mean a
+      # second full scan to still produce the artifact.
+      #
+      # All three deletions are needed: leaving hasFiles or a relationship
+      # pointing at a dropped file entry makes the document dangle, which
+      # SPDX validators reject. One pass over the large document, then the
+      # checks read the small one.
+      - name: Reduce SBOM to the package inventory
+        if: env.PUBLISH == 'true'
+        run: |
+          jq -c '
+            del(.files)
+            | .packages |= map(del(.hasFiles))
+            | .relationships |= map(select(
+                ((.spdxElementId      | startswith("SPDXRef-File-")) or
+                 (.relatedSpdxElement | startswith("SPDXRef-File-"))) | not))
+          ' "${RUNNER_TEMP}/sbom.spdx.json" > "${RUNNER_TEMP}/sbom.packages.spdx.json"
+
+          # A syft output change that renamed file SPDXIDs would silently
+          # stop the filter matching, so assert the result resolves.
+          if ! jq -e '
+            (([.SPDXID] + [.packages[].SPDXID]) | map({key:., value:true}) | from_entries) as $ids
+            | [.relationships[] | select(($ids[.spdxElementId] // false | not)
+                                      or ($ids[.relatedSpdxElement] // false | not))] | length == 0
+          ' "${RUNNER_TEMP}/sbom.packages.spdx.json" > /dev/null; then
+            echo "::error::filtered SBOM references SPDX ids it does not define"
+            exit 1
+          fi
+
+          # Fail here rather than in cosign at the end of the build
+          bytes="$(wc -c < "${RUNNER_TEMP}/sbom.packages.spdx.json")"
+          if [ "$bytes" -gt 94371840 ]; then
+            echo "::error::package SBOM is ${bytes} bytes; over ~90MB it exceeds cosign's attachment limit once encoded"
+            exit 1
+          fi
+          echo "packages: $(jq '.packages | length' "${RUNNER_TEMP}/sbom.packages.spdx.json"), ${bytes} bytes"
+
+      # The file-level document answers "which package owns this path",
+      # which is worth keeping even though it cannot be attested. Uploaded
+      # before the push so it exists for triage even if a later step fails.
+      - name: Upload file-level SBOM
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ env.IMAGE_NAME }}
+          path: ${{ runner.temp }}/sbom.spdx.json
+          retention-days: 30
 
       # Repack into content-stable chunks (one layer per package group) so
       # bootc upgrade only downloads what changed. rpm-ostree runs from the
@@ -435,7 +484,7 @@ jobs:
           # has been hit on slow ghcr days
           cosign attest --key env://COSIGN_PRIVATE_KEY \
             --tlog-upload=false --timeout=10m \
-            --type spdxjson --predicate "${RUNNER_TEMP}/sbom.spdx.json" \
+            --type spdxjson --predicate "${RUNNER_TEMP}/sbom.packages.spdx.json" \
             "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
         env:
           COSIGN_EXPERIMENTAL: false
