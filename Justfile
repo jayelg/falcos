@@ -206,10 +206,9 @@ build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_bui
 [group('Build Virtual Machine Image')]
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Wraps whatever image target_image names, but renders the kickstart from
-# the installer flavor, the same declaration CI renders from, so the
-# reference a local ISO installs is the one CI ships. Pass a flavor to
-# override it.
+# Wraps whatever image target_image names, but renders the kickstart the
+# same way CI does, so the reference a local ISO installs is the one CI
+# ships. Pass a flavor to override it.
 
 # Build an ISO installer image
 [group('Build Virtual Machine Image')]
@@ -232,12 +231,13 @@ rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_r
 [group('Build Virtual Machine Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Builds the installer flavor rather than the flavor list default, so the
-# payload and the kickstart reference agree.
+# Builds the ungated image rather than the default flavor, so the payload
+# and the kickstart reference agree: an installer lays down the set that
+# gates on no hardware.
 
 # Rebuild an ISO installer image
 [group('Build Virtual Machine Image')]
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor=`./scripts/flavors.sh installer`: (build target_image tag flavor)
+rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor="none": (build target_image tag flavor)
     just build-iso "${target_image}" "${tag}" "${flavor}"
 
 # Run a virtual machine with the specified image type

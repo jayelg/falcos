@@ -45,14 +45,12 @@ jobs:
           USER_GID=$(id -g)
           # Concatenate the types with a hyphen
           DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
-          # The flavor a disk image carries is declared once, in
-          # scripts/flavors.sh, and the ISO kickstart below is rendered
-          # from that same declaration, so the installed system cannot
+          # Disk images carry the ungated build, by the same rule the ISO
+          # kickstart is rendered from, so the installed system cannot
           # track an image other than the one it was installed from.
           # scripts/registry.sh owns the namespace and the lowercasing
           # ghcr.io requires, scripts/flavors.sh owns the image name.
-          FLAVOR="$(./scripts/flavors.sh installer)"
-          IMAGE_NAME="$(./scripts/flavors.sh image "$FLAVOR")"
+          IMAGE_NAME="$(./scripts/flavors.sh image none)"
           IMAGE_REF="$(./scripts/registry.sh ref "$IMAGE_NAME"):${DEFAULT_TAG}"
           {
             echo "IMAGE_REF=${IMAGE_REF}"

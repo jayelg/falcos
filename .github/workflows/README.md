@@ -4,7 +4,7 @@ The GitHub Actions pipelines.
 
 ### [Build Container Image](build.yml)
 
-Builds both flavor images (falcos-desktop and falcos-laptop), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `modules.kdl`, for build testing, and do not push.
+Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `modules.kdl`, for build testing, and do not push.
 
 Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a generator dry run over `modules.kdl`, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
@@ -19,6 +19,8 @@ The attested document is the package inventory. The full file-level SBOM, which 
 ### [Build Disk Images](build-disk.yml)
 
 Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Which flavor it builds, and which image the ISO switches the installed system to, both come from the installer flavor declared in [Flavors](../../scripts/flavors.sh); the kickstart reference is rendered from it rather than written down.
+
+> **A new target's first publish creates a GHCR package, and GitHub makes new packages private.** CI will not notice, because `GITHUB_TOKEN` carries `packages: read` for the repository's own packages, so the ISO build keeps succeeding while the reference it bakes in is unpullable by anyone else. Flip the package to public after its first push.
 
 ### [Kernel Freshness](kernel-freshness.yml)
 

@@ -25,11 +25,13 @@ set -ouex pipefail
 MODDIR="${1:?usage: run-module.sh <module dir>}"
 export MODDIR
 
+# An empty FLAVOR is the ungated build, not a missing value: a gated
+# module skips there, exactly as it does on a flavor it does not target.
 if [ -n "${FLAVOR_GATE:-}" ]; then
     case ",${FLAVOR_GATE}," in
-        *",${FLAVOR:?},"*) ;;
+        *",${FLAVOR:-},"*) ;;
         *)
-            echo "Skipping $(basename "$MODDIR"): not built for flavor '${FLAVOR}'"
+            echo "Skipping $(basename "$MODDIR"): not built for '${FLAVOR:-the ungated build}'"
             exit 0
             ;;
     esac

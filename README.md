@@ -124,11 +124,15 @@ Clone this repo to your own github account
 sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
 ```
 
+Or `falcos` unsuffixed for the ungated image, which carries no hardware-specific kargs.
+
 ### Fresh install
 
-The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches the installed system to track it, ie. `ghcr.io/[your username]/falcos-laptop:latest`.
+The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the ungated `falcos` image and switches the installed system to track it, ie. `ghcr.io/[your username]/falcos:latest`.
 
-Move an installed system to another flavor with a `bootc switch`:
+It lays down the ungated image by rule, not by a configured value. Kargs under `/usr/lib/bootc/kargs.d/` are static and cannot be made conditional on hardware, so anything a flavor gates is a claim about a machine the installer has not seen: the desktop flavor's VFIO kargs would bind devices to `vfio-pci` at boot on unknown hardware.
+
+Once installed and booted, move to the flavor that matches the machine:
 
 ```bash
 sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
@@ -136,7 +140,7 @@ sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
 
 Images are rechunked, so that downloads the difference (kargs, device tweaks, a DKMS module) rather than a second full image.
 
-Which flavor the installer lays down comes from one declaration in `scripts/flavors.sh`, and the namespace from your `origin` remote, so a fork's ISO installs the fork's own image with no edit. `just build-iso` renders the same reference locally.
+The namespace comes from your `origin` remote, so a fork's ISO installs the fork's own image with no edit. `just build-iso` renders the same reference locally.
 
 ### Local builds
 
