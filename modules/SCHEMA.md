@@ -245,7 +245,9 @@ sink "flatpaks" file="flatpaks.list" path="/usr/share/falcos/default-flatpaks"
 
 Contributions are appended in module list order. This is what removes the
 hardcoded goojust and flatpak paths from the runner: any module can
-define a new sink, and the runner learns about it from resolved env.
+define a new sink, and the runner learns about it from resolved env. Only
+the pairs a module actually contributes reach its layer, so a module that
+feeds no sink carries no sink env at all.
 
 Sink names and sink filenames must both be unique across enabled modules.
 A module shipping a file that matches no declared sink is an error — it
@@ -343,17 +345,6 @@ generator fails rather than expanding it to an empty string.
 today, and unused schema surface cannot be verified. They are the obvious
 next additions when one does.
 
-### Overlay overrides
-
-```kdl
-overrides "core/goojust"
-```
-
-Declares that this module's `files/` overlay intentionally replaces a
-path an earlier module shipped. There are zero collisions today; the node
-exists so the planned overlay collision check has an escape hatch that
-keeps deliberate mutation possible but visible.
-
 ### Raw fragments
 
 A module needing something the field sets cannot express — an extra
@@ -412,7 +403,7 @@ Nothing inside the image parses KDL.
 | --- | --- |
 | `FLAVOR_GATE=<flavor>` | the entry is inside a `flavor` block |
 | `OPT_<NAME>=<value>` | one per declared option, always, defaults included |
-| `MODULE_SINKS="<file>=<path> ..."` | any enabled module declares a sink |
+| `MODULE_SINKS="<file>=<path> ..."` | this module ships a file some sink aggregates |
 | `<NAME>=${<NAME>}` | one per `arg` |
 
 Plus `MODDIR` as the runner's argument, and one secret mount per
@@ -487,7 +478,11 @@ here.
 - **Additive fragments.** `Containerfile.inc` gains a declared position
   and stops replacing the generated block, which is what lets the
   restriction on `secret` and `arg` lift.
-- **The overlay collision check** that gives `overrides` its purpose.
+- **The overlay collision check**, and with it an `overrides` node
+  declaring that a module's `files/` overlay intentionally replaces a
+  path an earlier module shipped. There are zero collisions today, so
+  both arrive together: an escape hatch with nothing to escape, and no
+  check to escape from, would be surface nothing could verify.
 - **`asset` blocks replacing `versions.sh`**: datasource, version,
   sha256, URL template and verify mode, one block per asset. Pins must
   stay Renovate-readable, so an asset's version has to be a flat
