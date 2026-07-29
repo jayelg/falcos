@@ -40,6 +40,20 @@ jobs:
           set -euo pipefail
           api="users/${OWNER}/packages/container"
 
+          # Every package this prunes is derived from the flavor list, so
+          # one can legitimately not exist yet: a flavor added today has
+          # no package until its first publish, and a fresh fork has
+          # neither. Under set -e that 404 would abort the whole prune, so
+          # a listing failure skips one package instead. Logged as a
+          # warning rather than swallowed, so a genuine API failure does
+          # not read as an absent package (gh prints the cause above it).
+          list_versions() { # pkg -> versions json on stdout
+            if ! gh api "${api}/${1}/versions?per_page=100" --paginate; then
+              echo "::warning::skipping ${1}: could not list its versions" >&2
+              return 1
+            fi
+          }
+
           delete_version() { # pkg id note
             if [ "${DRY_RUN}" = "true" ]; then
               echo "dry run: would delete ${1} version ${2} (${3})"
@@ -56,7 +70,8 @@ jobs:
           mapfile -t packages < <(./scripts/flavors.sh images)
           for pkg in "${packages[@]}"; do
             echo "== ${pkg}"
-            deletions="$(gh api "${api}/${pkg}/versions?per_page=100" --paginate | jq -s 'add' | jq -r --argjson keep "${KEEP}" '
+            versions="$(list_versions "${pkg}")" || continue
+            deletions="$(printf '%s' "${versions}" | jq -s 'add' | jq -r --argjson keep "${KEEP}" '
               def is_sig: test("^sha256-[0-9a-f]{64}\\.(sig|att)$");
               map({id, name, created_at, tags: .metadata.container.tags})
               | map(. + {kind: (if (.tags | length) == 0 then "untagged"
@@ -85,11 +100,13 @@ jobs:
           pkg="$(./scripts/flavors.sh cache-image)"
           live="$(./scripts/flavors.sh list | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "== ${pkg}"
-          deletions="$(gh api "${api}/${pkg}/versions?per_page=100" --paginate | jq -s 'add' | jq -r --argjson live "${live}" '
-            map(select((.metadata.container.tags | map(select(. as $t | $live | index($t))) | length) == 0))
-            | .[] | [.id, (.metadata.container.tags | join(","))] | @tsv')"
-          [ -n "${deletions}" ] || echo "nothing to delete"
-          while IFS=$'\t' read -r id tags; do
-            [ -n "${id}" ] || continue
-            delete_version "${pkg}" "${id}" "stale cache${tags:+, tags: ${tags}}"
-          done <<<"${deletions}"
+          if versions="$(list_versions "${pkg}")"; then
+            deletions="$(printf '%s' "${versions}" | jq -s 'add' | jq -r --argjson live "${live}" '
+              map(select((.metadata.container.tags | map(select(. as $t | $live | index($t))) | length) == 0))
+              | .[] | [.id, (.metadata.container.tags | join(","))] | @tsv')"
+            [ -n "${deletions}" ] || echo "nothing to delete"
+            while IFS=$'\t' read -r id tags; do
+              [ -n "${id}" ] || continue
+              delete_version "${pkg}" "${id}" "stale cache${tags:+, tags: ${tags}}"
+            done <<<"${deletions}"
+          fi
