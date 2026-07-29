@@ -76,6 +76,8 @@ Define the base image to use with:
 Define what flavors to build with:
 `ARG FLAVORS=""` eg. `ARG FLAVORS="desktop,laptop"`
 
+This is the only place flavors are declared. `scripts/flavors.sh` is the only thing that reads it, and everything downstream asks that script: the build matrix, the published image names (`falcos-<flavor>`), the per-flavor build cache tags, the registry cleanup and the local `just build` default. Adding a flavor needs no other edit.
+
 #### [Components Directory](components)
 
 To add any new app, customization or feature you can make a copy of the  `components/_template/component-name` directory and rename it to a descriptive component name to be used in the `components.list` file. `components/_template/readme.md` explains how to use the component template.
@@ -110,7 +112,7 @@ sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
 
 ### Fresh install
 
-The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches itself to track your repo ie. `ghcr.io/[your username]/falcos-desktop:latest`.
+The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches itself to track your repo ie. `ghcr.io/[your username]/falcos-laptop:latest`.
 
 ### Local builds
 
@@ -118,7 +120,7 @@ The [Build disk images](.github/workflows/build-disk.yml) workflow produces an A
 just build              # build the container image (first flavor in ARG FLAVORS by default)
 just build-qcow2        # convert it to a bootable qcow2 via bootc-image-builder
 just run-vm-qcow2       # boot it in a browser-accessible VM
-just lint               # shellcheck, same file set as CI
+just lint               # shellcheck every Bash script and validate components.list, the same script CI gates on
 ```
 
 ## Secure Boot

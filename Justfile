@@ -59,7 +59,7 @@ sudoif command *args:
 
 # Build the image using Podman, e.g. `just build falcos latest desktop stock`.
 # Depends on `generate` so the Containerfile always matches components.list.
-build $target_image=image_name $tag=default_tag $flavor=`grep -oP '^ARG FLAVORS="\K[^,"]+' Containerfile.base | head -1` $kernel="cachyos": generate
+build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="cachyos": generate
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -283,25 +283,10 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
 
-# Runs shellcheck on all Bash scripts, same file set as the Lint workflow
+# Runs shellcheck over every Bash script and validates components.list,
+# the same script the build workflow gates on
 lint:
-    #!/usr/bin/env bash
-    set -eou pipefail
-    # Check if shellcheck is installed
-    if ! command -v shellcheck &> /dev/null; then
-        echo "shellcheck could not be found. Please install it."
-        exit 1
-    fi
-    # -s bash because the component scripts and versions files are sourced
-    # fragments without shebangs
-    mapfile -t scripts < <(
-        find build-phases scripts lib -name '*.sh' -type f
-        find components -path '*/files/*' -type f \
-            \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
-    )
-    shellcheck -s bash "${scripts[@]}"
-    # Validate components.list resolves (bad names, missing dirs, markers)
-    ./scripts/gen-containerfile.sh >/dev/null
+    ./scripts/lint.sh
 
 # Runs shfmt on all Bash scripts
 format:

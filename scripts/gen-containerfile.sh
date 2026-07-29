@@ -25,26 +25,15 @@ list=components.list
 skeleton=Containerfile.base
 out=Containerfile.generated
 
-# ---- read valid flavor names from Containerfile ARG FLAVORS -------------
+# ---- read valid flavor names --------------------------------------------
+# scripts/flavors.sh is the only thing that parses ARG FLAVORS; it validates
+# the list and fails on a malformed one, so anything it prints is usable.
+flavors_out="$(./scripts/flavors.sh list)"
+first_flavor="$(./scripts/flavors.sh default)"
 declare -A valid_flavors=()
-flavors_raw="$(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' "$skeleton")"
-if [ -z "$flavors_raw" ]; then
-    echo "gen-containerfile: ARG FLAVORS not found in ${skeleton}" >&2
-    exit 1
-fi
-IFS=',' read -ra flavor_list <<< "$flavors_raw"
-declare first_flavor=""
-for name in "${flavor_list[@]}"; do
-    name="${name## }"   # strip leading space
-    name="${name%% }"   # strip trailing space
-    [ -n "$name" ] && valid_flavors["$name"]=1
-    [ -z "$first_flavor" ] && [ -n "$name" ] && first_flavor="$name"
-done
-
-if [ "${#valid_flavors[@]}" -eq 0 ]; then
-    echo "gen-containerfile: no flavors found in ARG FLAVORS in ${skeleton}" >&2
-    exit 1
-fi
+while IFS= read -r name; do
+    valid_flavors["$name"]=1
+done <<< "$flavors_out"
 
 # ---- emit one component block -------------------------------------------
 # <name> <variant> <flavor> — flavor is "" for universal

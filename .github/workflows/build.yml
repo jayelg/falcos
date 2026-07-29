@@ -43,23 +43,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # -s bash because the component scripts and versions files are sourced
-      # fragments without shebangs. Extensionless runtime scripts (libexec,
-      # systemd generators) are included explicitly. Repo-wide excludes
-      # live in .shellcheckrc.
-      - name: Run shellcheck
-        run: |
-          mapfile -t scripts < <(
-            find build-phases scripts lib -name '*.sh' -type f
-            find components -path '*/files/*' -type f \
-              \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
-          )
-          shellcheck -s bash "${scripts[@]}"
-
-      # Catches list entries that don't resolve to a component directory
-      # and skeleton marker damage, without needing a full image build.
-      - name: Validate components.list against the component tree
-        run: ./scripts/gen-containerfile.sh
+      # shellcheck over every Bash script in the repo, then a generator dry
+      # run that validates components.list without a full image build. The
+      # script owns the file set, so `just lint` checks exactly what this
+      # gate checks. shellcheck is preinstalled on the runner image.
+      - name: Run lint
+        run: ./scripts/lint.sh
 
   actionlint:
     runs-on: ubuntu-24.04
@@ -106,16 +95,17 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          IFS=',' read -ra all < <(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' Containerfile.base)
-          # Pull requests build the first flavor only, for half the runner
+          # Pull requests build the default flavor only, for half the runner
           # time. It is the better single choice because its flavor-gated
           # components include a DKMS build, so it covers more build surface
           # than the others.
+          selection=list
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            all=("${all[0]}")
+            selection=default
           fi
-          printf -v joined '","%s' "${all[@]}"
-          printf 'flavors=["%s"]\n' "${joined:3}" >> "$GITHUB_OUTPUT"
+          flavors="$(./scripts/flavors.sh "$selection" \
+            | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          echo "flavors=${flavors}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
@@ -138,12 +128,19 @@ jobs:
       packages: write
 
     steps:
+      # These stage versions are pinned by https://github.com/renovatebot/renovate
+      # Checked out first because the steps below read scripts/flavors.sh.
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
       # Separate image per flavor so tag history is independent and
       # bootc switch targets are unambiguous
       - name: Prepare environment
+        env:
+          FLAVOR: ${{ matrix.flavor }}
         run: |
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
-          echo "IMAGE_NAME=falcos-${{ matrix.flavor }}" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=$(./scripts/flavors.sh image "$FLAVOR")" >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
              && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] \
@@ -152,10 +149,6 @@ jobs:
           else
             echo "PUBLISH=false" >> "${GITHUB_ENV}"
           fi
-
-      # These stage versions are pinned by https://github.com/renovatebot/renovate
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # The committed Containerfile is a skeleton; this writes the real
       # build file (one RUN layer per components.list entry) to
@@ -247,24 +240,28 @@ jobs:
       #   pull_request: read-only, anonymous (public package)
       # Per-flavor cache tags since a buildx cache export is one manifest
       # per ref and the matrix jobs would clobber a shared tag. Each flavor
-      # reads both tags, the sibling still serves the flavor-agnostic prefix.
+      # reads its own tag first, then every sibling tag: those still serve
+      # the flavor-agnostic layers, which are most of the build.
       - name: Determine build cache args
         id: cache-args
+        env:
+          FLAVOR: ${{ matrix.flavor }}
         run: |
-          cache_repo="${{ env.IMAGE_REGISTRY }}/falcos-cache"
-          sibling="$([ "${{ matrix.flavor }}" = "laptop" ] && echo desktop || echo laptop)"
+          cache_repo="${IMAGE_REGISTRY}/$(./scripts/flavors.sh cache-image)"
           {
             echo 'cache-from<<EOF'
             if [ "${{ github.event_name }}" != "schedule" ]; then
-              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }}"
-              echo "type=registry,ref=${cache_repo}:${sibling}"
+              echo "type=registry,ref=${cache_repo}:${FLAVOR}"
+              while IFS= read -r sibling; do
+                echo "type=registry,ref=${cache_repo}:${sibling}"
+              done < <(./scripts/flavors.sh siblings "$FLAVOR")
             fi
             echo 'EOF'
             echo 'cache-to<<EOF'
             # stock-kernel validation builds must not clobber the cache
             # the daily cachyos builds rely on
             if [ "${{ github.event.inputs.kernel }}" != "stock" ] && { [ "${{ github.event_name }}" = "schedule" ] || { [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; }; }; then
-              echo "type=registry,ref=${cache_repo}:${{ matrix.flavor }},mode=max"
+              echo "type=registry,ref=${cache_repo}:${FLAVOR},mode=max"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
