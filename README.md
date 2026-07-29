@@ -19,9 +19,10 @@ Anything that you want to include in an image can be packaged into a module. A m
 
 Modules are then explicity defined for inclusion in the image through the `modules.kdl` file.
 
-### The Containerfile is generated at build time
-(`Containerfile.generated`).
-During the build `scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer as they are ordered in the `modules.kdl` file and outputs a `Containerfile.generated` file for use in the build.
+### The build Containerfile is generated
+`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer in `modules.kdl` order, writing `Containerfile.generated`, which is the file builds use.
+
+`Containerfile.generated` is committed, so adding a module or reordering the list shows up as the expanded build in the same diff. Every build regenerates it first and lint fails if the committed copy is stale, so it cannot drift from `modules.kdl`.
 
 ### Image Flavors
 Flavours refers to image variants that that the build script/Build CI workflow will generate. 

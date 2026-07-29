@@ -5,8 +5,10 @@ output
 _build-*/**
 .claude/
 __pycache__/
-Containerfile.generated
-# Rendered configs and other generated files no build reads twice
+# Generated files nothing reviews: rendered disk configs, local image
+# exports, temporary build state. Containerfile.generated is the exception
+# and is tracked, because the expanded build is what a change to a module
+# has to be reviewed as.
 build/
 # Compiled host tooling
 tools/*/target/
