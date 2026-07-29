@@ -1,3 +1,13 @@
 description "Opinionated shell UX: eza, bat, ripgrep, fd, zoxide, starship, flyline, aichat and Nerd Fonts"
 
 supports "fedora"
+
+// Which Nerd Font families to install. A list, because the set is the
+// whole point: one pin covers every family in the release, so adding or
+// dropping one costs nothing but disk.
+option "fonts" type="list" {
+    description "Nerd Font families to install"
+    default "0xProto" "CascadiaMono" "ComicShannsMono" "DroidSansMono" \
+            "FiraCode" "Go-Mono" "IBMPlexMono" "JetBrainsMono" \
+            "SourceCodePro" "Ubuntu"
+}

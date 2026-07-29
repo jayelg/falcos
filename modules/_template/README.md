@@ -29,16 +29,16 @@ just keeps it sorted to the top of the modules directory.
 
 ## Anatomy — what each file in `module-name/` does (all optional)
 
-Run order within a module: `repo` → `versions.sh` → `variants/<v>.sh` →
-`module.sh` → `selinux/*.te` → `files/` overlay → `justfile.inc`.
-`finalize.sh` runs much later, in the finalize layer.
+Run order within a module: `repo` → `versions.sh` → `module.sh` →
+`selinux/*.te` → `files/` overlay → `justfile.inc`. `finalize.sh` runs
+much later, in the finalize layer.
 
 | File | Purpose |
 |---|---|
-| `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set and pins in scope. Omit for a pure-file module. |
+| `module.kdl` | **Required.** The manifest: description, base families, capabilities, contract files and options. See [SCHEMA.md](../SCHEMA.md). |
+| `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set, pins in scope, and `$OPT_*` for every option declared in `module.kdl`. Omit for a pure-file module. |
 | `versions.sh` | Renovate-tracked pins + SHA256s. `# renovate:` comment must sit directly above its version line. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
-| `variants/<v>.sh` | Pin/flag overrides, selected as `<name>@<v>` in modules.kdl. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |

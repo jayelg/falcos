@@ -36,7 +36,9 @@ rm -rf /tmp/flyline
 # then verified against the manifest, so one pin covers all of them
 fetch_verified "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/SHA-256.txt" \
     "$NERD_FONTS_SHA256" /tmp/nerdfonts-sha.txt
-NERD_FONTS=(0xProto CascadiaMono ComicShannsMono DroidSansMono FiraCode Go-Mono IBMPlexMono JetBrainsMono SourceCodePro Ubuntu)
+# Which families to install is the image author's call, declared as the
+# `fonts` option in module.kdl and arriving here resolved.
+read -ra NERD_FONTS <<< "$OPT_FONTS"
 for font in "${NERD_FONTS[@]}"; do
     curl --retry 3 -fsSLo "/tmp/${font}.tar.xz" \
         "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/${font}.tar.xz"

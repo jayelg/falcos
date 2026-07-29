@@ -27,10 +27,9 @@ pub struct Entry {
     pub path: String,
     pub flavor: Option<String>,
     pub variant: Option<String>,
-    /// Option name to the values set on it. Accepted and carried here,
-    /// but only meaningful once module manifests declare what each module
-    /// takes: what a module accepts is not something this file can know.
-    #[allow(dead_code)]
+    /// Option name to the values set on it. Checked against what the
+    /// module declares, not here: what a module accepts is not something
+    /// this file can know.
     pub options: Vec<(String, Vec<KdlValue>, SourceSpan)>,
     pub span: SourceSpan,
 }

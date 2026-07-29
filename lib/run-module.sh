@@ -8,16 +8,15 @@
 #                     skips the module on flavors it doesn't target
 #   2. repo           sourced if present, idempotent via its REPO_ID
 #   3. versions.sh    Renovate-tracked pins, sourced if present
-#   4. variant        variants/<name>.sh overrides pins/flags, selected
-#                     as <module>@<name> in modules.kdl
-#   5. module.sh      the module's own install logic (sourced, so it
-#                     inherits strict mode and the pins; MODDIR points
-#                     at the module directory). Optional: a pure-file
-#                     module (just a files/ overlay) omits it.
-#   6. selinux/       each *.te compiled and installed as a policy module
-#   7. files/         overlay copied verbatim into the image
-#   8. justfile.inc   appended to the goojust app recipes
-#   9. flatpaks.list  appended to /usr/share/falcos/default-flatpaks;
+#   4. module.sh      the module's own install logic (sourced, so it
+#                     inherits strict mode, the pins and OPT_* for every
+#                     option the module declares; MODDIR points at the
+#                     module directory). Optional: a pure-file module
+#                     (just a files/ overlay) omits it.
+#   5. selinux/       each *.te compiled and installed as a policy module
+#   6. files/         overlay copied verbatim into the image
+#   7. justfile.inc   appended to the goojust app recipes
+#   8. flatpaks.list  appended to /usr/share/falcos/default-flatpaks;
 #                     one flatpak ID per line, installed at first boot
 
 set -ouex pipefail
@@ -50,11 +49,6 @@ fi
 if [ -f "$MODDIR/versions.sh" ]; then
     # shellcheck source=/dev/null
     source "$MODDIR/versions.sh"
-fi
-
-if [ -n "${MODULE_VARIANT:-}" ]; then
-    # shellcheck source=/dev/null
-    source "$MODDIR/variants/${MODULE_VARIANT}.sh"
 fi
 
 # A module may be pure files (no install logic): its module.sh is

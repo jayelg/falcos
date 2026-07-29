@@ -21,14 +21,13 @@ modules/<group-or-name>/<name>/
                       image (e.g. service masking, policy.json edits), sourced
                       by 99-finalize.sh in list order and flavor-gated (optional)
   justfile.inc        goojust app recipes, appended at build time (optional)
-  variants/<v>.sh     pin/flag overrides, selected as <path>@<v> in the list (optional)
   Containerfile.inc   verbatim RUN block when the standard one isn't enough,
                       e.g. build secrets or ARGs (optional)
 ```
 
 The directory name is the module name in modules.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
 
-To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (helpers, preset, finalize.sh, variants, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.kdl, so it never builds.
+To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (manifest, helpers, preset, finalize.sh, options, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.kdl, so it never builds.
 
 ### Base (`base/`) -- do not disable
 - `base` -- pure-file base-system layer: sshd-off preset, coredump lockdown, PAM policy (faillock/pwquality), sulogin generator, os-release logo + plymouth branding
