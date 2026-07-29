@@ -20,9 +20,9 @@ The attested document is the package inventory. The full file-level SBOM, which 
 
 ### [Build Disk Images](build-disk.yml)
 
-Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Which flavor it builds, and which image the ISO switches the installed system to, both come from the installer flavor declared in [Flavors](../../scripts/flavors.sh); the kickstart reference is rendered from it rather than written down.
+Turns a published image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Both the payload and the image the ISO switches the installed system to are the ungated `falcos` build, by rule rather than by a configured value: kargs under `/usr/lib/bootc/kargs.d/` are static, so a payload for an uninspected machine has to be the set that gates on no hardware. The kickstart reference is rendered from that rather than written down.
 
-> **A new target's first publish creates a GHCR package, and GitHub makes new packages private.** CI will not notice, because `GITHUB_TOKEN` carries `packages: read` for the repository's own packages, so the ISO build keeps succeeding while the reference it bakes in is unpullable by anyone else. Flip the package to public after its first push.
+> **This workflow builds from a *published* image, so one has to exist.** An image package is created by a push to the default branch, and GitHub makes a new package private on first publish — and ghcr answers an unauthorised request with 403 rather than 404, so "never pushed" and "private" look identical. Both fail the same way. The workflow checks for this up front and says which it is, rather than letting the failure surface as a bare 403 from the pull. Flip a new package to public after its first push.
 
 ### [Kernel Freshness](kernel-freshness.yml)
 

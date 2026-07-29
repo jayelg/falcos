@@ -54,9 +54,9 @@ else
 fi
 
 # Renders the installer config the way a disk build does, so a template
-# that stopped substituting, or an installer flavor that is no longer
-# declared, fails here in seconds rather than during an installation on
-# someone's machine. The namespace is a placeholder: what this checks is
+# that stopped substituting, or a target that no longer resolves, fails
+# here in seconds rather than during an installation on someone's
+# machine. The namespace is a placeholder: what this checks is
 # the template, not where the image lives.
 IMAGE_REGISTRY=lint.invalid ./scripts/render-iso-config.sh > /dev/null
 echo "lint: installer config renders"

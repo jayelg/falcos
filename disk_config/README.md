@@ -10,7 +10,7 @@ Read as it is committed.
 
 A template. [Render installer config](../scripts/render-iso-config.sh) fills in the image the installed system is switched to and writes `build/iso.generated.toml`, which is the file bootc-image-builder reads. Both callers go through that script, so a local ISO installs the same reference CI publishes, and a fork's ISO points at the fork's own image.
 
-The image name comes from the installer flavor declared in [Flavors](../scripts/flavors.sh) and the namespace from [Registry](../scripts/registry.sh). Neither is written down here.
+The image is the ungated `falcos` build, by rule rather than by a declared value, and the namespace comes from [Registry](../scripts/registry.sh). Neither is written down here.
 
 ## Notes / Todo
 
