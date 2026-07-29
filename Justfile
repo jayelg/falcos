@@ -58,20 +58,42 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image, e.g. `just build falcos latest desktop stock`. Wraps
-# scripts/build.sh, the same invocation CI uses, so the build args, cache
-# refs and signing secret are identical to a CI build of the same commit.
-# An empty kernel leaves the choice to the Containerfile, which is what CI
-# does and what the kernel-freshness fallback rewrites.
-build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="":
+# Runs scripts/build.sh, the same invocation CI uses, so the build args,
+# cache refs and signing secret are identical to a CI build of the same
+# commit. An empty kernel leaves the choice to the Containerfile, which is
+# what CI does and what the kernel-freshness fallback rewrites. BuildKit
+# runs in a podman container, so a RUN layer is invalidated by the files
+# it mounts rather than by any change to the build context.
+
+# Build the image with BuildKit, e.g. `just build falcos latest desktop stock`
+build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildkit" target_image tag flavor kernel)
+
+# Fallback for a host where the BuildKit container can't run. Caches on
+# the whole ctx stage, so it rebuilds every layer after any change under
+# components/, lib/ or build-phases/.
+
+# Build the image with buildah instead of BuildKit
+[group('Utility')]
+build-buildah $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildah" target_image tag flavor kernel)
+
+[private]
+_build backend $target_image $tag $flavor $kernel:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    args=(--flavor "${flavor}" --tag "${target_image}:${tag}")
+    args=(--backend "{{ backend }}" --flavor "${flavor}" --tag "${target_image}:${tag}")
     if [[ -n "${kernel}" ]]; then
         args+=(--kernel "${kernel}")
     fi
     ./scripts/build.sh "${args[@]}"
+
+# The volume holds the layer cache and every RUN --mount=type=cache, so
+# the next build starts cold.
+
+# Remove the BuildKit daemon container and its cache volume
+[group('Utility')]
+buildkit-reset:
+    ./scripts/build.sh --reset
 
 # Generate a one-time Secure Boot (MOK) module-signing key pair. Keep the
 # private key out of the repo; commit the public cert.

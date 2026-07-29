@@ -4,9 +4,13 @@
 # between a local build and CI. Backends differ only in how they reach
 # BuildKit:
 #
+#   buildkit  buildkitd in a podman container driven by buildctl, the
+#             local default: the same builder CI uses, so a local build
+#             resolves the same cache keys
 #   buildx    the runner's buildx builder, used by the workflow
-#   buildah   podman build; no BuildKit, so no shared cache. Kept while the
-#             BuildKit path settles.
+#   buildah   podman build. No BuildKit, so the RUN cache keys on the whole
+#             ctx stage instead of the mounted files and nothing is shared
+#             with CI. Kept while the BuildKit path settles.
 #
 # Everything else — which Containerfile is built, which build args and
 # secret it gets, which cache refs are read and written — is decided here
@@ -15,6 +19,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 containerfile=Containerfile.generated
+
+# renovate: datasource=docker depName=docker.io/moby/buildkit
+buildkit_image="docker.io/moby/buildkit:v0.31.2"
+buildkit_container=falcos-buildkitd
+buildkit_volume=falcos-buildkit
+# Paths inside that container, not on the host
+buildkit_context=/build
+buildkit_secret=/run/secrets/mok_privkey
 
 die() {
     echo "build: $*" >&2
@@ -30,10 +42,13 @@ usage: scripts/build.sh [options]
                       decides, which is how the kernel-freshness fallback
                       switches the whole pipeline to the stock kernel)
   --tag <ref>         tag the result; repeatable
-  --backend <name>    buildx or buildah (default: $BUILD_BACKEND, else buildah)
+  --backend <name>    buildkit, buildx or buildah (default: $BUILD_BACKEND,
+                      else buildkit)
   --oci-output <path> write an OCI archive here instead of loading the image
   --cache-to          export the layer cache to the registry cache repo
   --no-cache-from     do not import the registry layer cache
+  --reset             remove the BuildKit daemon and its cache volume,
+                      then exit; the next build starts cold
 
 Environment:
   TAGS                newline-separated tags, as the metadata action emits
@@ -46,12 +61,13 @@ EOF
 }
 
 # ---- arguments -----------------------------------------------------------
-backend="${BUILD_BACKEND:-buildah}"
+backend="${BUILD_BACKEND:-buildkit}"
 flavor=""
 kernel=""
 oci_output=""
 cache_from=1
 cache_to=0
+reset=0
 tags=()
 labels=()
 
@@ -94,6 +110,10 @@ while [ $# -gt 0 ]; do
             cache_from=0
             shift
             ;;
+        --reset)
+            reset=1
+            shift
+            ;;
         -h | --help)
             usage
             exit 0
@@ -106,9 +126,18 @@ while [ $# -gt 0 ]; do
 done
 
 case "$backend" in
-    buildx | buildah) ;;
-    *) die "unknown backend '${backend}' (buildx or buildah)" ;;
+    buildkit | buildx | buildah) ;;
+    *) die "unknown backend '${backend}' (buildkit, buildx or buildah)" ;;
 esac
+
+# The daemon and its volume are this script's to create, so they are also
+# its to remove: their names live here and nowhere else.
+if [ "$reset" = 1 ]; then
+    podman rm --force "$buildkit_container" > /dev/null 2>&1 || true
+    podman volume rm --force "$buildkit_volume" > /dev/null 2>&1 || true
+    echo "build: removed the buildkit daemon and its cache volume"
+    exit 0
+fi
 
 # ---- resolved build inputs -----------------------------------------------
 # scripts/flavors.sh is the only reader of ARG FLAVORS; asking it for the
@@ -157,6 +186,13 @@ cache_repo() {
 
 cache_import_refs=()
 cache_export_ref=""
+# The buildkit backend has no registry cache wiring yet: it builds against
+# the cache in its own volume only.
+if [ "$backend" = buildkit ]; then
+    [ "$cache_to" = 0 ] \
+        || die "the buildkit backend cannot export to the registry cache yet"
+    cache_from=0
+fi
 if [ "$cache_from" = 1 ] || [ "$cache_to" = 1 ]; then
     if repo="$(cache_repo)"; then
         if [ "$cache_from" = 1 ]; then
@@ -191,6 +227,102 @@ echo "build: tags ${tags[*]}"
 [ -z "$cache_export_ref" ] || echo "build: exporting cache to ${cache_export_ref}"
 
 # ---- backends ------------------------------------------------------------
+# buildkitd in a podman container, the same daemon CI drives through
+# buildx. Its state — the layer cache and every RUN --mount=type=cache —
+# lives in a named volume, so it survives the container and a rebuild
+# after a one line change re-runs one layer instead of forty.
+#
+# Privileged because buildkitd mounts overlayfs for its snapshotter. Under
+# rootless podman that stays inside the user namespace: root in the
+# container is the invoking user outside it, and nothing on the host is
+# writable that the user could not already write.
+buildkitd_ensure() {
+    local run_args=(
+        --detach
+        --name "$buildkit_container"
+        --privileged
+        --security-opt label=disable
+        --volume "${buildkit_volume}:/var/lib/buildkit"
+        --volume "${PWD}:${buildkit_context}:ro"
+    )
+    [ -z "$mok_key" ] \
+        || run_args+=(--volume "${mok_key}:${buildkit_secret}:ro")
+
+    # The daemon outlives a build but its mounts are fixed at start, so
+    # the config it was started with is stamped on it and a changed one
+    # recreates it. The cache is in the volume, so that costs nothing.
+    local want have
+    want="$(printf '%s\n' "$buildkit_image" "${run_args[@]}" | sha256sum | cut -d' ' -f1)"
+    have="$(podman inspect --format \
+        '{{index .Config.Labels "falcos.buildkitd"}} {{.State.Running}}' \
+        "$buildkit_container" 2> /dev/null || true)"
+    [ "$have" = "${want} true" ] && return 0
+
+    podman rm --force "$buildkit_container" > /dev/null 2>&1 || true
+    podman run "${run_args[@]}" --label "falcos.buildkitd=${want}" \
+        "$buildkit_image" > /dev/null
+
+    for _ in $(seq 30); do
+        if podman exec "$buildkit_container" buildctl debug workers > /dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    podman logs "$buildkit_container" >&2 || true
+    die "buildkitd did not come up"
+}
+
+# podman resolves a bare name against the search registries, so a plain
+# `falcos:latest` loaded from a tarball would land as docker.io/library.
+# podman build spells the same tag localhost/falcos:latest; match it, so
+# the disk image recipes find what a build just produced.
+local_ref() {
+    local first="${1%%/*}"
+    if [ "$first" != "$1" ]; then
+        case "$first" in
+            *.* | *:* | localhost)
+                printf '%s\n' "$1"
+                return
+                ;;
+        esac
+    fi
+    printf 'localhost/%s\n' "$1"
+}
+
+build_buildkit() {
+    buildkitd_ensure
+
+    local args=(
+        build
+        --frontend dockerfile.v0
+        --local "context=${buildkit_context}"
+        --local "dockerfile=${buildkit_context}"
+        --opt "filename=${containerfile}"
+    )
+    local arg label tag first
+
+    for arg in "${build_args[@]}"; do args+=(--opt "build-arg:${arg}"); done
+    for label in "${labels[@]}"; do args+=(--opt "label:${label}"); done
+    [ -z "$mok_key" ] \
+        || args+=(--secret "id=mok_privkey,src=${buildkit_secret}")
+
+    # buildctl writes the exported image to stdout when it is given no
+    # destination, so the tarball streams straight into podman storage
+    # rather than being written out and read back.
+    if [ -n "$oci_output" ]; then
+        podman exec "$buildkit_container" buildctl "${args[@]}" \
+            --output "type=oci,name=${tags[0]}" > "$oci_output"
+        return
+    fi
+
+    first="$(local_ref "${tags[0]}")"
+    podman exec "$buildkit_container" buildctl "${args[@]}" \
+        --output "type=docker,name=${first}" | podman load --quiet
+    for tag in "${tags[@]:1}"; do
+        podman tag "$first" "$(local_ref "$tag")"
+    done
+}
+
 build_buildx() {
     local args=(build --file "$containerfile")
     local arg tag label ref

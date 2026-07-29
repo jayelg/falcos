@@ -125,6 +125,8 @@ just lint               # shellcheck every Bash script and validate components.l
 
 `just build` and the build workflow both run [scripts/build.sh](scripts/build.sh), so a local build gets the same Containerfile, build args, cache refs and signing secret as CI.
 
+Local builds use BuildKit, running as a `podman` container (`moby/buildkit`) driven by `buildctl`, and the built image is loaded into podman storage as `localhost/falcos:latest`. This is the same builder CI uses, so each `RUN` layer is invalidated by the files that layer mounts rather than by any change to the build context: editing one component rebuilds one layer. BuildKit's state, which is both the layer cache and every `RUN --mount=type=cache`, lives in the `falcos-buildkit` podman volume; `just buildkit-reset` deletes it and the daemon container. `just build-buildah` builds with buildah instead, for a host where the BuildKit container cannot run.
+
 ## Secure Boot
 
 The image supports Secure Boot via a self-managed MOK (Machine Owner Key). When a signing key is supplied at build time, the CachyOS kernel and every kernel module — including the out-of-tree DKMS modules (xone, kvmfr) — are signed with it. Without the key the build still succeeds but kernel and modules are unsigned (fine for VMs and machines with Secure Boot disabled). The stock Fedora fallback kernel is already signed by Fedora's key, which shim trusts; the MOK then only matters for the out-of-tree modules.
