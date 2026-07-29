@@ -14,6 +14,8 @@ Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) r
 
 Each published digest also carries a syft SPDX SBOM as a cosign in-toto attestation, verifiable with `cosign verify-attestation --key cosign.pub --type spdxjson --insecure-ignore-tlog=true <image>` (the flag skips the Rekor transparency-log check, which this key-based flow doesn't use — trust comes from the key).
 
+The attested document is the package inventory. The full file-level SBOM, which also records which package owns each path, is 148MB and cannot be attested: cosign refuses an attestation layer over 128MiB, and raising `COSIGN_MAX_ATTACHMENT_SIZE` would only move the problem to every consumer. It is uploaded as the `sbom-falcos-<flavor>` build artifact instead.
+
 ### [Build Disk Images](build-disk.yml)
 
 Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config).

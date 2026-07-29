@@ -321,11 +321,17 @@ jobs:
           #
           # The 'rpm' cataloger tag (resolves to just rpm-db-cataloger in
           # the default dir set) is scope, not an OOM mitigation: RPMs are
-          # the supply-chain inventory this SBOM exists to attest, reading
-          # only the RPM DB keeps the scan to seconds instead of walking the
-          # multi-GB rootfs, and the SPDX output stays small enough to
-          # attest (see Rekor note below). --select-catalogers takes tags
-          # here, not cataloger names (a bare name errors out).
+          # the supply-chain inventory this SBOM exists to attest, and
+          # reading only the RPM DB keeps package discovery to the DB
+          # rather than fingerprinting a multi-GB rootfs.
+          # --select-catalogers takes tags here, not cataloger names (a
+          # bare name errors out).
+          #
+          # This document is the file-level one: cataloger selection does
+          # not stop syft capturing the files those packages own, so it
+          # carries an entry per owned path (220k of them, 148MB) on top of
+          # the ~2.2k packages. That is why it is uploaded as an artifact
+          # and reduced before being attested, in the steps below.
           mnt="$(sudo podman image mount "localhost/${IMAGE_NAME}:raw")"
           sudo "$SYFT_CMD" scan "dir:${mnt}" \
             --source-name "${IMAGE_NAME}" \
@@ -334,6 +340,64 @@ jobs:
           sudo podman image umount "localhost/${IMAGE_NAME}:raw"
           sudo chown "$(id -u):$(id -g)" "${RUNNER_TEMP}/sbom.spdx.json"
           du -sh "${RUNNER_TEMP}/sbom.spdx.json"
+
+      # cosign base64-encodes the predicate into the attestation layer and
+      # refuses a layer over 128MiB, so the file-level SBOM (148MB, 197MB
+      # encoded) has never been verifiable: `cosign verify-attestation`
+      # fails on it for us and for anyone consuming these images. Raising
+      # COSIGN_MAX_ATTACHMENT_SIZE is not a fix, it is an environment
+      # variable every consumer would have to set too.
+      #
+      # So attest the package inventory, which is what the SBOM is for and
+      # is a few MB, and keep the file-level document as the artifact
+      # uploaded below. syft can drop the file data at source
+      # (relationships.package-file-ownership=false) but that would mean a
+      # second full scan to still produce the artifact.
+      #
+      # All three deletions are needed: leaving hasFiles or a relationship
+      # pointing at a dropped file entry makes the document dangle, which
+      # SPDX validators reject. One pass over the large document, then the
+      # checks read the small one.
+      - name: Reduce SBOM to the package inventory
+        if: env.PUBLISH == 'true'
+        run: |
+          jq -c '
+            del(.files)
+            | .packages |= map(del(.hasFiles))
+            | .relationships |= map(select(
+                ((.spdxElementId      | startswith("SPDXRef-File-")) or
+                 (.relatedSpdxElement | startswith("SPDXRef-File-"))) | not))
+          ' "${RUNNER_TEMP}/sbom.spdx.json" > "${RUNNER_TEMP}/sbom.packages.spdx.json"
+
+          # A syft output change that renamed file SPDXIDs would silently
+          # stop the filter matching, so assert the result resolves.
+          if ! jq -e '
+            (([.SPDXID] + [.packages[].SPDXID]) | map({key:., value:true}) | from_entries) as $ids
+            | [.relationships[] | select(($ids[.spdxElementId] // false | not)
+                                      or ($ids[.relatedSpdxElement] // false | not))] | length == 0
+          ' "${RUNNER_TEMP}/sbom.packages.spdx.json" > /dev/null; then
+            echo "::error::filtered SBOM references SPDX ids it does not define"
+            exit 1
+          fi
+
+          # Fail here rather than in cosign at the end of the build
+          bytes="$(wc -c < "${RUNNER_TEMP}/sbom.packages.spdx.json")"
+          if [ "$bytes" -gt 94371840 ]; then
+            echo "::error::package SBOM is ${bytes} bytes; over ~90MB it exceeds cosign's attachment limit once encoded"
+            exit 1
+          fi
+          echo "packages: $(jq '.packages | length' "${RUNNER_TEMP}/sbom.packages.spdx.json"), ${bytes} bytes"
+
+      # The file-level document answers "which package owns this path",
+      # which is worth keeping even though it cannot be attested. Uploaded
+      # before the push so it exists for triage even if a later step fails.
+      - name: Upload file-level SBOM
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ env.IMAGE_NAME }}
+          path: ${{ runner.temp }}/sbom.spdx.json
+          retention-days: 30
 
       # Repack into content-stable chunks (one layer per package group) so
       # bootc upgrade only downloads what changed. rpm-ostree runs from the
@@ -420,7 +484,7 @@ jobs:
           # has been hit on slow ghcr days
           cosign attest --key env://COSIGN_PRIVATE_KEY \
             --tlog-upload=false --timeout=10m \
-            --type spdxjson --predicate "${RUNNER_TEMP}/sbom.spdx.json" \
+            --type spdxjson --predicate "${RUNNER_TEMP}/sbom.packages.spdx.json" \
             "${IMAGE_FULL}@${{ steps.push.outputs.digest }}"
         env:
           COSIGN_EXPERIMENTAL: false
