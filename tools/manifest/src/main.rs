@@ -73,6 +73,7 @@ fn main() -> ExitCode {
         .iter()
         .filter_map(|entry| module::Module::load(entry, &list, &root, &mut issues))
         .collect();
+    module::check_graph(&modules, &root, &mut issues);
 
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.

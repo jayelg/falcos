@@ -1,3 +1,7 @@
 description "Plasma theming: Darkly, the Ant colour scheme, Papirus icons and a weather widget"
 
 supports "fedora"
+
+// Installs colour schemes, a desktop theme and a plasmoid into Plasma's
+// own directories.
+requires "plasma-desktop"

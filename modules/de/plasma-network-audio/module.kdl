@@ -1,3 +1,5 @@
 description "Plasma settings module for network audio devices"
 
 supports "fedora"
+
+requires "plasma-desktop"

@@ -1,3 +1,9 @@
 description "VSCodium, the telemetry-free VS Code build"
 
 supports "fedora"
+
+// Wraps its binary to run without the preloaded allocator, which is only
+// meaningful once that allocator is in the image. Soft, because the
+// wrapper is harmless without it and this must never fail a build that
+// deliberately drops the hardening.
+after "hardened-malloc"

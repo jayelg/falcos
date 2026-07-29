@@ -15,3 +15,26 @@ description "Example module showing every optional piece a module can ship"
 // module that cannot build on a family simply does not list it, and lint
 // catches the mismatch before a build finds out the slow way.
 supports "fedora"
+
+// OPTIONAL. Capabilities: depend on what a thing *is*, never on the
+// module that happens to provide it, so a provider can be swapped
+// without touching its consumers.
+//
+//   provides   this module offers it
+//   requires   hard. Lint fails if nothing enabled provides it, and
+//              names the module that would. Implies ordering.
+//   after      soft. Ordering and cache preference only, never fails.
+//
+// Nothing is ever included automatically: an unsatisfied requirement
+// tells you what to add and stops, so modules.kdl stays the complete
+// statement of what is in the image.
+//
+// requires "kernel-devel"
+// after "hardened-malloc"
+
+// OPTIONAL. Contract files: an exact path one module writes and another
+// reads. Unlike a capability, both sides name the same path. Lint fails
+// on a reader whose writer is not in the image.
+//
+// provides-file "/usr/lib/falcos/example-marker"
+// requires-file "/usr/share/falcos/sb_cert.der"
