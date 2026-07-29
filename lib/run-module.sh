@@ -15,9 +15,10 @@
 #                     (just a files/ overlay) omits it.
 #   5. selinux/       each *.te compiled and installed as a policy module
 #   6. files/         overlay copied verbatim into the image
-#   7. justfile.inc   appended to the goojust app recipes
-#   8. flatpaks.list  appended to /usr/share/falcos/default-flatpaks;
-#                     one flatpak ID per line, installed at first boot
+#   7. sinks          each file this module ships that some other module
+#                     declared a sink for, appended to that sink. The
+#                     pairs arrive resolved in MODULE_SINKS, so no path
+#                     is written down here
 
 set -ouex pipefail
 
@@ -75,12 +76,15 @@ if [ -d "$MODDIR/files" ]; then
     cp -rT "$MODDIR/files" /
 fi
 
-if [ -f "$MODDIR/justfile.inc" ]; then
-    mkdir -p /usr/share/goojust
-    cat "$MODDIR/justfile.inc" >> /usr/share/goojust/justfile.apps
-fi
-
-if [ -f "$MODDIR/flatpaks.list" ]; then
-    mkdir -p /usr/share/falcos
-    cat "$MODDIR/flatpaks.list" >> /usr/share/falcos/default-flatpaks
-fi
+# Aggregation sinks. The consuming module declares which filename feeds
+# it and where that lands, and the generator resolved those into
+# <file>=<path> pairs for exactly the files this module ships. Nothing
+# here knows about goojust or flatpaks, so a module can define a new sink
+# without this script being taught about it.
+read -ra sinks <<< "${MODULE_SINKS:-}"
+for sink in "${sinks[@]}"; do
+    src="$MODDIR/${sink%%=*}"
+    dest="${sink#*=}"
+    mkdir -p "$(dirname "$dest")"
+    cat "$src" >> "$dest"
+done

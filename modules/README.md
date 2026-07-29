@@ -20,7 +20,8 @@ modules/<group-or-name>/<name>/
   finalize.sh         run-once logic needing real systemctl or the final
                       image (e.g. service masking, policy.json edits), sourced
                       by 99-finalize.sh in list order and flavor-gated (optional)
-  justfile.inc        goojust app recipes, appended at build time (optional)
+  justfile.inc        goojust app recipes, appended at build time to the
+                      sink core/goojust declares for this name (optional)
   Containerfile.inc   verbatim RUN block when the standard one isn't enough,
                       e.g. build secrets or ARGs (optional)
 ```

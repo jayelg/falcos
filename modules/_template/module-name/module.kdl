@@ -73,3 +73,17 @@ supports "fedora"
 //     set "extras"
 //     set "gpu-accel" #false
 // }
+
+// OPTIONAL. Aggregation sinks: declared by the module that *consumes* an
+// aggregated file, since only it knows where the file has to land. Any
+// module shipping the named filename contributes, in list order.
+//
+// Contribution stays presence driven, like files/ and selinux/: shipping
+// a justfile.inc is the contribution. What is declared is the part that
+// cannot be discovered, namely the destination.
+//
+// Lint fails if a module ships a sink's filename while the module that
+// owns that sink is not in the list, so a contribution cannot go missing
+// silently.
+//
+// sink "example" file="example.inc" path="/usr/share/falcos/example.d/all"

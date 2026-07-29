@@ -1,3 +1,7 @@
 description "Flatpak client, first-boot install of the default app set, and a daily update timer"
 
 supports "fedora"
+
+// The first-boot installer reads one aggregated list, so this module
+// owns where it lands. Any module shipping a flatpaks.list contributes.
+sink "flatpaks" file="flatpaks.list" path="/usr/share/falcos/default-flatpaks"

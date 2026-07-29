@@ -30,8 +30,8 @@ just keeps it sorted to the top of the modules directory.
 ## Anatomy — what each file in `module-name/` does (all optional)
 
 Run order within a module: `repo` → `versions.sh` → `module.sh` →
-`selinux/*.te` → `files/` overlay → `justfile.inc`. `finalize.sh` runs
-much later, in the finalize layer.
+`selinux/*.te` → `files/` overlay → sink contributions. `finalize.sh`
+runs much later, in the finalize layer.
 
 | File | Purpose |
 |---|---|
@@ -42,7 +42,7 @@ much later, in the finalize layer.
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |
-| `justfile.inc` | goojust recipes, appended to `/usr/share/goojust/justfile.apps`. |
+| `justfile.inc` | goojust recipes. Aggregated because `core/goojust` declares a sink for this filename; the destination lives there, not here. |
 | `Containerfile.inc` | Verbatim RUN block replacing the standard one — only for extra mounts, build secrets, or ARGs. |
 | `README.md` | Every module has one; the copy here is a fill-in skeleton. |
 
