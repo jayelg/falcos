@@ -1,7 +1,8 @@
-# Keeps the build context identical to a clean checkout, so a local build
-# can reuse the CI layer cache (see scripts/build.sh). Anything listed here
-# that appears under build-phases/, lib/ or modules/ would otherwise
-# change the ctx stage and invalidate every module layer below it.
+# Keeps the build context to what the build reads, and identical between a
+# local build and CI, so a local build can reuse the CI layer cache (see
+# scripts/build.sh). Anything listed here that appears under build-phases/,
+# lib/ or modules/ would otherwise change the ctx stage and invalidate
+# every module layer below it.
 #
 # Patterns match from the context root, so a nested directory needs the
 # **/ prefix: __pycache__ alone would only exclude one at the root.
@@ -14,6 +15,10 @@ output
 _build*
 # Generated files, not build-phases/ which the pattern does not match
 build
+# Tracked, so a checkout has it, and rewritten by every build. The
+# frontend reads it as the dockerfile rather than out of the context, so
+# excluding it costs nothing and keeps a regeneration off the ctx stage.
+Containerfile.generated
 # Host build tooling. Never copied into the image, and target/ is
 # large enough that shipping it to the daemon is worth avoiding.
 tools
