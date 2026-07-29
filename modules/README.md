@@ -1,11 +1,13 @@
 [root](../../README.md) / [build-phases](../README.md) / **modules**
 
-Self-describing, independently cacheable build units. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), and is toggled/ordered by [modules.kdl](../../modules.kdl). Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
+Self-describing, independently cacheable build units. Every module carries a [module.kdl](SCHEMA.md) manifest declaring what it needs from the rest of the image and what it offers back; everything else about a module is discovered from the files it ships. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), and is toggled/ordered by [modules.kdl](../../modules.kdl). Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
 
 ### Anatomy of a module
 
 ```
 modules/<group-or-name>/<name>/
+  module.kdl          the manifest: what this module needs, offers and
+                      accepts. REQUIRED. See SCHEMA.md
   module.sh           the install logic; sourced with pins loaded (optional --
                       omit for a pure-file module that only drops files/)
   versions.sh         Renovate-tracked version pins + SHA256s (optional)

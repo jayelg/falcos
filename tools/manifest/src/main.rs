@@ -10,6 +10,7 @@
 
 mod diag;
 mod list;
+mod module;
 mod render;
 
 use list::List;
@@ -64,6 +65,15 @@ fn main() -> ExitCode {
         }
     };
 
+    // Every module's own manifest. Loaded for every command so that a
+    // missing or malformed one fails the same way wherever it is noticed,
+    // rather than only when something happens to need a field from it.
+    let modules: Vec<module::Module> = list
+        .entries
+        .iter()
+        .filter_map(|entry| module::Module::load(entry, &list, &root, &mut issues))
+        .collect();
+
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
@@ -93,7 +103,7 @@ fn main() -> ExitCode {
     if command == "check" {
         eprintln!(
             "manifest: {} modules, {} flavors",
-            list.entries.len(),
+            modules.len(),
             list.flavors.len()
         );
     }

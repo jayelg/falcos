@@ -1,0 +1,3 @@
+description "Plasma theming: Darkly, the Ant colour scheme, Papirus icons and a weather widget"
+
+supports "fedora"

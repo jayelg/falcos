@@ -1,0 +1,17 @@
+// module.kdl — the manifest. REQUIRED for every module.
+//
+// It holds only facts nothing can discover by looking at this directory.
+// That is why there is no entry here for files/, selinux/, finalize.sh,
+// repo or versions.sh: the runner checks for those, and a declaration
+// sitting beside an existing file could drift both ways.
+//
+// modules/SCHEMA.md is the full reference.
+
+// REQUIRED. One line, present tense, no trailing period. It names this
+// module wherever the resolved build is summarised.
+description "Example module showing every optional piece a module can ship"
+
+// REQUIRED. Base families this module can build on, one or more. A
+// module that cannot build on a family simply does not list it, and lint
+// catches the mismatch before a build finds out the slow way.
+supports "fedora"

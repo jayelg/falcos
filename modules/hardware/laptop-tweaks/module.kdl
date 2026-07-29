@@ -1,0 +1,3 @@
+description "s2idle sleep kernel argument for laptops whose firmware defaults badly"
+
+supports "fedora"
