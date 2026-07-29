@@ -1,7 +1,7 @@
-# CI builds with BuildKit (docker/build-push-action); local `just build`
-# uses buildah with coarser caching (see Justfile). The component section
-# between the BEGIN/END COMPONENTS markers is generated from
-# components.list by scripts/gen-containerfile.sh (`just generate`).
+# Every build goes through scripts/build.sh, which CI and `just build`
+# both call. The component section between the BEGIN/END COMPONENTS
+# markers is generated from components.list by
+# scripts/gen-containerfile.sh (`just generate` runs it standalone).
 FROM scratch AS ctx
 COPY build-phases/ /
 COPY lib/ /lib/
@@ -36,10 +36,10 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
 # ---- BEGIN COMPONENTS (generated at build time from components.list; see scripts/gen-containerfile.sh) ----
 #
 # Intentionally empty in git. This committed file is the build skeleton:
-# at build time (`just build` locally, the Sync step in CI) one RUN layer
-# per components.list entry is spliced in here and the result is written
-# to Containerfile.generated, which is what actually builds. To change
-# what the image contains, edit components.list, not this file.
+# at build time (scripts/build.sh, locally and in CI) one RUN layer per
+# components.list entry is spliced in here and the result is written to
+# Containerfile.generated, which is what actually builds. To change what
+# the image contains, edit components.list, not this file.
 #
 # ---- END COMPONENTS ----
 

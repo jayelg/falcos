@@ -21,7 +21,8 @@ fix:
     just --unstable --fmt -f Justfile
 
 # Generate Containerfile.generated from the Containerfile skeleton +
-# components.list. Runs automatically as a dependency of `build`.
+# components.list. Every build regenerates it first, so this is only for
+# inspecting what a build would use.
 [group('Utility')]
 generate:
     ./scripts/gen-containerfile.sh
@@ -57,32 +58,20 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# Build the image using Podman, e.g. `just build falcos latest desktop stock`.
-# Depends on `generate` so the Containerfile always matches components.list.
-build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="cachyos": generate
+# Build the image, e.g. `just build falcos latest desktop stock`. Wraps
+# scripts/build.sh, the same invocation CI uses, so the build args, cache
+# refs and signing secret are identical to a CI build of the same commit.
+# An empty kernel leaves the choice to the Containerfile, which is what CI
+# does and what the kernel-freshness fallback rewrites.
+build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Local buildah keys the RUN cache on the whole ctx stage, so any
-    # change to build-phases/, lib/, or components/ rebuilds every layer.
-    # Correct, just coarser than CI's BuildKit which scopes invalidation
-    # to the mounted files.
-
-    # Optional Secure Boot signing key; see `just generate-mok-key`.
-    SECRET_ARGS=()
-    if [[ -n "${MOK_KEY_PATH:-}" && -f "${MOK_KEY_PATH}" ]]; then
-        SECRET_ARGS+=("--secret" "id=mok_privkey,src=${MOK_KEY_PATH}")
+    args=(--flavor "${flavor}" --tag "${target_image}:${tag}")
+    if [[ -n "${kernel}" ]]; then
+        args+=(--kernel "${kernel}")
     fi
-
-    podman build \
-        "${SECRET_ARGS[@]}" \
-        --build-arg "FLAVOR=${flavor}" \
-        --build-arg "KERNEL=${kernel}" \
-        --build-arg "IMAGE_VERSION=$(date -u +%Y%m%d)" \
-        --pull=newer \
-        --tag "${target_image}:${tag}" \
-        -f Containerfile.generated \
-        .
+    ./scripts/build.sh "${args[@]}"
 
 # Generate a one-time Secure Boot (MOK) module-signing key pair. Keep the
 # private key out of the repo; commit the public cert.

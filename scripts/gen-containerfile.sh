@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Generates Containerfile.generated (the file builds actually use) from the
-# committed Containerfile skeleton plus components.list. Runs automatically
-# before every build (`just build` dependency, CI build step); `just
-# generate` runs it standalone. Containerfile.generated is gitignored: the
-# committed Containerfile stays an honest skeleton with an empty component
-# section, so nothing generated is ever committed.
+# committed Containerfile skeleton plus components.list. scripts/build.sh
+# runs it before every build, locally and in CI, so no build can use a
+# stale one; `just generate` runs it standalone. Containerfile.generated
+# is gitignored: the committed Containerfile stays an honest skeleton with
+# an empty component section, so nothing generated is ever committed.
 #
 # Each list entry is a path relative to components/. It becomes one RUN
 # layer that calls lib/run-component.sh. Components under a [flavor]
