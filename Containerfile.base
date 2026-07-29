@@ -24,8 +24,12 @@ COPY components.list /components.list
 FROM quay.io/fedora/fedora-bootc:44
 
 ### Build arguments
-# Comma-separated list of valid flavor names. Used by the generator,
-# The first entry is the default flavor and is injected as ARG FLAVOR by the containerfile generator.
+# Comma-separated list of valid flavor names, read only by
+# scripts/flavors.sh. The first entry is the default flavor. The singular
+# ARG FLAVOR is declared by the generator, directly above the first
+# flavor-gated component, so that every layer above it is shared by all
+# flavors. See the IMAGE_VERSION note below for why an ARG's position
+# decides that.
 ARG FLAVORS="desktop,laptop"
 
 ### No need to change anything below

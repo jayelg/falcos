@@ -35,6 +35,31 @@ while IFS= read -r name; do
     valid_flavors["$name"]=1
 done <<< "$flavors_out"
 
+# ---- ARG FLAVOR ----------------------------------------------------------
+# Containerfile.base omits it because where it goes depends on the list.
+# An ARG in scope is part of the cache key of every RUN below it, whether
+# or not that RUN mentions it, so declaring it at the top of the section
+# would fork the cache at the first component and leave two flavors
+# sharing no layers at all. It is emitted directly above the first
+# flavor-gated block instead, which is the first layer that can read it,
+# and at the end of the section when nothing is gated, since the flavor
+# and finalize phases below the section still need it.
+#
+# Everything above that point is flavor independent by construction: an
+# ungated block's RUN never mentions FLAVOR, and run-component.sh only
+# reads it when the generator set COMPONENT_FLAVORS. A Containerfile.part
+# that breaks that is caught in emit_block.
+flavor_arg_emitted=0
+emit_flavor_arg() {
+    cat <<EOF
+# ---- flavor gate ----
+# Declared here rather than above: an ARG in scope is part of the cache
+# key of every RUN below it, so every layer above this one is shared by
+# all flavors.
+ARG FLAVOR=${first_flavor}
+EOF
+}
+
 # ---- emit one component block -------------------------------------------
 # <name> <variant> <flavor> — flavor is "" for universal
 emit_block() {
@@ -46,6 +71,14 @@ emit_block() {
     fi
 
     if [ -f "${dir}/Containerfile.part" ]; then
+        # A part above the ARG that expands FLAVOR would get an empty
+        # string, silently, so it is an error rather than a surprise in
+        # the built image.
+        if [ "$flavor_arg_emitted" = 0 ] \
+            && grep -qE '\$\{?FLAVOR\}?' "${dir}/Containerfile.part"; then
+            echo "gen-containerfile: '${name}' expands FLAVOR in its Containerfile.part but is listed above the first flavor-gated component, where ARG FLAVOR is not yet declared" >&2
+            exit 1
+        fi
         # Containerfile.part component: cross-check flavor gate if listed
         # under a [flavor] section, then emit verbatim.
         if [ -n "$flavor" ]; then
@@ -109,15 +142,18 @@ while IFS= read -r line; do
     variant=""
     [ "$entry" != "$name" ] && variant="${entry#*@}"
 
+    if [ -n "$current_flavor" ] && [ "$flavor_arg_emitted" = 0 ]; then
+        section+="$(emit_flavor_arg)"$'\n\n'
+        flavor_arg_emitted=1
+    fi
     section+="$(emit_block "$name" "$variant" "$current_flavor")"$'\n\n'
 done < "$list"
 
-# ---- inject ARG FLAVOR default (first entry in FLAVORS) ------------------
-# Containerfile.base omits ARG FLAVOR; the generator declares it as the
-# first line of the generated section so it is in scope for the downstream
-# flavor and finalize phases.
-flavor_arg="ARG FLAVOR=${first_flavor}"
-section="${flavor_arg}"$'\n\n'"${section}"
+# Nothing gated, so nothing above needs it, but the phases below the
+# section still do.
+if [ "$flavor_arg_emitted" = 0 ]; then
+    section+="$(emit_flavor_arg)"$'\n\n'
+fi
 
 # ---- splice into skeleton -----------------------------------------------
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then

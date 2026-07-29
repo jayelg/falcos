@@ -9,6 +9,12 @@
 #   [common]           included in all flavors
 #   [<flavor-name>]    included only in that flavor's build
 #
+# Every layer above the first flavor section is shared by all flavors, so
+# adding a flavor costs only its own gated components. A [common] section
+# placed after a flavor section still runs everywhere, but sits below the
+# flavor gate and is built once per flavor: keep components there only
+# when they have to run last.
+#
 # Syntax:
 #   <path>              enable the component at components/<path>
 #   <path>@<variant>    enable it with its variants/<variant>.sh overrides

@@ -34,6 +34,8 @@ The `[Common]` header tag is used for components targeting all built images,
 
 The generated `Containerfile.generated` file is not flavor specific and includes all components listed in the `components.list` file for use in all flavor builds. The build workflow parses the `components.list` file during the build to gate what is installed during each flavor build workflow.
 
+Every layer above the first flavor section is shared by all flavor builds: the flavor is only declared as a build arg at that point, and an arg in scope is part of the cache key of every layer below it. Adding a flavor therefore costs its own gated components rather than a whole extra build.
+
 ### Image Building
 Images are build using the `.github/workflows/build.yml` workflow, signed and published for bootc images to track updates.
 The workflow runs daily to rebuild with any updates to the base image and components (that aren't pinned to a version).
@@ -78,6 +80,8 @@ Define what flavors to build with:
 
 This is the only place flavors are declared. `scripts/flavors.sh` is the only thing that reads it, and everything downstream asks that script: the build matrix, the published image names (`falcos-<flavor>`), the per-flavor build cache tags, the registry cleanup and the local `just build` default. Adding a flavor needs no other edit.
 
+That script also declares which flavor a fresh installer lays down, the one flavor choice that is a policy rather than a derivation.
+
 #### [Components Directory](components)
 
 To add any new app, customization or feature you can make a copy of the  `components/_template/component-name` directory and rename it to a descriptive component name to be used in the `components.list` file. `components/_template/readme.md` explains how to use the component template.
@@ -114,7 +118,15 @@ sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
 
 The [Build disk images](.github/workflows/build-disk.yml) workflow produces an Anaconda installer ISO and a qcow2 disk image (run it via workflow dispatch and download the artifacts). The ISO installs the laptop flavor and switches the installed system to track it, ie. `ghcr.io/[your username]/falcos-laptop:latest`.
 
-Which flavor that is comes from one declaration in `scripts/flavors.sh`, and the namespace from your `origin` remote, so a fork's ISO installs the fork's own image with no edit. `just build-iso` renders the same reference locally.
+Move an installed system to another flavor with a `bootc switch`:
+
+```bash
+sudo bootc switch ghcr.io/[your username]/falcos-desktop:latest
+```
+
+Images are rechunked, so that downloads the difference (kargs, device tweaks, a DKMS module) rather than a second full image.
+
+Which flavor the installer lays down comes from one declaration in `scripts/flavors.sh`, and the namespace from your `origin` remote, so a fork's ISO installs the fork's own image with no edit. `just build-iso` renders the same reference locally.
 
 ### Local builds
 
