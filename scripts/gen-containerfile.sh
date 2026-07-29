@@ -118,6 +118,7 @@ EOF
 
 # ---- parse modules.list -----------------------------------------------
 current_flavor=""
+finalize_order=()
 while IFS= read -r line; do
     entry="${line%%#*}"
     entry="${entry//[[:space:]]/}"
@@ -147,6 +148,14 @@ while IFS= read -r line; do
         flavor_arg_emitted=1
     fi
     section+="$(emit_block "$name" "$variant" "$current_flavor")"$'\n\n'
+
+    # Resolved here because this loop is already the one authority on
+    # list order and flavor gating. The finalize phase used to reparse
+    # the list inside the image to recover both, which was a second
+    # implementation of this format that could drift from this one.
+    if [ -f "modules/${name}/finalize.sh" ]; then
+        finalize_order+=("${name}${current_flavor:+:${current_flavor}}")
+    fi
 done < "$list"
 
 # Nothing gated, so nothing above needs it, but the phases below the
@@ -154,6 +163,18 @@ done < "$list"
 if [ "$flavor_arg_emitted" = 0 ]; then
     section+="$(emit_flavor_arg)"$'\n\n'
 fi
+
+# Consumed by the finalize phase below the section, which is why it is
+# declared at the bottom of it. Each token is <path>, or <path>:<flavor>
+# for a gated module, because which hooks run is still a per-flavor fact
+# the build arg resolves and this file cannot.
+section+="$(
+    cat <<EOF
+# ---- finalize hook order ----
+# Modules shipping a finalize.sh, in list order, resolved on the host.
+ARG FINALIZE_ORDER="${finalize_order[*]}"
+EOF
+)"$'\n\n'
 
 # ---- splice into skeleton -----------------------------------------------
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
