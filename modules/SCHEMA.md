@@ -30,7 +30,7 @@ drift both ways.
 | `selinux/*.te` | compiled and installed at priority 200 |
 | `files/` | copied verbatim into the image |
 | `finalize.sh` | sourced by the finalize phase, in resolved order |
-| a file matching a declared `sink` | appended to that sink |
+| a file another module `collects` | handed to that module |
 
 A manifest declares *facts*, not *file layout*.
 
@@ -225,34 +225,47 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
 
-### Aggregation sinks
+### Collecting
 
-A module that owns an aggregated file declares where it lands and which
-filename feeds it. Any module shipping that filename contributes to it.
+A module that wants every copy of a filename in the image says so, and
+says where the build should put them. Any module shipping that filename
+contributes.
 
 ```kdl
 // modules/core/goojust/module.kdl
-sink "justfile" file="justfile.inc" path="/usr/share/goojust/justfile.apps"
+collects "justfile.inc" into="/usr/share/goojust/justfile.apps"
 
 // modules/core/flatpak/module.kdl
-sink "flatpaks" file="flatpaks.list" path="/usr/share/falcos/default-flatpaks"
+collects "flatpaks.list" into="/usr/share/falcos/default-flatpaks"
 ```
 
-| Property | Meaning |
+| Part | Meaning |
 | --- | --- |
-| `file=` | filename in a contributing module's directory |
-| `path=` | absolute destination in the image, created if needed |
+| argument | filename in a contributing module's directory |
+| `into=` | absolute destination in the image, created if needed |
 
-Contributions are appended in module list order. This is what removes the
-hardcoded goojust and flatpak paths from the runner: any module can
-define a new sink, and the runner learns about it from resolved env. Only
-the pairs a module actually contributes reach its layer, so a module that
-feeds no sink carries no sink env at all.
+**The declaration says nothing about what the collecting module then does
+with them.** The build collects; interpreting the result is the module's
+business. Today the build appends, in module list order, but that is a
+detail of the collector and not a promise of this node — which is why it
+is not called `aggregates` or `concatenates`.
 
-Sink names and sink filenames must both be unique across enabled modules.
-A module shipping a file that matches no declared sink is an error — it
-would otherwise be silently ignored, which is how a contribution goes
-missing without anything failing.
+Contribution is presence driven, like `files/` and `selinux/`: shipping
+the file is the whole contribution and a contributor declares nothing.
+Only the destination is declared, because it is the one part that cannot
+be derived from the filename.
+
+This is what removes the hardcoded goojust and flatpak paths from the
+runner: any module can start collecting a new filename, and the runner
+learns about it from resolved env. Only the pairs a module actually
+contributes reach its layer, so a module that contributes nothing carries
+no such env at all.
+
+One collector per filename, or where a contribution went would depend on
+module list order. A module shipping a collected filename while the
+module that collects it is absent is an error — it would otherwise be
+silently ignored, which is how a contribution goes missing without
+anything failing.
 
 ### Options
 
@@ -403,7 +416,7 @@ Nothing inside the image parses KDL.
 | --- | --- |
 | `FLAVOR_GATE=<flavor>` | the entry is inside a `flavor` block |
 | `OPT_<NAME>=<value>` | one per declared option, always, defaults included |
-| `MODULE_SINKS="<file>=<path> ..."` | this module ships a file some sink aggregates |
+| `MODULE_COLLECT="<file>=<dest> ..."` | this module ships a file another module collects |
 | `<NAME>=${<NAME>}` | one per `arg` |
 
 Plus `MODDIR` as the runner's argument, and one secret mount per
@@ -440,10 +453,11 @@ Lint fails on all of these, in seconds, before anything builds.
 - a `requires-file` no enabled module provides
 - two enabled modules providing the same capability or contract file
 
-**Sinks**
+**Collecting**
 
-- a `contributes`-shaped file matching no declared sink
-- two enabled modules declaring the same sink name or sink filename
+- shipping a collected filename while the module that collects it is not
+  enabled
+- two enabled modules collecting the same filename
 
 **Options and variants**
 

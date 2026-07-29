@@ -15,10 +15,9 @@
 #                     (just a files/ overlay) omits it.
 #   5. selinux/       each *.te compiled and installed as a policy module
 #   6. files/         overlay copied verbatim into the image
-#   7. sinks          each file this module ships that some other module
-#                     declared a sink for, appended to that sink. The
-#                     pairs arrive resolved in MODULE_SINKS, so no path
-#                     is written down here
+#   7. collected      each file this module ships that another module
+#                     collects. The pairs arrive resolved in
+#                     MODULE_COLLECT, so no path is written down here
 
 set -ouex pipefail
 
@@ -76,15 +75,15 @@ if [ -d "$MODDIR/files" ]; then
     cp -rT "$MODDIR/files" /
 fi
 
-# Aggregation sinks. The consuming module declares which filename feeds
-# it and where that lands, and the generator resolved those into
-# <file>=<path> pairs for exactly the files this module ships. Nothing
-# here knows about goojust or flatpaks, so a module can define a new sink
-# without this script being taught about it.
-read -ra sinks <<< "${MODULE_SINKS:-}"
-for sink in "${sinks[@]}"; do
-    src="$MODDIR/${sink%%=*}"
-    dest="${sink#*=}"
+# Collected files. Another module declared that it collects this
+# filename and where the build should put it; the generator resolved that
+# into <file>=<destination> pairs for exactly the files this module ships.
+# Nothing here knows about goojust or flatpaks, so a module can start
+# collecting a new filename without this script being taught about it.
+read -ra collected <<< "${MODULE_COLLECT:-}"
+for pair in "${collected[@]}"; do
+    src="$MODDIR/${pair%%=*}"
+    dest="${pair#*=}"
     mkdir -p "$(dirname "$dest")"
     cat "$src" >> "$dest"
 done

@@ -29,7 +29,7 @@ ARG FLAVOR";
 pub fn section(
     list: &List,
     modules: &[Module],
-    sinks: &BTreeMap<String, Vec<(String, String)>>,
+    collected: &BTreeMap<String, Vec<(String, String)>>,
     root: &Path,
     issues: &mut Issues,
 ) -> String {
@@ -69,7 +69,7 @@ pub fn section(
         let block = if inc.is_file() {
             verbatim(entry, &inc, flavor_arg_emitted, list, issues)
         } else {
-            standard(entry, module, sinks.get(&entry.path))
+            standard(entry, module, collected.get(&entry.path))
         };
         let _ = write!(out, "{block}\n\n");
 
@@ -104,7 +104,7 @@ pub fn section(
 fn standard(
     entry: &Entry,
     module: Option<&Module>,
-    sinks: Option<&Vec<(String, String)>>,
+    collected: Option<&Vec<(String, String)>>,
 ) -> String {
     let mut env = String::new();
     if let Some(flavor) = &entry.flavor {
@@ -117,15 +117,15 @@ fn standard(
     for (name, value) in module.map(|m| m.resolved.as_slice()).unwrap_or_default() {
         let _ = write!(env, "{name}=\"{value}\" ");
     }
-    // Only the sinks this module actually contributes to, resolved from
-    // the files it ships, so the runner appends without knowing any path
-    // and a module that contributes nothing carries no env at all.
-    if let Some(sinks) = sinks.filter(|s| !s.is_empty()) {
-        let pairs: Vec<String> = sinks
+    // Only the files this module actually contributes, resolved from what
+    // it ships, so the runner needs no path of its own and a module that
+    // contributes nothing carries no env at all.
+    if let Some(collected) = collected.filter(|c| !c.is_empty()) {
+        let pairs: Vec<String> = collected
             .iter()
-            .map(|(file, path)| format!("{file}={path}"))
+            .map(|(file, into)| format!("{file}={into}"))
             .collect();
-        let _ = write!(env, "MODULE_SINKS=\"{}\" ", pairs.join(" "));
+        let _ = write!(env, "MODULE_COLLECT=\"{}\" ", pairs.join(" "));
     }
 
     // required=false always: a build without the secret is a supported
