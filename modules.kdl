@@ -4,23 +4,10 @@
 // scripts/manifest.sh reads from this file.
 //
 // Optional build flavors
-// Flavor specific modules can then be defined using the following syntax
-// in the modules section eg.
-// modules {
-//     flavor "flavor-name" {
-//        module "module-name"
-//    }
-// }
-//
+// flavours can have the following boolean properties:
+// - default: what `just build` builds
+// - pr-build: what builds during a pull request
 flavors {
-    // default   what `just build` builds when given no flavor. A
-    //           build-order convenience, and no claim about which image
-    //           belongs on any particular machine.
-    // pr-build  the single flavor a pull request builds, for half the
-    //           runner time. desktop rather than laptop because its gated
-    //           modules include the kvmfr DKMS build, so it covers more
-    //           build surface. Unrelated to default; they coincide by
-    //           choice, not because one implies the other.
     desktop default=#true pr-build=#true
     laptop
 }
@@ -28,7 +15,13 @@ flavors {
 // Modules compile into one Containerfile RUN layer each in the build Containerfile
 // (Contaienrfile.generated) in the order below. Therefore:
 // - Place less frequently updated modules earlier in the build to ensure better caching
-// - Ensure that any modules that have dependancies in other modules run first 
+// - Ensure that any modules that have dependancies in other modules run first
+// Flavor specific modules are defined with the following syntax:
+// modules {
+//     flavor "flavor-name" {
+//        module "module-name"
+//    }
+// }
 modules {
     module "base"
     module "core/auto-updates"

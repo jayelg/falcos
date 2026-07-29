@@ -1,2 +1,3 @@
 # Flatpaks to install on first boot.
-io.github.kolunmi.Bazaar
+# eg.
+# io.github.kolunmi.Bazaar
