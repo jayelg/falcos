@@ -1,22 +1,17 @@
-// Falcos module inventory: the source of truth for what goes in the image.
+// module configuration: Defining all of the modules included in the image builds.
 //
-// Entries build in the order they appear, one Containerfile RUN layer
-// each. Heavy or rarely-changing modules first, for better layer caching.
+// The schema is documented in modules/SCHEMA.md.
+// scripts/manifest.sh reads from this file.
 //
-// The schema is documented in modules/SCHEMA.md. scripts/manifest.sh is
-// the only thing that reads this file.
-
-// Image build variants. Every layer above the first flavor-gated module
-// is shared by all of them, so adding a flavor costs only its own gated
-// modules.
+// Optional build flavors
+// Flavor specific modules can then be defined using the following syntax
+// in the modules section eg.
+// modules {
+//     flavor "flavor-name" {
+//        module "module-name"
+//    }
+// }
 //
-// The ungated set is published too, as `falcos` unsuffixed, and is not
-// declared here: it exists because the shared layers exist. It is what a
-// fresh installer lays down, because kargs under /usr/lib/bootc/kargs.d/
-// are static and cannot be made conditional on hardware. Moving to a
-// device flavor afterwards is a `bootc switch`.
-//
-// Omitting this block entirely is supported and builds one unnamed image.
 flavors {
     // default   what `just build` builds when given no flavor. A
     //           build-order convenience, and no claim about which image
@@ -30,6 +25,10 @@ flavors {
     laptop
 }
 
+// Modules compile into one Containerfile RUN layer each in the build Containerfile
+// (Contaienrfile.generated) in the order below. Therefore:
+// - Place less frequently updated modules earlier in the build to ensure better caching
+// - Ensure that any modules that have dependancies in other modules run first 
 modules {
     module "base"
     module "core/auto-updates"
@@ -79,8 +78,6 @@ modules {
     module "apps/vscodium"
     module "apps/bitwarden"
 
-    // Everything from here down sits below ARG FLAVOR, so it is built
-    // once per target rather than shared.
     flavor "desktop" {
         module "virtualization/vfio-passthrough"
         module "virtualization/looking-glass"
@@ -90,8 +87,5 @@ modules {
         module "hardware/laptop-tweaks"
     }
 
-    // Outside the flavor blocks again, so ungated: this runs everywhere.
-    // It is down here because it has to run after every gated module,
-    // which is the only reason to accept being built once per target.
-    module "core/power-just-scripts"
+    module "core/power-just-scripts" // installed after flavors for preferred justfile ordering
 }
