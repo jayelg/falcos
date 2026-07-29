@@ -8,3 +8,5 @@ __pycache__/
 Containerfile.generated
 # Rendered configs and other generated files no build reads twice
 build/
+# Compiled host tooling
+tools/*/target/

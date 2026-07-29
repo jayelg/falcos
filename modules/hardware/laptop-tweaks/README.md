@@ -1,7 +1,7 @@
 # laptop-tweaks
 
 Laptop-flavor kernel tweaks. Laptop flavor only (gated by the `[laptop]`
-section in [modules.list](../../../modules.list)). Pure-file module.
+section in [modules.kdl](../../../modules.kdl)). Pure-file module.
 
 ## Files
 

@@ -1,6 +1,6 @@
 [root](../../README.md) / [build-phases](../README.md) / **modules**
 
-Self-describing, independently cacheable build units. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), and is toggled/ordered by [modules.list](../../modules.list). Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
+Self-describing, independently cacheable build units. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), and is toggled/ordered by [modules.kdl](../../modules.kdl). Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
 
 ### Anatomy of a module
 
@@ -24,9 +24,9 @@ modules/<group-or-name>/<name>/
                       e.g. build secrets or ARGs (optional)
 ```
 
-The directory name is the module name in modules.list. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.list is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
+The directory name is the module name in modules.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
 
-To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (helpers, preset, finalize.sh, variants, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.list, so it never builds.
+To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (helpers, preset, finalize.sh, variants, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.kdl, so it never builds.
 
 ### Base (`base/`) -- do not disable
 - `base` -- pure-file base-system layer: sshd-off preset, coredump lockdown, PAM policy (faillock/pwquality), sulogin generator, os-release logo + plymouth branding

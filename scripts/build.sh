@@ -144,9 +144,9 @@ if [ "$reset" = 1 ]; then
 fi
 
 # ---- resolved build inputs -----------------------------------------------
-# scripts/flavors.sh is the only reader of ARG FLAVORS; asking it for the
-# default and validating against it is what keeps a typo out of a 50 minute
-# build.
+# scripts/flavors.sh derives both from the flavor set in modules.kdl;
+# asking it for the default and validating against it is what keeps a typo
+# out of a 50 minute build.
 flavor="${flavor:-$(./scripts/flavors.sh default)}"
 ./scripts/flavors.sh check "$flavor"
 

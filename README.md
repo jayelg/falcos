@@ -5,7 +5,7 @@ Falcos is a framework for a 'build-your-own distro' using an atomic/immutable li
 ## Features
 
 - **Minimal Abstractions**: The repo is a framework for a custom linux image designed to be easy to learn and understand whats happening under the hood while still keeping things organised and easy to maintain.
-- **Module based architecture**: `modules/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `modules.list` then defines a definitive list of all modules that are enabled in the built images including common modules and modules specific to different flavor builds (using a `[Flavor_Name]` tags). Modules are then spliced into a generated containerfile at build time.
+- **Module based architecture**: `modules/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `modules.kdl` then defines a definitive list of all modules that are enabled in the built images including common modules and modules specific to different flavor builds (using a `[Flavor_Name]` tags). Modules are then spliced into a generated containerfile at build time.
 - **System visibility**: The default base image is [fedora-bootc](https://quay.io/repository/fedora/fedora-bootc) which provides a minimal starting point so that the majority of the system configuration is centralized and visible to the user.
 - **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening modules are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
 - **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each module cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
@@ -17,22 +17,24 @@ Falcos is a framework for a 'build-your-own distro' using an atomic/immutable li
 ### Modules
 Anything that you want to include in an image can be packaged into a module. A module is a structured directory that can include scripts, direct file overlays, justfiles, flatpaks, Containerfile segments, and versioning.
 
-Modules are then explicity defined for inclusion in the image through the `modules.list` file.
+Modules are then explicity defined for inclusion in the image through the `modules.kdl` file.
 
 ### The Containerfile is generated at build time
 (`Containerfile.generated`).
-During the build `scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer as they are ordered in the `modules.list` file and outputs a `Containerfile.generated` file for use in the build.
+During the build `scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer as they are ordered in the `modules.kdl` file and outputs a `Containerfile.generated` file for use in the build.
 
 ### Image Flavors
 Flavours refers to image variants that that the build script/Build CI workflow will generate. 
 
-Images flavours are defined by adding a comma delinated list into `Containerfile.template` > `ARG FLAVORS=""`.
+Image flavours are declared in the `flavors { }` block at the top of `modules.kdl`, and modules are gated to one by nesting them in a `flavor "<name>" { }` block.
 
-Flavors are configured by using the `[<Flavor-Name>]` header tag before a list of modules in `modules.list`.
+The ungated set is published too, as `falcos` unsuffixed, and is not declared: it exists because the layers above the flavor gate exist. It is what a fresh installer lays down, because kargs under `/usr/lib/bootc/kargs.d/` are static and cannot be made conditional on hardware. Moving to a device flavor afterwards is a `bootc switch`.
+
+Flavors are optional. Omit the block and the build produces one unnamed image.
 
 The `[Common]` header tag is used for modules targeting all built images,
 
-The generated `Containerfile.generated` file is not flavor specific and includes all modules listed in the `modules.list` file for use in all flavor builds. The build workflow parses the `modules.list` file during the build to gate what is installed during each flavor build workflow.
+The generated `Containerfile.generated` file is not flavor specific and includes all modules listed in the `modules.kdl` file for use in all flavor builds. The build workflow parses the `modules.kdl` file during the build to gate what is installed during each flavor build workflow.
 
 Every layer above the first flavor section is shared by all flavor builds: the flavor is only declared as a build arg at that point, and an arg in scope is part of the cache key of every layer below it. Adding a flavor therefore costs its own gated modules rather than a whole extra build.
 
@@ -75,18 +77,26 @@ Dev scripts for building and testing outside CI.
 Define the base image to use with:
 `FROM <base-image>` eg. `FROM quay.io/fedora/fedora-bootc:44`
 
-Define what flavors to build with:
-`ARG FLAVORS=""` eg. `ARG FLAVORS="desktop,laptop"`
+Define what flavors to build in `modules.kdl`:
 
-This is the only place flavors are declared. `scripts/flavors.sh` is the only thing that reads it, and everything downstream asks that script: the build matrix, the published image names (`falcos-<flavor>`), the per-flavor build cache tags, the registry cleanup and the local `just build` default. Adding a flavor needs no other edit.
+```kdl
+flavors {
+    desktop default=#true pr-build=#true
+    laptop
+}
+```
+
+`default` is the flavor `just build` produces when given none; `pr-build` is the single flavor a pull request builds. They are marked rather than inferred from position, because three unrelated policies had accumulated on "first entry" and collided.
+
+This is the only place flavors are declared. Everything downstream derives from it: the build matrix, the published image names (`falcos-<flavor>`), the per-target build cache tags, the registry cleanup and the local `just build` default. Adding a flavor needs no other edit.
 
 That script also declares which flavor a fresh installer lays down, the one flavor choice that is a policy rather than a derivation.
 
 #### [Modules Directory](modules)
 
-To add any new app, customization or feature you can make a copy of the  `modules/_template/module-name` directory and rename it to a descriptive module name to be used in the `modules.list` file. `modules/_template/readme.md` explains how to use the module template.
+To add any new app, customization or feature you can make a copy of the  `modules/_template/module-name` directory and rename it to a descriptive module name to be used in the `modules.kdl` file. `modules/_template/readme.md` explains how to use the module template.
 
-Module directories can also be organised into groups eg. `modules/core/brew`. Grouped modules must be formatted as `<group-name>/<module-name>` in the modules.list eg. `core/brew`.
+Module directories can also be organised into groups eg. `modules/core/brew`. Grouped modules must be formatted as `<group-name>/<module-name>` in the modules.kdl eg. `core/brew`.
 
 You can use modules in a variety of ways:
 - As a single application installation eg. a browser
@@ -94,15 +104,15 @@ You can use modules in a variety of ways:
 - For any just scripts you want to include ie. justfile.inc
 - Layering files trees into the immutable system
 
-#### [modules.list](modules.list)
+#### [modules.kdl](modules.kdl)
 
 This is a list of all modules that will be included in the build images.
 
 To include a module from the `modules/` directory, you can just add a line with the module name in the order that you would like it to run. If the module is grouped into a directory, it must be formatted as `<group-name>/<module-name>`.
 
-To exclude a module from the build, you can either delete it or comment it out. Module directories in `modules/` will not be included unless it is defined in `modules.list`.
+To exclude a module from the build, you can either delete it or comment it out. Module directories in `modules/` will not be included unless it is defined in `modules.kdl`.
 
-To include a module for a specific image flavor only, add a `[Flavor-name}` header tag with the flavor name specified in `Containerfile.template` `ARG FLAVORS` list. all modules below this flavor header tag will be included only in the specified flavor image. to include module that should be applied to all images after the flavor modules have been included, add the `[common]` header tag. This is useful for any scripts that need to run last.
+To include a module in one flavor only, nest it in a `flavor "<name>" { }` block naming a declared flavor. Modules outside any such block are ungated and build once, shared by every flavor. A module listed after a flavor block is ungated again, but sits below the flavor gate and so is built once per target: put one there only when it has to run last.
 
 ## Installation
 
@@ -131,10 +141,10 @@ Which flavor the installer lays down comes from one declaration in `scripts/flav
 ### Local builds
 
 ```bash
-just build              # build the container image (first flavor in ARG FLAVORS by default)
+just build              # build the container image (the flavor marked default in modules.kdl)
 just build-qcow2        # convert it to a bootable qcow2 via bootc-image-builder
 just run-vm-qcow2       # boot it in a browser-accessible VM
-just lint               # shellcheck every Bash script and validate modules.list, the same script CI gates on
+just lint               # shellcheck every Bash script and validate modules.kdl, the same script CI gates on
 ```
 
 `just build` and the build workflow both run [scripts/build.sh](scripts/build.sh), so a local build gets the same Containerfile, build args, cache refs and signing secret as CI.

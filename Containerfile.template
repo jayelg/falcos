@@ -11,7 +11,7 @@
 #
 # Every build goes through scripts/build.sh, which CI and `just build`
 # both call. The module section between the BEGIN/END MODULES markers is
-# generated from modules.list by scripts/gen-containerfile.sh (`just
+# generated from modules.kdl by scripts/gen-containerfile.sh (`just
 # generate` runs it standalone).
 FROM scratch AS ctx
 COPY build-phases/ /
@@ -23,17 +23,16 @@ COPY modules/ /modules/
 FROM quay.io/fedora/fedora-bootc:44
 
 ### Build arguments
-# Comma-separated list of valid flavor names, read only by
-# scripts/flavors.sh. The first entry is the default flavor. The singular
-# ARG FLAVOR is declared by the generator, directly above the first
-# flavor-gated module, so that every layer above it is shared by all
-# flavors. See the IMAGE_VERSION note below for why an ARG's position
+# The flavor set is declared in modules.kdl, not here: the build never
+# reads the plural, and co-locating it with the sections that gate on it
+# turns a cross-file check into a local one. The singular ARG FLAVOR is a
+# real build arg, declared by the generator directly above the first
+# flavor-gated module so that every layer above it is shared by every
+# flavor. See the IMAGE_VERSION note below for why an ARG's position
 # decides that.
-ARG FLAVORS="desktop,laptop"
-
-### No need to change anything below
+#
 # The below ARG does not need to be updated for custom kernels defined in
-# modules.list. A kernel module ships its own Containerfile fragment that
+# modules.kdl. A kernel module ships its own Containerfile fragment that
 # overrides this value.
 ARG KERNEL=stock
 
@@ -46,13 +45,13 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
 ## Modules: one RUN layer each for independent BuildKit caching, run
 ## through lib/run-module.sh (repo file, version pins, files overlay).
 
-# ---- BEGIN MODULES (generated at build time from modules.list; see scripts/gen-containerfile.sh) ----
+# ---- BEGIN MODULES (generated at build time from modules.kdl; see scripts/gen-containerfile.sh) ----
 #
 # Intentionally empty in git. This committed file is the build skeleton:
 # at build time (scripts/build.sh, locally and in CI) one RUN layer per
-# modules.list entry is spliced in here and the result is written to
+# modules.kdl entry is spliced in here and the result is written to
 # Containerfile.generated, which is what actually builds. To change what
-# the image contains, edit modules.list, not this file.
+# the image contains, edit modules.kdl, not this file.
 #
 # ---- END MODULES ----
 

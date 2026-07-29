@@ -1,7 +1,7 @@
 # vfio-passthrough
 
 VFIO GPU-passthrough host setup. Desktop flavor only (gated by the
-`[desktop]` section in [modules.list](../../../../modules.list)).
+`[desktop]` section in [modules.kdl](../../../../modules.kdl)).
 Pure-file module; pairs with the [looking-glass](../looking-glass) kvmfr
 module. The passthrough device IDs are hardcoded in `modprobe.d/vfio.conf`.
 

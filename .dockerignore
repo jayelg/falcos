@@ -14,3 +14,6 @@ output
 _build*
 # Generated files, not build-phases/ which the pattern does not match
 build
+# Host build tooling. Never copied into the image, and target/ is
+# large enough that shipping it to the daemon is worth avoiding.
+tools

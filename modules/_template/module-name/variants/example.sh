@@ -1,5 +1,5 @@
 # variants/<name>.sh — pin/flag overrides selected as `<module>@<name>` in
-# modules.list (e.g. `template@example`). OPTIONAL. Sourced after
+# modules.kdl (e.g. `template@example`). OPTIONAL. Sourced after
 # versions.sh and before module.sh, so it can override a pin or set a flag
 # that module.sh then branches on.
 

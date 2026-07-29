@@ -5,13 +5,13 @@
 A copy-me reference demonstrating **every** capability the build architecture
 supports. The `module-name/` subdirectory *is* the module (copy it); this
 top-level README is the how-to. Nothing here is listed in
-[modules.list](../../../modules.list), so it never builds. The `_` prefix
+[modules.kdl](../../../modules.kdl), so it never builds. The `_` prefix
 just keeps it sorted to the top of the modules directory.
 
 ## Quick start
 
 1. Copy the inner module directory to its destination. The path relative
-   to `modules/` is the entry you'll add to modules.list:
+   to `modules/` is the entry you'll add to modules.kdl:
    ```
    cp -r modules/_template/module-name modules/<group-or-name>/<name>
    ```
@@ -22,7 +22,7 @@ just keeps it sorted to the top of the modules directory.
    `45-falcos-template.preset` → `45-falcos-<name>.preset`, rename
    `Containerfile.inc.example` → `Containerfile.inc` only if you need it, and
    drop the `.example` config/libexec.
-4. Add the module path (e.g. `core/my-module`) to `modules.list` in
+4. Add the module path (e.g. `core/my-module`) to `modules.kdl` in
    the position you want its RUN layer (order = build order; see
    **Ordering & flavors**).
 5. `just generate` to confirm it resolves and splices in.
@@ -38,7 +38,7 @@ Run order within a module: `repo` → `versions.sh` → `variants/<v>.sh` →
 | `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set and pins in scope. Omit for a pure-file module. |
 | `versions.sh` | Renovate-tracked pins + SHA256s. `# renovate:` comment must sit directly above its version line. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
-| `variants/<v>.sh` | Pin/flag overrides, selected as `<name>@<v>` in modules.list. |
+| `variants/<v>.sh` | Pin/flag overrides, selected as `<name>@<v>` in modules.kdl. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |
@@ -46,7 +46,7 @@ Run order within a module: `repo` → `versions.sh` → `variants/<v>.sh` →
 | `Containerfile.inc` | Verbatim RUN block replacing the standard one — only for extra mounts, build secrets, or ARGs. |
 | `README.md` | Every module has one; the copy here is a fill-in skeleton. |
 
-## Ordering & flavors (in modules.list)
+## Ordering & flavors (in modules.kdl)
 
 - Position in the list = position of the RUN layer. Put heavy, rarely-changing
   modules early (better layer caching) and frequently-bumped ones late.
@@ -54,7 +54,7 @@ Run order within a module: `repo` → `versions.sh` → `variants/<v>.sh` →
   (the generator injects `FLAVOR_GATE`, and both `run-module.sh` and
   the `finalize.sh` loop skip it on other flavors). Flavor sections stay at
   the bottom to keep the cache fork there. Valid flavors are defined in
-  `Containerfile.template` `ARG FLAVORS` build arg.
+  `flavors` block in `modules.kdl`.
 
 ## Key rules & gotchas
 
@@ -69,7 +69,7 @@ Run order within a module: `repo` → `versions.sh` → `variants/<v>.sh` →
   scripts. Sourcing a lib helper in `module.sh` also stops shellcheck from
   flagging your pin vars (SC2154); pin/override files use `# shellcheck
   disable=SC2034`.
-- **The modules.list entry IS the path** relative to `modules/`. E.g.
+- **The modules.kdl entry IS the path** relative to `modules/`. E.g.
   `core/my-module` for `modules/core/my-module/`. No uniqueness
   constraint across groups — `core/tools` and `de/tools` are distinct.
 

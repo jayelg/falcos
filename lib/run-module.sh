@@ -9,7 +9,7 @@
 #   2. repo           sourced if present, idempotent via its REPO_ID
 #   3. versions.sh    Renovate-tracked pins, sourced if present
 #   4. variant        variants/<name>.sh overrides pins/flags, selected
-#                     as <module>@<name> in modules.list
+#                     as <module>@<name> in modules.kdl
 #   5. module.sh      the module's own install logic (sourced, so it
 #                     inherits strict mode and the pins; MODDIR points
 #                     at the module directory). Optional: a pure-file

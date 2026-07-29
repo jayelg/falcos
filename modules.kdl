@@ -1,0 +1,97 @@
+// Falcos module inventory: the source of truth for what goes in the image.
+//
+// Entries build in the order they appear, one Containerfile RUN layer
+// each. Heavy or rarely-changing modules first, for better layer caching.
+//
+// The schema is documented in modules/SCHEMA.md. scripts/manifest.sh is
+// the only thing that reads this file.
+
+// Image build variants. Every layer above the first flavor-gated module
+// is shared by all of them, so adding a flavor costs only its own gated
+// modules.
+//
+// The ungated set is published too, as `falcos` unsuffixed, and is not
+// declared here: it exists because the shared layers exist. It is what a
+// fresh installer lays down, because kargs under /usr/lib/bootc/kargs.d/
+// are static and cannot be made conditional on hardware. Moving to a
+// device flavor afterwards is a `bootc switch`.
+//
+// Omitting this block entirely is supported and builds one unnamed image.
+flavors {
+    // default   what `just build` builds when given no flavor. A
+    //           build-order convenience, and no claim about which image
+    //           belongs on any particular machine.
+    // pr-build  the single flavor a pull request builds, for half the
+    //           runner time. desktop rather than laptop because its gated
+    //           modules include the kvmfr DKMS build, so it covers more
+    //           build surface. Unrelated to default; they coincide by
+    //           choice, not because one implies the other.
+    desktop default=#true pr-build=#true
+    laptop
+}
+
+modules {
+    module "base"
+    module "core/auto-updates"
+    module "core/system-just-scripts"
+    module "core/goojust"
+    module "core/flatpak"
+    module "core/brew"
+    module "core/cli-tools"
+
+    module "cli-customizations"
+    module "manage-dotfiles"
+
+    module "kernel/cachyos-kernel"
+
+    module "hardening/hardened-malloc"
+    module "hardening/sudo-hardening"
+
+    module "backup/backup-tools"
+
+    module "hardware/intel-wifi"
+    module "hardware/gaming"
+    module "hardware/hardware-tools"
+    module "hardware/logitech"
+    module "hardware/yubikey"
+
+    module "de/kde-desktop"
+    module "de/falcos-plasma-settings"
+    module "de/plasma-network-audio"
+    module "de/bazaar"
+    module "de/kde-theming"
+
+    module "media-codecs"
+    module "networking"
+
+    module "dev-tools"
+
+    module "virtualization/libvirt"
+    module "virtualization/incus"
+    module "virtualization/podman"
+
+    module "vpn/mullvad-vpn"
+    module "vpn/netbird"
+    module "vpn/tailscale"
+
+    module "apps/affinity"
+    module "apps/trivalent"
+    module "apps/vscodium"
+    module "apps/bitwarden"
+
+    // Everything from here down sits below ARG FLAVOR, so it is built
+    // once per target rather than shared.
+    flavor "desktop" {
+        module "virtualization/vfio-passthrough"
+        module "virtualization/looking-glass"
+    }
+
+    flavor "laptop" {
+        module "hardware/laptop-tweaks"
+    }
+
+    // Outside the flavor blocks again, so ungated: this runs everywhere.
+    // It is down here because it has to run after every gated module,
+    // which is the only reason to accept being built once per target.
+    module "core/power-just-scripts"
+}

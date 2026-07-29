@@ -26,11 +26,16 @@ mapfile -t scripts < <(
 shellcheck -s bash "${scripts[@]}"
 echo "lint: shellcheck passed on ${#scripts[@]} scripts"
 
-# Catches modules.list entries that don't resolve to a module
-# directory, an undeclared flavor section and skeleton marker damage,
-# without needing a full image build.
+# Validates every manifest: unknown nodes and properties, flavor marks,
+# entries that do not resolve to a module directory, and fragments whose
+# gate disagrees with the list. Reports every problem at once, with the
+# line each is on, rather than stopping at the first.
+./scripts/manifest.sh check
+
+# Then the splice itself, which is the part manifest.sh does not own:
+# skeleton marker damage would otherwise only surface at build time.
 ./scripts/gen-containerfile.sh > /dev/null
-echo "lint: modules.list resolves"
+echo "lint: the Containerfile generates"
 
 # Renders the installer config the way a disk build does, so a template
 # that stopped substituting, or an installer flavor that is no longer

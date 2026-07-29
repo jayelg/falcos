@@ -1,6 +1,6 @@
 # finalize.sh — run-once logic that needs the REAL systemctl or the final
 # assembled image. OPTIONAL. Sourced by 99-finalize.sh (not run-module.sh)
-# after systemctl is restored, in modules.list order and flavor-gated, so:
+# after systemctl is restored, in modules.kdl order and flavor-gated, so:
 #   - `systemctl mask/enable/disable` works here (it's stubbed in the build
 #     layers) — though simple enablement should use a files/ preset instead
 #   - the whole image exists, so you can edit files other modules installed

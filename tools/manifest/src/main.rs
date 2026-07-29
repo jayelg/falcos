@@ -1,0 +1,109 @@
+//! The only reader of modules.kdl and the per-module module.kdl files.
+//!
+//! Everything that needs to know what is in the image asks this: the
+//! Containerfile generator, the CI build matrix, the per-target cache
+//! tags, the registry cleanup and the Justfile. One parse, on the host.
+//! The build consumes resolved values passed as env or generated files,
+//! and nothing inside the image parses KDL.
+//!
+//! Reached through scripts/manifest.sh, which builds it if needed.
+
+mod diag;
+mod list;
+mod render;
+
+use list::List;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+const USAGE: &str = "\
+usage: manifest <command>
+
+All output is one item per line, in declaration order.
+
+  flavors           every declared flavor
+  default-flavor    the flavor marked default, which builds use when none
+                    is given; nothing when no flavors are declared
+  pr-flavor         the flavor a pull request builds
+  targets           every build target: the ungated `none`, then flavors
+  section           the generated Containerfile module section
+  check             validate every manifest, printing what is wrong
+
+Run from the repository root, or set FALCOS_ROOT.
+";
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let command = match args.first().map(String::as_str) {
+        Some("-h") | Some("--help") => {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        Some(c) => c,
+        None => {
+            eprint!("{USAGE}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if args.len() > 1 {
+        eprintln!("manifest: `{command}` takes no arguments");
+        return ExitCode::FAILURE;
+    }
+
+    let root = PathBuf::from(std::env::var("FALCOS_ROOT").unwrap_or_else(|_| ".".into()));
+    let list_path = root.join("modules.kdl");
+    let list_display = list_path.display().to_string();
+
+    let (list, mut issues) = match List::load(&list_display) {
+        Ok(v) => v,
+        Err(issue) => {
+            let mut issues = diag::Issues::default();
+            issues.push(*issue);
+            issues.report("modules.kdl");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Rendering is where the module directories and fragments are
+    // checked, so `check` runs it too and throws the output away.
+    let output = match command {
+        "flavors" => lines(list.flavors.iter().map(|f| f.name.clone())),
+        "default-flavor" => lines(list.default_flavor().map(str::to_string)),
+        "pr-flavor" => lines(list.pr_flavor().map(str::to_string)),
+        "targets" => lines(list.targets()),
+        "section" | "check" => {
+            let section = render::section(&list, &root, &mut issues);
+            if command == "check" {
+                String::new()
+            } else {
+                section
+            }
+        }
+        other => {
+            eprintln!("manifest: unknown command `{other}`");
+            eprint!("{USAGE}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if issues.report(&list_display) {
+        return ExitCode::FAILURE;
+    }
+    print!("{output}");
+    if command == "check" {
+        eprintln!(
+            "manifest: {} modules, {} flavors",
+            list.entries.len(),
+            list.flavors.len()
+        );
+    }
+    ExitCode::SUCCESS
+}
+
+fn lines(items: impl IntoIterator<Item = String>) -> String {
+    items
+        .into_iter()
+        .map(|s| s + "\n")
+        .collect::<Vec<_>>()
+        .concat()
+}
