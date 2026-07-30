@@ -14,8 +14,8 @@ if ! command -v shellcheck > /dev/null 2>&1; then
     exit 1
 fi
 
-# -s bash because module scripts, versions files and variant overrides
-# are sourced fragments without shebangs. Extensionless runtime scripts
+# -s bash because module scripts are sourced fragments without a
+# shebang. Extensionless runtime scripts
 # (libexec helpers, systemd generators) are matched by path instead of
 # extension. Repo-wide excludes live in .shellcheckrc.
 mapfile -t scripts < <(

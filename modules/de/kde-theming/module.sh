@@ -19,11 +19,10 @@ DARKLY_BUILD_DEPS=(
     kdecoration-devel
 )
 dnf5 install -y "${DARKLY_BUILD_DEPS[@]}"
-fetch_extract "https://github.com/Bali10050/Darkly/archive/refs/tags/v${DARKLY_VERSION}.tar.gz" \
-    "$DARKLY_SHA256" /tmp
+fetch_extract "$ASSET_DARKLY_URL" "$ASSET_DARKLY_SHA256" /tmp
 cmake \
     -B /tmp/darkly-build \
-    -S "/tmp/Darkly-${DARKLY_VERSION}" \
+    -S "/tmp/Darkly-${ASSET_DARKLY_VERSION}" \
     -DBUILD_TESTING=OFF \
     -Wno-dev \
     -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
@@ -31,16 +30,15 @@ cmake \
     -DBUILD_QT5=OFF
 cmake --build /tmp/darkly-build -j "$(nproc)"
 cmake --install /tmp/darkly-build
-rm -rf "/tmp/Darkly-${DARKLY_VERSION}" /tmp/darkly-build
+rm -rf "/tmp/Darkly-${ASSET_DARKLY_VERSION}" /tmp/darkly-build
 dnf5 remove -y --noautoremove "${DARKLY_BUILD_DEPS[@]}"
 
 # Ant-Dark plasma desktop theme
-fetch_extract "https://github.com/EliverLara/Ant/archive/${ANT_COMMIT}.tar.gz" \
-    "$ANT_SHA256" /tmp
-cp -r "/tmp/Ant-${ANT_COMMIT}/kde/Dark/plasma/desktoptheme/Ant-Dark" \
+fetch_extract "$ASSET_ANT_URL" "$ASSET_ANT_SHA256" /tmp
+cp -r "/tmp/Ant-${ASSET_ANT_VERSION}/kde/Dark/plasma/desktoptheme/Ant-Dark" \
     /usr/share/plasma/desktoptheme/Ant-Dark
-rm -rf "/tmp/Ant-${ANT_COMMIT}"
+rm -rf "/tmp/Ant-${ASSET_ANT_VERSION}"
 
 # Advanced Weather Widget
-fetch_extract "https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/${AWW_VERSION}/advanced-weather-widget.plasmoid" \
-    "$AWW_SHA256" /usr/share/plasma/plasmoids/org.kde.plasma.advanced-weather-widget
+fetch_extract "$ASSET_ADVANCED_WEATHER_WIDGET_URL" "$ASSET_ADVANCED_WEATHER_WIDGET_SHA256" \
+    /usr/share/plasma/plasmoids/org.kde.plasma.advanced-weather-widget

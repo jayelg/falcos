@@ -26,7 +26,6 @@ drift both ways.
 | --- | --- |
 | `module.sh` | sourced as the install logic |
 | `repo` | sourced once, idempotent via its `REPO_ID` |
-| `versions.sh` | sourced for Renovate-tracked pins |
 | `selinux/*.te` | compiled and installed at priority 200 |
 | `files/` | copied verbatim into the image |
 | `finalize.sh` | sourced by the finalize phase, in resolved order |
@@ -354,8 +353,80 @@ undeclared variant is an error.
 This replaces `variants/*.sh`, which overrode pins by reassigning shell
 variables inside the build. Variants now resolve on the host into option
 env, so nothing inside the image sources a variant file and the runner
-loses the concept entirely. Once asset pins move into this manifest, a
-variant overrides a pin the same way it overrides any other option.
+loses the concept entirely. It cannot override an [asset
+pin](#asset-pins): a pin is not an option, and no module needs a variant
+to move one, so the form for saying so would be surface nothing could
+verify. That is the extension to make when one does.
+
+### Asset pins
+
+An asset is a pinned upstream input: a release archive, a single file, or
+a git ref a module clones. Everything about the pin is declared here, and
+the generator passes the resolved values to the layer as env.
+
+```kdl
+asset "starship" {
+    renovate datasource="github-releases" depName="starship/starship"
+    version "1.26.0"
+    url "https://github.com/starship/starship/releases/download/v{version}/starship-x86_64-unknown-linux-musl.tar.gz"
+    sha256 "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3" from="sidecar"
+}
+```
+
+| Node | Arity | Meaning |
+| --- | --- | --- |
+| `renovate` | 0 or 1 | Renovate tracks this pin. Mutually exclusive with `manual`. |
+| `manual "<why>"` | 0 or 1 | nothing tracks it, and this is why. Mutually exclusive with `renovate`. |
+| `version "<pin>"` | 0 or 1 | the pinned ref: a version, a tag or a commit. Required with `renovate`. |
+| `url "<template>"` | 0 or 1 | download URL. `{version}` is the only expansion. |
+| `sha256 "<hex>"` | 0 or 1 | what the fetched bytes must hash to. |
+
+The asset name is kebab-case and unique within the module. It becomes an
+env prefix, uppercased with dashes as underscores: `nerd-fonts` arrives as
+`ASSET_NERD_FONTS_VERSION`, `_URL` and `_SHA256`, one per field that is
+declared. A field that is not declared contributes no env, so a module
+reading it fails under `set -u` rather than fetching an empty URL.
+
+**`url` and `sha256` come together.** A download with nothing to check it
+against looks pinned while installing whatever the URL serves today. A
+module that clones a git ref instead declares neither: nothing is
+downloaded, and `git checkout <commit>` cannot hand back other content.
+
+`from=` on `sha256` says where the expected hash comes from when a
+version bump makes the pinned one stale. Only the [checksum
+workflow](../.github/workflows/checksums.yml) reads it; the build always
+verifies against whatever is pinned here.
+
+| `from=` | Where the hash comes from |
+| --- | --- |
+| `"asset"` (default) | hashing the asset itself. Trust-on-first-use, taken at PR time, which still catches an asset swapped after the pin was made. |
+| `"sidecar"` | the `<url>.sha256` upstream publishes beside it, so the pin is accurate from the start. |
+| `"manual"` | a human. For an asset whose filename does not follow from its version, or that has no version at all. |
+
+#### What Renovate reads
+
+`renovate` carries Renovate's own field names, and Renovate reads them out
+of this file directly through the custom managers in
+[renovate.json5](../.github/renovate.json5).
+
+| Property | Meaning |
+| --- | --- |
+| `datasource=` | `github-releases`, `github-tags` or `git-refs` — the three the custom managers match |
+| `depName=` | `owner/repo`, or the clone URL for `git-refs` |
+| `extractVersion=` | Renovate's capture turning an upstream tag into the value pinned here, e.g. `^v(?<version>.*)$` |
+
+Declared as data rather than written in a comment, because a comment
+cannot be checked and this one silently stopped matching through two path
+moves. The pin still has to be **flat and adjacent**: `version` is a line
+of its own directly below `renovate`, since the two are matched by one
+regex. Both halves are validated — an unsupported datasource, a missing
+`depName`, or anything wedged between the two lines fails lint rather than
+leaving the pin quietly unmanaged.
+
+An asset with no upstream to watch says so with `manual` and says why.
+Absence is not a mark: the next reader takes a missing annotation for an
+oversight and wires it up, which is exactly what the reason exists to
+prevent.
 
 ### Build inputs
 
@@ -491,6 +562,7 @@ Nothing inside the image parses KDL.
 | --- | --- |
 | `FLAVOR_GATE=<flavor>` | the entry is inside a `flavor` block |
 | `OPT_<NAME>=<value>` | one per declared option, always, defaults included |
+| `ASSET_<NAME>_VERSION`, `_URL`, `_SHA256` | one per declared asset field, URL already resolved |
 | `MODULE_COLLECT="<file>=<dest> ..."` | this module ships a file another module collects |
 | `<NAME>=${<NAME>}` | one per `arg` |
 
@@ -542,6 +614,22 @@ Lint fails on all of these, in seconds, before anything builds.
   enabled
 - two enabled modules collecting the same filename
 
+**Asset pins**
+
+- an asset declaring neither `renovate` nor `manual`, or both
+- a `renovate` with no `depName`, or a datasource no custom manager
+  matches
+- a `renovate` with no `version` below it, or with something between the
+  two
+- a `manual` with no reason
+- a `url` without a `sha256`, or a `sha256` without a `url`
+- a `sha256` that is not 64 lowercase hex digits
+- a `url` holding a placeholder other than `{version}`, or holding
+  `{version}` with no version pinned
+- two assets in one module under the same name
+- a `version` or `url` containing a shell metacharacter, which the env
+  prefix would not survive
+
 **Options and variants**
 
 - setting an option the module does not declare, or setting one twice
@@ -556,8 +644,9 @@ Lint fails on all of these, in seconds, before anything builds.
   one declared twice
 - a `position` other than `before` or `after`, or one declared alongside
   `standard-layer=#false`, where there is nothing to be before or after
-- a `secret`, `arg`, `option` or collected file declared alongside
-  `standard-layer=#false`, which removes the layer they would land on
+- a `secret`, `arg`, `option`, `asset` or collected file declared
+  alongside `standard-layer=#false`, which removes the layer they would
+  land on
 - a `Containerfile.inc` expanding `FLAVOR` above the `ARG FLAVOR`
   declaration
 - a gated module whose fragment runs a command without carrying the
@@ -573,11 +662,6 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **`asset` blocks replacing `versions.sh`**: datasource, version,
-  sha256, URL template and verify mode, one block per asset. Pins must
-  stay Renovate-readable, so an asset's version has to be a flat
-  `version "x.y.z"` line with its annotation comment directly above; a
-  nested pin form stops matching silently.
 - **`packages { fedora "..." }`**, declaring packages instead of calling
   the installer, and `supports` becoming enforced against the base family
   rather than merely declared.

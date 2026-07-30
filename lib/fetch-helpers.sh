@@ -1,7 +1,8 @@
 #!/bin/bash
 # Download-and-verify helpers for modules that install pinned upstream
-# release assets. Every asset is SHA256-verified against the pin in the
-# module's versions.sh (maintained by Renovate + checksums.yml).
+# release assets. The URL and the SHA256 both come from an `asset` block in
+# the module's module.kdl, resolved on the host and passed to the layer as
+# env (maintained by Renovate + checksums.yml).
 # Standalone so RUN layers can mount just this file.
 
 # <url> <sha256> <dest> — download with retries, verify, keep at <dest>.

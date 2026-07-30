@@ -1,9 +1,9 @@
 // module.kdl — the manifest. REQUIRED for every module.
 //
 // It holds only facts nothing can discover by looking at this directory.
-// That is why there is no entry here for files/, selinux/, finalize.sh,
-// repo or versions.sh: the runner checks for those, and a declaration
-// sitting beside an existing file could drift both ways.
+// That is why there is no entry here for files/, selinux/, finalize.sh or
+// repo: the runner checks for those, and a declaration sitting beside an
+// existing file could drift both ways.
 //
 // modules/SCHEMA.md is the full reference.
 
@@ -80,6 +80,49 @@ supports "fedora"
 //     description "Skip the extras and build without GPU acceleration"
 //     set "extras"
 //     set "gpu-accel" #false
+// }
+
+// OPTIONAL. Assets: a pinned upstream input, whether a release archive, a
+// single file or a git ref the module clones. The version, the hash and
+// the download URL are one fact in one place, so nothing outside can hold
+// a second copy of the URL and disagree about it.
+//
+// The name becomes an env prefix, uppercased with dashes as underscores,
+// one variable per declared field: `nerd-fonts` arrives as
+// $ASSET_NERD_FONTS_VERSION, _URL (already resolved) and _SHA256.
+//
+// `url` and `sha256` come together: a download with nothing to check it
+// against looks pinned while installing whatever the URL serves today.
+// A module that clones a git ref declares neither, since the commit is
+// itself the content hash.
+//
+// `version` must be the line directly below `renovate`: Renovate matches
+// the two together, and lint fails if anything gets between them.
+//
+// asset "template" {
+//     renovate datasource="github-releases" depName="example-org/example-tool"
+//     version "1.0.0"
+//     url "https://github.com/example-org/example-tool/releases/download/v{version}/example-tool-{version}.tar.gz"
+//     sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+// }
+//
+// from= says where the expected hash comes from when a version bump makes
+// the pinned one stale, and only .github/workflows/checksums.yml reads it:
+//
+//   asset      (default) hash the asset. Trust-on-first-use, taken at PR
+//              time, which still catches an asset swapped after the pin
+//   sidecar    upstream publishes <url>.sha256 beside the asset
+//   manual     nobody recomputes it
+//
+//     sha256 "0000..." from="sidecar"
+//
+// An asset with no upstream to watch says so, and says why. Absence is
+// not a mark: the next reader takes it for an oversight and wires it up.
+//
+// asset "template-manual" {
+//     manual "why nothing tracks this pin, so nobody wires it to Renovate later"
+//     url "https://example.com/permanent/asset.bin"
+//     sha256 "0000000000000000000000000000000000000000000000000000000000000000" from="manual"
 // }
 
 // OPTIONAL. Collecting: declared by the module that wants every copy of

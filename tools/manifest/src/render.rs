@@ -226,15 +226,7 @@ fn phase(file: &str, below_modules: bool) -> String {
 /// No target means every entry, which is the whole list rather than any
 /// image that gets built.
 pub fn summary(list: &List, modules: &[Module], target: Option<&str>) -> String {
-    let included: Vec<&Entry> = list
-        .entries
-        .iter()
-        .filter(|e| match (&e.flavor, target) {
-            (None, _) => true,
-            (Some(_), None) => true,
-            (Some(gate), Some(target)) => gate == target,
-        })
-        .collect();
+    let included: Vec<&Entry> = list.entries.iter().filter(|e| in_target(e, target)).collect();
     let gated = included.iter().filter(|e| e.flavor.is_some()).count();
 
     let mut out = String::new();
@@ -282,6 +274,63 @@ fn cell(text: &str) -> String {
     text.replace('|', "\\|")
 }
 
+/// Whether an entry lands in a target's image. No target means every
+/// entry, which is the whole list rather than any image that gets built.
+fn in_target(entry: &Entry, target: Option<&str>) -> bool {
+    match (&entry.flavor, target) {
+        (None, _) => true,
+        (Some(_), None) => true,
+        (Some(gate), Some(target)) => gate == target,
+    }
+}
+
+/// Every pinned asset, pipe separated, one per line:
+///
+///     <module>|<name>|<manifest>|<version>|<sha256>|<from>|<url>
+///
+/// Two consumers, neither of which should be carrying a table of its own:
+/// the checksum workflow, which recomputes a stale hash and needs the
+/// manifest to rewrite, and the SBOM supplement, which needs the payloads
+/// an RPM inventory cannot see. Absent fields are empty, so the column
+/// count is fixed.
+///
+/// Delimited with | rather than a tab because bash `read` collapses
+/// consecutive IFS whitespace characters (including tab), which shifts
+/// columns when a field is empty.
+pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
+    let mut out = String::new();
+    // A module listed under two flavors is two entries carrying the same
+    // pins, and a pin is recomputed and reported once however many images
+    // it lands in.
+    let mut seen: Vec<(&str, &str)> = Vec::new();
+    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+        let Some(module) = modules
+            .iter()
+            .find(|m| m.path == entry.path && m.flavor == entry.flavor)
+        else {
+            continue;
+        };
+        for asset in &module.assets {
+            if seen.contains(&(module.path.as_str(), asset.name.as_str())) {
+                continue;
+            }
+            seen.push((module.path.as_str(), asset.name.as_str()));
+            let _ = writeln!(
+                out,
+                "{}|{}|modules/{}/module.kdl|{}|{}|{}|{}",
+                module.path,
+                asset.name,
+                module.path,
+                asset.version.as_deref().unwrap_or_default(),
+                asset.sha256.as_deref().unwrap_or_default(),
+                asset.from.as_str(),
+                asset.url_resolved().unwrap_or_default(),
+            );
+        }
+    }
+    out
+}
+
 fn standard(
     entry: &Entry,
     module: Option<&Module>,
@@ -307,6 +356,17 @@ fn standard(
             .map(|(file, into)| format!("{file}={into}"))
             .collect();
         let _ = write!(env, "MODULE_COLLECT=\"{}\" ", pairs.join(" "));
+    }
+
+    // One line per asset field, unlike everything else here, because a
+    // module with seven pins carries twenty env pairs and the generated
+    // file is committed to be read. Only a module with assets gets them,
+    // so no line that has none moves.
+    let mut assets = String::new();
+    for asset in module.map(|m| m.assets.as_slice()).unwrap_or_default() {
+        for (name, value) in asset.env() {
+            let _ = write!(assets, "{name}=\"{value}\" \\\n    ");
+        }
     }
 
     // required=false always: a build without the secret is a supported
@@ -343,7 +403,7 @@ fn standard(
          --mount=type=cache,target=/var/cache \\\n    \
          --mount=type=cache,target=/var/log \\\n    \
          --mount=type=tmpfs,target=/tmp \\\n    \
-         {secrets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
+         {secrets}{assets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
     );
     out
 }

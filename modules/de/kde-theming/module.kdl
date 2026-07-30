@@ -5,3 +5,26 @@ supports "fedora"
 // Installs colour schemes, a desktop theme and a plasmoid into Plasma's
 // own directories.
 requires "plasma-desktop"
+
+// Darkly is built from source, so the pinned asset is the tag's archive.
+asset "darkly" {
+    renovate datasource="github-tags" depName="Bali10050/Darkly"
+    version "0.5.38"
+    url "https://github.com/Bali10050/Darkly/archive/refs/tags/v{version}.tar.gz"
+    sha256 "6ffb293b9b109fe4a4f8aad20027edb640f063fbc5e7b3621ec58762e42f4bbb"
+}
+
+// Ant publishes no releases, so the pin is a commit on its default branch.
+asset "ant" {
+    renovate datasource="git-refs" depName="https://github.com/EliverLara/Ant"
+    version "79ddc06b40ad1e96c87d9270c71d7db3bfa0c3cd"
+    url "https://github.com/EliverLara/Ant/archive/{version}.tar.gz"
+    sha256 "1eea917d8afc1151ee6c6287d216490bce9d7a5e555450d5b6e626970fa478d4"
+}
+
+asset "advanced-weather-widget" {
+    renovate datasource="github-releases" depName="pnedyalkov91/advanced-weather-widget"
+    version "1.6.3"
+    url "https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/{version}/advanced-weather-widget.plasmoid"
+    sha256 "4bfc4f3163014a4d23b225739e8ccfaa8bdea4736779c193c16f97f17f13351e"
+}

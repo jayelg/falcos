@@ -4,7 +4,7 @@ Everything that runs at image build time. These scripts are bind mounted into th
 
 ### [Modules](../modules)
 
-Self-describing, independently cacheable build units, one Containerfile RUN layer each. What gets built is controlled by [modules.kdl](../modules.kdl): edit the list, run `just generate`, commit both. Each layer runs [lib/run-module.sh](../lib/run-module.sh), which handles the shared conventions (repo file, version pins, variants, `files/` overlay, justfile recipes).
+Self-describing, independently cacheable build units, one Containerfile RUN layer each. What gets built is controlled by [modules.kdl](../modules.kdl): edit the list, run `just generate`, commit both. Each layer runs [lib/run-module.sh](../lib/run-module.sh), which handles the shared conventions (repo file, `module.sh`, SELinux policy, `files/` overlay, collected files).
 
 ### Phase Scripts
 

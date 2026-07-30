@@ -1,3 +1,80 @@
 description "Affinity Photo, Designer and Publisher, under a patched Wine prefix"
 
 supports "fedora"
+
+// None of these upstreams publish a checksum, so every hash here is
+// trust-on-first-use: taken at PR time, which still catches a release
+// asset swapped after the pin was made.
+
+// ElementalWarrior's Affinity-patched Wine, prebuilt by ryzendew's builder
+// (mainline Wine fails in Affinity's installer). Tags are bare Wine
+// versions. A CPU-tuned "-v4" (Zen 4/5) asset also exists per release but
+// is skipped so one image serves both flavors (the laptop is Intel).
+asset "wine-affinity" {
+    renovate datasource="github-releases" depName="ryzendew/Affinity-Wine-Builder"
+    version "11.12"
+    url "https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{version}/ElementalWarrior-wine-{version}.tar.xz"
+    sha256 "44a99f2a90356790936f08620ccca573581c0bb006b9bed6899dd4ed465986aa"
+}
+
+asset "dxvk" {
+    renovate datasource="github-releases" depName="doitsujin/dxvk" extractVersion="^v(?<version>.*)$"
+    version "3.0.1"
+    url "https://github.com/doitsujin/dxvk/releases/download/v{version}/dxvk-{version}.tar.gz"
+    sha256 "bebb6284db590535b7b005c102ebf6850c98842cff0fded9aacb74babae14c49"
+}
+
+// Last version validated against Affinity by
+// ryzendew/Linux-Affinity-Installer was 2.14.1; if a bump breaks
+// Affinity's OpenCL compute, pin back to that.
+asset "vkd3d-proton" {
+    renovate datasource="github-releases" depName="HansKristian-Work/vkd3d-proton" extractVersion="^v(?<version>.*)$"
+    version "3.0.1"
+    url "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{version}/vkd3d-proton-{version}.tar.zst"
+    sha256 "3cf2315522af5e43605ef6d3c41dad91387040bf97199934f3f7ab76caaa2f0c"
+}
+
+// WinRT metadata for the Affinity prefix, from Microsoft's MIT-licensed
+// windows-rs repo, which is redistributable so it is baked into the image.
+asset "windows-winmd" {
+    manual "windows-rs master moves daily, but this only ever needs bumping when Affinity or Wine do"
+    version "a4f924122bcdc1e65b94e882b5ea874cccad23bb"
+    url "https://github.com/microsoft/windows-rs/raw/{version}/crates/libs/bindgen/default/Windows.winmd"
+    sha256 "d700ffb5733ffa4b3f58d8853636d195df72aa6ada1ae91651f4fdfeb55cc111" from="manual"
+}
+
+// Winelib wintypes shim by the patched Wine's author, paired with the
+// metadata above.
+asset "wintypes-shim" {
+    manual "the pairing upstream Linux-Affinity-Installer uses, bumped by hand alongside windows-winmd"
+    version "f8a2d42ba3abc5dcdc584daa6728a2fa019be72e"
+    url "https://github.com/ElementalWarrior/wine-wintypes.dll-for-affinity/raw/{version}/wintypes_shim.dll.so"
+    sha256 "a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bfebbff6" from="manual"
+}
+
+// 64-bit VC++ 2022 redistributable, needed by dotnet48 and Affinity itself.
+// The URL is the permalink aka.ms/vs/17/release/vc_redist.x64.exe redirects
+// to, which is content addressed: the uppercase SHA256 in its path is the
+// hash pinned below. aka.ms itself is the *latest* redist, so Microsoft
+// repoints it at every VS servicing release and the pinned hash stopped
+// matching without anything here changing -- a build failure at a time
+// nobody chose. This URL cannot move under the pin.
+//
+// The cost is the other direction: a newer redist has to be adopted
+// deliberately, by resolving aka.ms again and taking the permalink and hash
+// it lands on. Nothing about that is automatic, which is the honest state
+// of a dependency with no version feed to watch.
+asset "vc-redist" {
+    manual "no version feed exists for the redist, so moving to a newer one means resolving the aka.ms redirect by hand and taking the permalink it lands on"
+    version "14.44.35211"
+    url "https://download.visualstudio.microsoft.com/download/pr/9b0d1fa5-c16d-4ee8-97f0-c2734086ece8/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe"
+    sha256 "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b" from="manual"
+}
+
+// .NET Framework 4.8 offline installer, needed by Affinity itself. The
+// hash is winetricks' own for ndp48-x86-x64-allos-enu.exe.
+asset "dotnet48" {
+    manual "4.8 is a final release behind a versioned permalink, so the bytes do not move"
+    url "https://download.visualstudio.microsoft.com/download/pr/7afca223-55d2-470a-8edc-6a1739ae3252/abd170b4b0ec15ad0222a809b761a036/ndp48-x86-x64-allos-enu.exe"
+    sha256 "95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53" from="manual"
+}

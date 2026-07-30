@@ -5,3 +5,12 @@ supports "fedora"
 // A KCM and a Plasma notifier: it installs into a desktop that has to
 // already be there.
 requires "plasma-desktop"
+
+// The RPM filename derives from the version, which relies on releases
+// keeping tag = v<rpm version> and release -1.
+asset "falcos-bootc-updates" {
+    renovate datasource="github-releases" depName="jayelg/falcos-bootc-updates" extractVersion="^v(?<version>.*)$"
+    version "0.1.1"
+    url "https://github.com/jayelg/falcos-bootc-updates/releases/download/v{version}/falcos-bootc-updates-{version}-1.fc44.x86_64.rpm"
+    sha256 "2272f4682aff39bd0bff7b2b13db71854da971eda99b6e84653ba1da32d94b7a"
+}

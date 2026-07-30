@@ -1,12 +1,20 @@
 ---
-# Several release assets are pinned with a SHA256 next to their version pin
-# in the versions.sh files (trust-on-first-use at PR time, which also
-# catches a release asset being swapped after the pin). Renovate can bump
-# the version pins but can't recompute checksums; this workflow does that
-# follow-up for every pinned asset in one pass: on PRs touching a versions
-# file it recomputes each stale checksum and pushes a single fixup commit
-# to the PR branch. One workflow rather than one per asset so concurrent
-# fixup pushes to the same branch can't race each other.
+# Follow-up work after a bot bumps an asset pin.
+#
+# Every `asset` block in a module.kdl carries a version, a download URL and
+# a SHA256. Renovate can bump the version but cannot recompute the hash,
+# and the resolved URL and hash are baked into Containerfile.generated,
+# which lint checks for drift. Both of those are mechanical, so this
+# workflow does them: on a PR touching a module manifest it recomputes each
+# stale checksum, regenerates the Containerfile and pushes a single fixup
+# commit to the PR branch. One workflow rather than one per asset so
+# concurrent fixup pushes to the same branch cannot race each other.
+#
+# There is no table of assets here. `manifest.sh assets` reports every pin
+# in the repository with its resolved URL, which is the same resolution the
+# build uses, so the URL this hashes and the URL the build fetches cannot
+# disagree. That was a real gap: the URL used to exist here and again in
+# each module.sh, with nothing comparing them.
 #
 # The fixup push uses GITHUB_TOKEN, which never triggers the pull_request
 # workflows on the new commit, so validation runs are dispatched explicitly
@@ -16,12 +24,7 @@ name: Checksums
 on:
   pull_request:
     paths:
-      - 'modules/cli-customizations/versions.sh'
-      - 'modules/manage-dotfiles/versions.sh'
-      - 'modules/core/goojust/versions.sh'
-      - 'modules/apps/affinity/versions.sh'
-      - 'modules/de/falcos-plasma-settings/versions.sh'
-      - 'modules/de/kde-theming/versions.sh'
+      - 'modules/**/module.kdl'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -37,80 +40,96 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
+      # Full history: the job only checks the manifests this PR touched, so
+      # it needs the base branch to diff against.
       - name: Checkout PR branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
       - name: Recompute stale checksums and push fixup
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
 
-          # name|versions file|version var|sha var|mode|asset URL ({v} = version)
-          # mode "download" hashes the asset itself; "sidecar" fetches an
-          # upstream-published .sha256 next to it (URL points at the sidecar).
-          entries=(
-            'bw|modules/manage-dotfiles/versions.sh|BW_VERSION|BW_SHA256|download|https://github.com/bitwarden/clients/releases/download/cli-v{v}/bw-linux-{v}.zip'
-            'aichat|modules/cli-customizations/versions.sh|AICHAT_VERSION|AICHAT_SHA256|download|https://github.com/sigoden/aichat/releases/download/v{v}/aichat-v{v}-x86_64-unknown-linux-musl.tar.gz'
-            'starship|modules/cli-customizations/versions.sh|STARSHIP_VERSION|STARSHIP_SHA256|sidecar|https://github.com/starship/starship/releases/download/v{v}/starship-x86_64-unknown-linux-musl.tar.gz.sha256'
-            # nerd-fonts pins the release's SHA-256.txt manifest, the build
-            # verifies each font archive against it
-            'nerd-fonts|modules/cli-customizations/versions.sh|NERD_FONTS_VERSION|NERD_FONTS_SHA256|download|https://github.com/ryanoasis/nerd-fonts/releases/download/v{v}/SHA-256.txt'
-            'darkly|modules/de/kde-theming/versions.sh|DARKLY_VERSION|DARKLY_SHA256|download|https://github.com/Bali10050/Darkly/archive/refs/tags/v{v}.tar.gz'
-            'ant|modules/de/kde-theming/versions.sh|ANT_COMMIT|ANT_SHA256|download|https://github.com/EliverLara/Ant/archive/{v}.tar.gz'
-            'advanced-weather-widget|modules/de/kde-theming/versions.sh|AWW_VERSION|AWW_SHA256|download|https://github.com/pnedyalkov91/advanced-weather-widget/releases/download/{v}/advanced-weather-widget.plasmoid'
-            'flyline|modules/cli-customizations/versions.sh|FLYLINE_VERSION|FLYLINE_SHA256|sidecar|https://github.com/HalFrgrd/flyline/releases/download/v{v}/libflyline-v{v}-x86_64-unknown-linux-gnu.tar.gz.sha256'
-            'goojust|modules/core/goojust/versions.sh|GOOJUST_VERSION|GOOJUST_SHA256|sidecar|https://github.com/jayelg/goojust/releases/download/v{v}/goojust-v{v}-x86_64-linux-gnu.tar.gz.sha256'
-            'wine-affinity|modules/apps/affinity/versions.sh|AFFINITY_WINE_TAG|AFFINITY_WINE_SHA256|download|https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/{v}/ElementalWarrior-wine-{v}.tar.xz'
-            'dxvk|modules/apps/affinity/versions.sh|DXVK_VERSION|DXVK_SHA256|download|https://github.com/doitsujin/dxvk/releases/download/v{v}/dxvk-{v}.tar.gz'
-            'vkd3d-proton|modules/apps/affinity/versions.sh|VKD3D_PROTON_VERSION|VKD3D_PROTON_SHA256|download|https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v{v}/vkd3d-proton-{v}.tar.zst'
-            'falcos-bootc-updates|modules/de/falcos-plasma-settings/versions.sh|FALCOS_BOOTC_UPDATES_VERSION|FALCOS_BOOTC_UPDATES_SHA256|download|https://github.com/jayelg/falcos-bootc-updates/releases/download/v{v}/falcos-bootc-updates-{v}-1.fc44.x86_64.rpm'
-          )
-          # plasma-network-audio (same file) is deliberately absent: its
-          # asset filename doesn't derive from the tag, bumps are manual.
+          # Only the manifests this PR touched. Hashing every asset in the
+          # repository on every manifest edit would download hundreds of
+          # megabytes to confirm that nothing moved.
+          base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+          changed="$(git diff --name-only "$base" HEAD \
+            | grep -E '^modules/.*/module\.kdl$' || true)"
+          if [ -z "$changed" ]; then
+            echo "No module manifest changed against ${BASE_REF}, nothing to do."
+            exit 0
+          fi
+          echo "Changed manifests:"
+          echo "$changed"
 
           fixed=()
-          for entry in "${entries[@]}"; do
-            IFS='|' read -r name file version_var sha_var mode url <<< "$entry"
-
-            version="$(sed -n "s/^${version_var}=\"\([^\"]*\)\"/\1/p" "$file")"
-            pinned="$(sed -n "s/^${sha_var}=\"\([^\"]*\)\"/\1/p" "$file")"
-            # Not `[ -n .. ] && [ -n .. ]`: set -e exempts non-final commands
-            # of a && list, so that form never aborts on an empty $version
-            if [ -z "$version" ] || [ -z "$pinned" ]; then
-              echo "::error::${name}: ${version_var} or ${sha_var} not found in ${file}"
-              exit 1
-            fi
-            url="${url//\{v\}/${version}}"
-
-            if [ "$mode" = "sidecar" ]; then
-              actual="$(curl -fsSL --retry 3 "$url" | cut -d' ' -f1)"
-            else
-              curl -fsSL --retry 3 "$url" -o "${RUNNER_TEMP}/asset"
-              actual="$(sha256sum "${RUNNER_TEMP}/asset" | cut -d' ' -f1)"
-              rm -f "${RUNNER_TEMP}/asset"
-            fi
-
-            if [ "$actual" = "$pinned" ]; then
-              echo "${sha_var} already matches ${name} ${version}, nothing to do."
+          # module, name, manifest, version, sha256, hash source, URL
+          while IFS='|' read -r module name file version pinned from url; do
+            grep -qxF "$file" <<< "$changed" || continue
+            # A pin with no hash is a git ref the module clones, and a
+            # manual one is a hash nothing derives: for an asset whose
+            # filename does not follow from its version, recomputing would
+            # hash whatever the old URL still serves.
+            [ -n "$pinned" ] || continue
+            if [ "$from" = "manual" ]; then
+              echo "${module} ${name}: hash is maintained by hand, skipping."
               continue
             fi
 
-            sed -i "s/^${sha_var}=.*/${sha_var}=\"${actual}\"/" "$file"
-            fixed+=("${name} ${version}")
-            echo "${sha_var} updated for ${name} ${version}."
-          done
+            target="$url"
+            [ "$from" != "sidecar" ] || target="${url}.sha256"
+            if ! curl -fsSL --retry 3 "$target" -o "${RUNNER_TEMP}/asset"; then
+              echo "::error file=${file}::${name} ${version}: ${target} did not download. A version bump whose asset filename does not follow from the version needs the url in ${file} updated by hand."
+              exit 1
+            fi
+            if [ "$from" = "sidecar" ]; then
+              actual="$(cut -d' ' -f1 < "${RUNNER_TEMP}/asset")"
+            else
+              actual="$(sha256sum "${RUNNER_TEMP}/asset" | cut -d' ' -f1)"
+            fi
+            rm -f "${RUNNER_TEMP}/asset"
 
-          [ "${#fixed[@]}" -gt 0 ] || exit 0
+            if [ "$actual" = "$pinned" ]; then
+              echo "${module} ${name} ${version}: hash already matches."
+              continue
+            fi
+            # Matched on the pinned value rather than by line, so the
+            # from= property beside it survives. Both values are hex, so
+            # there is nothing for sed to misread.
+            sed -i "s/sha256 \"${pinned}\"/sha256 \"${actual}\"/" "$file"
+            fixed+=("${name} ${version}")
+            echo "${module} ${name} ${version}: hash updated."
+          done < <(./scripts/manifest.sh assets)
+
+          # The pins reach the build as env on each module's layer, so a
+          # bumped version or a rewritten hash changes the generated
+          # Containerfile too, and lint fails on the drift.
+          ./scripts/gen-containerfile.sh
+
+          if git diff --quiet; then
+            echo "Nothing to fix up."
+            exit 0
+          fi
+
+          if [ "${#fixed[@]}" -gt 0 ]; then
+            message="update checksums: $(IFS=', '; echo "${fixed[*]}")"
+          else
+            message="regenerate the Containerfile for the bumped pins"
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "update checksums: $(IFS=', '; echo "${fixed[*]}")"
+          git commit -am "$message"
           git push origin "HEAD:${BRANCH}"
 
-          # Re-validate the branch on the fixup commit
+          # Re-validate the branch on the fixup commit. build.yml gates the
+          # image build on its own lint job, so that one dispatch covers
+          # both.
           gh workflow run build.yml --ref "$BRANCH"
-          gh workflow run lint.yml --ref "$BRANCH"

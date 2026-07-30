@@ -8,9 +8,9 @@ Self-describing, independently cacheable build units. Every module carries a [mo
 modules/<group-or-name>/<name>/
   module.kdl          the manifest: what this module needs, offers and
                       accepts. REQUIRED. See SCHEMA.md
-  module.sh           the install logic; sourced with pins loaded (optional --
+  module.sh           the install logic; sourced with the module's resolved
+                      asset pins and options in the environment (optional --
                       omit for a pure-file module that only drops files/)
-  versions.sh         Renovate-tracked version pins + SHA256s (optional)
   repo                package repo setup, idempotent via REPO_ID (optional)
   selinux/*.te        local SELinux policy modules, each auto-compiled and
                       installed at priority 200 (optional)
