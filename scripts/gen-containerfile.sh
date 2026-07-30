@@ -1,25 +1,26 @@
 #!/usr/bin/env bash
-# Splices the generated module section into the Containerfile skeleton and
-# writes Containerfile.generated, which is the file builds actually use.
+# Splices the generated section — the build phase layers and the module
+# layers — into the Containerfile skeleton and writes
+# Containerfile.generated, which is the file builds actually use.
 # scripts/build.sh runs this before every build, locally and in CI, so no
 # build can use a stale one; `just generate` runs it standalone.
 #
 # The section itself comes from scripts/manifest.sh, the only thing that
-# reads modules.kdl. What stays here is the part that is about this file
-# rather than about the manifest: finding the markers, and keeping the
-# parser directive on line one.
+# reads modules.kdl and build-phases/. What stays here is the part that is
+# about this file rather than about the manifest: finding the markers, and
+# keeping the parser directive on line one.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # shellcheck disable=SC2016  # the marker is literal text, not an expansion
-begin='# ---- BEGIN MODULES (generated at build time from modules.kdl; see scripts/gen-containerfile.sh) ----'
-end='# ---- END MODULES ----'
+begin='# ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----'
+end='# ---- END GENERATED ----'
 
 skeleton=Containerfile.template
 out=Containerfile.generated
 
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
-    echo "gen-containerfile: BEGIN/END MODULES markers not found in ${skeleton}" >&2
+    echo "gen-containerfile: BEGIN/END GENERATED markers not found in ${skeleton}" >&2
     exit 1
 fi
 
@@ -57,4 +58,5 @@ esac
     ' "$skeleton"
 } > "$out"
 
-echo "gen-containerfile: wrote ${out} ($(grep -c 'run-module.sh /ctx' "$out") module RUN layers)"
+echo "gen-containerfile: wrote ${out} ($(grep -c 'run-module.sh /ctx' "$out") module layers,\
+ $(grep -c '^# ---- phase ' "$out") build phases)"

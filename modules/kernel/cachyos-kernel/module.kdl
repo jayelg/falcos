@@ -7,3 +7,9 @@ supports "fedora"
 provides "kernel-devel"
 provides-file "/usr/share/falcos/sb_cert.der"
 provides-file "/usr/lib/falcos/kernel-package"
+
+// The kernel variant the fragment declares, and the optional MOK key the
+// modules are signed with. The Secure Boot cert itself ships in this
+// module's files/ overlay.
+arg "KERNEL"
+secret "mok_privkey"

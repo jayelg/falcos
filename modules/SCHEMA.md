@@ -73,16 +73,16 @@ modules {
         module "hardware/laptop-tweaks"
     }
 
-    // Back outside, so ungated again. A module here is built once per
-    // flavor because it sits below ARG FLAVOR; put one here only when it
-    // must run after every gated module.
+    // Back outside, so ungated again, and it still builds above every
+    // gated module: where a line sits only breaks ties.
     module "core/power-just-scripts"
 }
 ```
 
-Order is document order, top to bottom, and is the build order: one RUN
-layer per entry. Nesting rather than INI-style section headers makes
-"outside a flavor block means ungated" structural instead of positional.
+One RUN layer per entry, in the order [Build order](#build-order)
+resolves, which is document order wherever the graph says nothing.
+Nesting rather than INI-style section headers makes "outside a flavor
+block means ungated" structural instead of positional.
 
 ### `flavors`
 
@@ -200,7 +200,8 @@ it.
 preference only, and never fails, so a module can prefer to run after an
 optional peer without depending on it. There is no third edge kind: two
 is enough to express everything in this repo, and each additional one
-multiplies the sort's failure modes.
+multiplies the sort's failure modes. What the two edges do to the build
+order is [below](#build-order).
 
 Nothing is auto-included. An unsatisfied `requires` names the modules
 that would fix it and stops; it never adds one. The list stays the
@@ -225,6 +226,26 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
 
+### Overlay collisions
+
+Every `files/` overlay is copied over the image root in build order, so
+two modules shipping the same path means the later one wins and the
+earlier one's file never reaches the image. Nothing about that is
+visible in either module, so it is an error.
+
+| Node | Meaning |
+| --- | --- |
+| `overrides "<abs-path>"` | this module's overlay knowingly replaces a path an earlier module ships |
+
+Checked both ways. Without it a collision fails; with nothing to
+override it fails too, so the escape hatch cannot outlive the collision
+it was added for. Two modules gated to different flavors never land in
+the same image, so they are not a collision.
+
+There are zero collisions today, which is why the check and the escape
+hatch arrive together: an escape hatch with nothing to escape, and no
+check to escape from, would be surface nothing could verify.
+
 ### Collecting
 
 A module that wants every copy of a filename in the image says so, and
@@ -246,7 +267,7 @@ collects "flatpaks.list" into="/usr/share/falcos/default-flatpaks"
 
 **The declaration says nothing about what the collecting module then does
 with them.** The build collects; interpreting the result is the module's
-business. Today the build appends, in module list order, but that is a
+business. Today the build appends, in build order, but that is a
 detail of the collector and not a promise of this node — which is why it
 is not called `aggregates` or `concatenates`.
 
@@ -262,7 +283,7 @@ contributes reach its layer, so a module that contributes nothing carries
 no such env at all.
 
 One collector per filename, or where a contribution went would depend on
-module list order. A module shipping a collected filename while the
+build order. A module shipping a collected filename while the
 module that collects it is absent is an error — it would otherwise be
 silently ignored, which is how a contribution goes missing without
 anything failing.
@@ -362,20 +383,74 @@ next additions when one does.
 
 A module needing something the field sets cannot express — an extra
 builder stage, a second layer, an `ARG` with a default — ships a
-`Containerfile.inc`, which the generator inlines verbatim *instead of*
-the standard block.
+`Containerfile.inc`, which the generator inlines verbatim *alongside* the
+standard block.
 
-Because it replaces the block rather than adding to it, a module with a
-`Containerfile.inc` may not also declare `secret` or `arg`: the fragment
-already spells those out itself, and a declaration it silently ignored
-would be worse than no declaration. Lint enforces this. Fragments are
-planned to become additive rather than replacing, at which point the two
-combine and this restriction lifts.
+Shipping the file is the whole declaration, as with `files/`. The
+optional `fragment` node carries only the two things the file cannot say
+about itself:
 
-One module uses one today: `kernel/cachyos-kernel` declares `ARG
-KERNEL=cachyos`, which is graph shape rather than a parameter, and is the
-line the kernel-freshness workflow rewrites to fall back to the stock
-kernel.
+```kdl
+fragment position="after" standard-layer=#false
+```
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `position=` | `"before"` | where the fragment goes relative to the generated block |
+| `standard-layer=` | `#true` | whether that block is emitted at all |
+
+Because a fragment adds rather than replaces, a module ships only the
+part it actually needs: `kernel/cachyos-kernel`, the one module with a
+fragment today, is down to its `ARG KERNEL=cachyos` — graph shape rather
+than a parameter, and the line the kernel-freshness workflow rewrites to
+fall back to the stock kernel. Its mounts, its build arg and its signing
+secret are declared, and the generator writes the same RUN line the
+fragment used to spell out by hand.
+
+`standard-layer=#false` asks for the full override the generator used to
+do implicitly: the fragment becomes the only thing the module emits, and
+it has to call `run-module.sh` itself and mount everything that needs.
+Nothing then carries the module's `secret`, `arg`, `option` or collected
+files, so declaring any of those alongside it is an error rather than a
+silent omission — the hole the old replacing behaviour left, where a
+declared option was quietly dropped.
+
+A fragment is emitted unconditionally: the generated Containerfile is one
+file for every target, and the only per-flavor mechanism is the
+`FLAVOR_GATE` the runner checks. The standard block carries the gate, so
+a gated module's fragment only has to when it runs a command of its own,
+which lint checks against the flavor block the module is listed under.
+
+## Build order
+
+Resolved from the graph, not read off the list. A `requires` already
+says "after whatever provides this", so the list does not have to repeat
+it and the two can no longer disagree.
+
+Constraints, in the order they bind:
+
+1. a provider builds before anything that `requires` it or reads a file
+   it `provides-file`s. Hard.
+2. a provider builds before anything declaring `after` it, when it is
+   enabled at all. Soft, and skipped when it would drag an ungated
+   module below the flavor gate — a preference is not worth a layer per
+   flavor.
+3. ungated modules build before gated ones, so nothing lands below `ARG
+   FLAVOR` and gets built once per target for no reason.
+4. anything still tied builds in declaration order.
+
+**Determinism is not negotiable**: the same list produces the same order
+on every machine, because a reshuffle is a full rebuild. That is also
+why there is no `weight` field. Declaration order is already the
+tie-break, and modules.kdl is the image author's file, so wanting one
+module later is expressed by moving its line — a second knob for the
+same thing would only be a way for the two to disagree.
+
+A cycle has no build order at all, so it is a lint failure naming the
+edges that close it.
+
+The resolved order is what the committed `Containerfile.generated`
+shows, layer by layer, and what `manifest summary` prints.
 
 ## Build targets
 
@@ -452,6 +527,14 @@ Lint fails on all of these, in seconds, before anything builds.
   would satisfy it
 - a `requires-file` no enabled module provides
 - two enabled modules providing the same capability or contract file
+- a requirement satisfied only by a module gated to another flavor
+- a cycle, naming the edges that close it
+
+**Overlays**
+
+- two enabled modules that land in the same image shipping the same
+  `files/` path, without the later one declaring `overrides`
+- an `overrides` for a path no earlier module ships
 
 **Collecting**
 
@@ -469,9 +552,16 @@ Lint fails on all of these, in seconds, before anything builds.
 
 **Fragments**
 
-- a module declaring `secret` or `arg` alongside a `Containerfile.inc`
+- a `fragment` node in a module that ships no `Containerfile.inc`, or
+  one declared twice
+- a `position` other than `before` or `after`, or one declared alongside
+  `standard-layer=#false`, where there is nothing to be before or after
+- a `secret`, `arg`, `option` or collected file declared alongside
+  `standard-layer=#false`, which removes the layer they would land on
 - a `Containerfile.inc` expanding `FLAVOR` above the `ARG FLAVOR`
   declaration
+- a gated module whose fragment runs a command without carrying the
+  matching `FLAVOR_GATE`
 
 **Reserved**
 
@@ -483,20 +573,6 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **Ordering by the graph.** The build order is document order today. A
-  deterministic topological sort over `requires` and `after` replaces it,
-  tie broken by declaration order, along with the rule that ungated
-  modules sort above gated ones so nothing lands below `ARG FLAVOR` and
-  gets built once per flavor for no reason. Determinism is not
-  negotiable: a reshuffle is a full rebuild.
-- **Additive fragments.** `Containerfile.inc` gains a declared position
-  and stops replacing the generated block, which is what lets the
-  restriction on `secret` and `arg` lift.
-- **The overlay collision check**, and with it an `overrides` node
-  declaring that a module's `files/` overlay intentionally replaces a
-  path an earlier module shipped. There are zero collisions today, so
-  both arrive together: an escape hatch with nothing to escape, and no
-  check to escape from, would be surface nothing could verify.
 - **`asset` blocks replacing `versions.sh`**: datasource, version,
   sha256, URL template and verify mode, one block per asset. Pins must
   stay Renovate-readable, so an asset's version has to be a flat

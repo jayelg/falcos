@@ -39,6 +39,14 @@ supports "fedora"
 // provides-file "/usr/lib/falcos/example-marker"
 // requires-file "/usr/share/falcos/sb_cert.der"
 
+// OPTIONAL. Overlay overrides: the files/ overlay is copied over the
+// image root in build order, so two modules shipping the same path
+// means the later one wins silently. That is a lint failure unless the
+// later module says it meant to, here. The declaration is checked, so
+// it cannot outlive the collision it was added for.
+//
+// overrides "/etc/profile.d/zz-bling.sh"
+
 // OPTIONAL. Options: typed, declared here, set by the image author in
 // modules.kdl, and arriving in module.sh as env. This is what turns a
 // hardcoded list inside a module's own script into something an image
@@ -90,3 +98,17 @@ supports "fedora"
 // missing silently.
 //
 // collects "example.inc" into="/usr/share/falcos/example.d/all"
+
+// OPTIONAL, and only alongside a Containerfile.inc. Shipping that file
+// is what adds a fragment; this node says the two things the file cannot
+// say about itself, and only when the defaults are wrong.
+//
+//   position         "before" (default) puts the fragment above this
+//                    module's generated block, "after" below it
+//   standard-layer   #false drops the generated block entirely, leaving
+//                    the fragment as the only thing this module emits.
+//                    It then has to call run-module.sh itself, and
+//                    nothing carries a secret, arg, option or collected
+//                    file, so declaring those alongside it is an error.
+//
+// fragment position="after"

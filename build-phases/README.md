@@ -8,11 +8,20 @@ Self-describing, independently cacheable build units, one Containerfile RUN laye
 
 ### Phase Scripts
 
-The build phases around the modules, numbered to show their order relative to the module RUN layers that sit between them:
+A drop-in directory: every `*.sh` here becomes one RUN layer, in the order its number gives it. **The module layers build at 50**, so a phase numbered below that runs before them and one at or above runs after. Adding a phase is adding a file — `just generate` picks it up, and a name without a number is a lint failure rather than a guess.
 
 - [00-setup.sh](00-setup.sh) -- pre-install workarounds (systemctl stub, `/opt` shuffle) and `dnf5-plugins` for the module repo files. First RUN layer.
 - [50-flavor.sh](50-flavor.sh) -- applies os-release branding (NAME, PRETTY_NAME, DEFAULT_HOSTNAME) via [lib/brand-helpers.sh](../lib/brand-helpers.sh). Runs after all modules; the desktop/laptop layer cache forks here. Flavor-specific files ship in flavor-gated modules (e.g. `virtualization/vfio-passthrough`, `hardware/laptop-tweaks`).
 - [99-finalize.sh](99-finalize.sh) -- restores systemctl, regenerates the initramfs, relocates `/opt` payloads, applies the falcos systemd presets, runs per-module `finalize.sh` hooks, and the remaining global tweaks (GRUB os-prober, composefs SELinux workaround). Last RUN layer.
+
+What a phase gets depends on which side of the modules it is on, because the difference is a property of the build rather than of the script:
+
+| | above the modules | below the modules |
+| --- | --- | --- |
+| mounts | its own script, `/var/cache`, `/var/log`, `/tmp` | the same, plus [lib/](../lib) and [modules/](../modules) |
+| env | none | `FLAVOR`, `IMAGE_VERSION`, `FINALIZE_ORDER` |
+
+A phase above the modules gets neither because `ARG FLAVOR` and `ARG IMAGE_VERSION` are declared below them on purpose (an ARG in scope is part of the cache key of every RUN under it), and because binding the module tree into the first layer of the build would put every module's content in that layer's cache key.
 
 ### Service enablement
 

@@ -1,6 +1,6 @@
 [root](../../README.md) / [build-phases](../README.md) / **modules**
 
-Self-describing, independently cacheable build units. Every module carries a [module.kdl](SCHEMA.md) manifest declaring what it needs from the rest of the image and what it offers back; everything else about a module is discovered from the files it ships. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), and is toggled/ordered by [modules.kdl](../../modules.kdl). Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
+Self-describing, independently cacheable build units. Every module carries a [module.kdl](SCHEMA.md) manifest declaring what it needs from the rest of the image and what it offers back; everything else about a module is discovered from the files it ships. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), is enabled by [modules.kdl](../../modules.kdl), and builds in the order the declared graph resolves to, with the list as the tie-break. Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
 
 ### Anatomy of a module
 
@@ -19,11 +19,12 @@ modules/<group-or-name>/<name>/
                       that 99-finalize.sh applies (optional)
   finalize.sh         run-once logic needing real systemctl or the final
                       image (e.g. service masking, policy.json edits), sourced
-                      by 99-finalize.sh in list order and flavor-gated (optional)
+                      by 99-finalize.sh in build order and flavor-gated (optional)
   justfile.inc        goojust app recipes, collected at build time by
                       core/goojust, which declares where they go (optional)
-  Containerfile.inc   verbatim RUN block when the standard one isn't enough,
-                      e.g. build secrets or ARGs (optional)
+  Containerfile.inc   verbatim Containerfile lines added above the generated
+                      block, for what the fields can't express, e.g. an ARG
+                      with a default (optional)
 ```
 
 The directory name is the module name in modules.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.

@@ -4,7 +4,8 @@
 # instead of module.sh directly, so the per-module conventions live in
 # one place:
 #
-#   1. flavor gate    FLAVOR_GATE (set by a Containerfile.inc)
+#   1. flavor gate    FLAVOR_GATE (set by the generated block from the
+#                     flavor the module is listed under in modules.kdl)
 #                     skips the module on flavors it doesn't target
 #   2. repo           sourced if present, idempotent via its REPO_ID
 #   3. versions.sh    Renovate-tracked pins, sourced if present

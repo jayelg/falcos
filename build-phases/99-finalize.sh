@@ -91,7 +91,7 @@ apply_falcos_presets user /usr/lib/systemd/user-preset
 ### Module finalize hooks
 # Some modules need real systemctl or must run after every other module
 # (e.g. service masking, image policy edits). That logic lives in the
-# module's finalize.sh, sourced here in module list order and
+# module's finalize.sh, sourced here in resolved build order and
 # flavor-gated exactly like the build layers. MODDIR points at the module
 # dir, as in run-module.sh.
 #

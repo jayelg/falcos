@@ -20,7 +20,7 @@ Anything that you want to include in an image can be packaged into a module. A m
 Modules are then explicity defined for inclusion in the image through the `modules.kdl` file.
 
 ### The build Containerfile is generated
-`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer in `modules.kdl` order, writing `Containerfile.generated`, which is the file builds use.
+`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in one RUN layer per module and one per build phase, writing `Containerfile.generated`, which is the file builds use. [build-phases/](build-phases) is a drop-in directory: a `*.sh` there becomes a layer, ordered by its number around the module layers, which build at 50.
 
 `Containerfile.generated` is committed, so adding a module or reordering the list shows up as the expanded build in the same diff. Every build regenerates it first and lint fails if the committed copy is stale, so it cannot drift from `modules.kdl`.
 
@@ -109,11 +109,13 @@ You can use modules in a variety of ways:
 
 This is a list of all modules that will be included in the build images.
 
-To include a module from the `modules/` directory, you can just add a line with the module name in the order that you would like it to run. If the module is grouped into a directory, it must be formatted as `<group-name>/<module-name>`.
+To include a module from the `modules/` directory, you can just add a line with the module name. If the module is grouped into a directory, it must be formatted as `<group-name>/<module-name>`.
+
+The build order is resolved from what the modules declare: one that `requires` a capability builds after whatever provides it, and ungated modules build before flavor-gated ones. This list is the tie-break for everything the graph says nothing about, so it is still where "less frequently updated first, for layer caching" is expressed. The resolved order is visible in the committed `Containerfile.generated`.
 
 To exclude a module from the build, you can either delete it or comment it out. Module directories in `modules/` will not be included unless it is defined in `modules.kdl`.
 
-To include a module in one flavor only, nest it in a `flavor "<name>" { }` block naming a declared flavor. Modules outside any such block are ungated and build once, shared by every flavor. A module listed after a flavor block is ungated again, but sits below the flavor gate and so is built once per target: put one there only when it has to run last.
+To include a module in one flavor only, nest it in a `flavor "<name>" { }` block naming a declared flavor. Modules outside any such block are ungated and build once, shared by every flavor, wherever they are listed: an ungated module always sorts above the gated ones, so a line after a flavor block no longer costs a layer per target.
 
 ## Installation
 

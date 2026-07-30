@@ -22,9 +22,9 @@ just keeps it sorted to the top of the modules directory.
    `45-falcos-template.preset` → `45-falcos-<name>.preset`, rename
    `Containerfile.inc.example` → `Containerfile.inc` only if you need it, and
    drop the `.example` config/libexec.
-4. Add the module path (e.g. `core/my-module`) to `modules.kdl` in
-   the position you want its RUN layer (order = build order; see
-   **Ordering & flavors**).
+4. Add the module path (e.g. `core/my-module`) to `modules.kdl`. Position
+   decides the RUN layer's place only where the declared graph doesn't; see
+   **Ordering & flavors**.
 5. `just generate` to confirm it resolves and splices in.
 
 ## Anatomy — what each file in `module-name/` does (all optional)
@@ -40,21 +40,25 @@ runs much later, in the finalize layer.
 | `versions.sh` | Renovate-tracked pins + SHA256s. `# renovate:` comment must sit directly above its version line. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
-| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
-| `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |
+| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. Shipping a path another module also ships is a lint failure unless the later one declares `overrides`. |
+| `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in build order. |
 | `justfile.inc` | goojust recipes. Picked up because `core/goojust` declares it collects this filename; the destination lives there, not here. |
-| `Containerfile.inc` | Verbatim RUN block replacing the standard one — only for extra mounts, build secrets, or ARGs. |
+| `Containerfile.inc` | Verbatim Containerfile lines added above the generated block — only for what the declared fields cannot express, such as an `ARG` with a default or a second layer. Build secrets and args are declared in `module.kdl` instead. |
 | `README.md` | Every module has one; the copy here is a fill-in skeleton. |
 
 ## Ordering & flavors (in modules.kdl)
 
-- Position in the list = position of the RUN layer. Put heavy, rarely-changing
-  modules early (better layer caching) and frequently-bumped ones late.
-- A module under a `[desktop]` / `[laptop]` section is gated to that flavor
-  (the generator injects `FLAVOR_GATE`, and both `run-module.sh` and
-  the `finalize.sh` loop skip it on other flavors). Flavor sections stay at
-  the bottom to keep the cache fork there. Valid flavors are defined in
-  `flavors` block in `modules.kdl`.
+- Build order comes from the graph: declare `requires "<capability>"` and
+  the module builds after whatever provides it, wherever the two lines sit.
+  Never order a dependency by hand.
+- Where the graph says nothing, position in the list decides. Put heavy,
+  rarely-changing modules early (better layer caching) and frequently-bumped
+  ones late.
+- A module nested in a `flavor "desktop" { }` block is gated to that flavor
+  (the generator sets `FLAVOR_GATE`, and both `run-module.sh` and the
+  `finalize.sh` loop skip it on other flavors). Gated modules always sort
+  below the ungated ones, which is where the cache forks. Valid flavors are
+  declared in the `flavors` block in `modules.kdl`.
 
 ## Key rules & gotchas
 
@@ -94,7 +98,7 @@ SHA256-verified against the pin in `versions.sh`:
 `selinux/*.te` (auto-installed). Use the helper only for a build-time-generated policy:
 - `install_selinux_module <te>` — compile + install a `.te` (write it to `/tmp` first; the helper removes the source)
 
-**dkms-helpers.sh** — out-of-tree kernel modules (MOK-signed when a key is mounted); the module also needs a `Containerfile.inc` for the kernel headers:
+**dkms-helpers.sh** — out-of-tree kernel modules (MOK-signed when a key is mounted); the module also declares `requires "kernel-devel"`, `arg "KERNEL"` and `secret "mok_privkey"` in its manifest:
 - `kernel_devel_install [extra-deps…]` / `kernel_devel_remove [extra-deps…]`
 - `dkms_conf_version <src-dir>` — read `PACKAGE_VERSION` from a `dkms.conf`
 - `dkms_build_module <name> <version> <src-dir>`

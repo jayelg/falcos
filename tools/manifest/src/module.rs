@@ -57,6 +57,11 @@ pub struct Module {
     /// Exact paths one module writes and another reads.
     pub provides_files: Vec<Decl>,
     pub requires_files: Vec<Decl>,
+    /// Paths this module's files/ overlay knowingly replaces. Two
+    /// overlays writing the same path is an error without one of these,
+    /// because the winner is otherwise decided by build order and
+    /// nothing says it was meant to.
+    pub overrides: Vec<Decl>,
     /// The flavor this module is gated to, from the list rather than the
     /// manifest: a module never names a flavor.
     pub flavor: Option<String>,
@@ -69,6 +74,12 @@ pub struct Module {
     pub variants: Vec<Variant>,
     /// Resolved option name to value, ready to become env on the layer.
     pub resolved: Vec<(String, String)>,
+    /// Where a Containerfile.inc goes relative to the generated block,
+    /// and whether that block is emitted at all. Both only mean anything
+    /// beside a fragment, which is why shipping one stays presence
+    /// driven and only these two facts are declared.
+    pub fragment_after: bool,
+    pub standard_layer: bool,
 }
 
 /// The only base family today. Declared rather than assumed so that a
@@ -130,6 +141,7 @@ impl Module {
             after: Vec::new(),
             provides_files: Vec::new(),
             requires_files: Vec::new(),
+            overrides: Vec::new(),
             flavor: entry.flavor.clone(),
             collects: Vec::new(),
             secrets: Vec::new(),
@@ -137,10 +149,13 @@ impl Module {
             options: Vec::new(),
             variants: Vec::new(),
             resolved: Vec::new(),
+            fragment_after: false,
+            standard_layer: true,
             file: file.clone(),
             text: text.clone(),
         };
 
+        let mut fragment_span: Option<SourceSpan> = None;
         for node in doc.nodes() {
             match node.name().value() {
                 "description" => match string_args(node).first() {
@@ -185,7 +200,7 @@ impl Module {
                         _ => module.after.extend(decls),
                     }
                 }
-                kind @ ("provides-file" | "requires-file") => {
+                kind @ ("provides-file" | "requires-file" | "overrides") => {
                     for path in string_args(node) {
                         if !path.starts_with('/') {
                             issues.push(
@@ -194,20 +209,17 @@ impl Module {
                                     &file,
                                     &text,
                                 )
-                                .at(
-                                    node.name().span(),
-                                    "a contract file is an exact path in the image",
-                                ),
+                                .at(node.name().span(), "an exact path in the image"),
                             );
                         }
                         let decl = Decl {
                             name: path.to_string(),
                             span: node.name().span(),
                         };
-                        if kind == "provides-file" {
-                            module.provides_files.push(decl);
-                        } else {
-                            module.requires_files.push(decl);
+                        match kind {
+                            "provides-file" => module.provides_files.push(decl),
+                            "requires-file" => module.requires_files.push(decl),
+                            _ => module.overrides.push(decl),
                         }
                     }
                 }
@@ -258,6 +270,29 @@ impl Module {
                         }
                     }
                 }
+                "fragment" => {
+                    if let Some(first) = fragment_span {
+                        issues.push(
+                            Issue::new("`fragment` is declared twice", &file, &text)
+                                .at(first, "first here")
+                                .at(node.name().span(), "and again here"),
+                        );
+                        continue;
+                    }
+                    fragment_span = Some(node.name().span());
+                    if !dir.join("Containerfile.inc").is_file() {
+                        issues.push(
+                            Issue::new(
+                                format!("`{}` declares `fragment` but ships no Containerfile.inc", entry.path),
+                                &file,
+                                &text,
+                            )
+                            .at(node.name().span(), "nothing to place")
+                            .help("shipping the file is what adds a fragment; this node only says where it goes"),
+                        );
+                    }
+                    module.parse_fragment(node, &file, &text, issues);
+                }
                 "option" => {
                     if let Some(opt) = options::parse_option(node, &file, &text, issues) {
                         if module.options.iter().any(|o| o.name == opt.name) {
@@ -304,22 +339,35 @@ impl Module {
                     .help("one line, present tense, no trailing period; it names the module in the resolved build summary"),
             );
         }
-        // A fragment replaces the generated block rather than adding to
-        // it, so it already spells these out itself. A declaration the
-        // generator silently ignored would be worse than none.
-        if dir.join("Containerfile.inc").is_file() {
-            for decl in module.secrets.iter().chain(module.args.iter()) {
+        // A fragment adds to the generated block, so declaring these
+        // alongside one is fine: they land on the block it adds to.
+        // Dropping that block leaves them nowhere to go, which is worse
+        // than not declaring them, so it is an error rather than a
+        // silent omission.
+        if !module.standard_layer {
+            let dropped = module
+                .secrets
+                .iter()
+                .map(|d| ("secret", d.name.as_str(), d.span))
+                .chain(module.args.iter().map(|d| ("arg", d.name.as_str(), d.span)))
+                .chain(
+                    module
+                        .options
+                        .iter()
+                        .map(|o| ("option", o.name.as_str(), o.span)),
+                );
+            for (kind, name, span) in dropped {
                 issues.push(
                     Issue::new(
                         format!(
-                            "`{}` declares `{}` alongside a Containerfile.inc",
-                            entry.path, decl.name
+                            "`{}` declares `{kind} \"{name}\"` with no standard layer to carry it",
+                            entry.path
                         ),
                         &file,
                         &text,
                     )
-                    .at(decl.span, "would be silently ignored")
-                    .help("a fragment replaces the generated block, so it has to carry its own mounts and args; drop one or the other"),
+                    .at(span, "nowhere to land")
+                    .help("`standard-layer #false` makes the fragment the whole layer, so it has to spell out its own mounts, args and env; drop one or the other"),
                 );
             }
         }
@@ -342,6 +390,65 @@ impl Module {
         );
 
         Some(module)
+    }
+
+    /// `fragment position="after" standard-layer=#false`
+    ///
+    /// Defaults are the additive case: the fragment goes above the
+    /// generated block and the block is still emitted. `standard-layer
+    /// #false` is how the full override the generator used to do
+    /// implicitly is now asked for.
+    fn parse_fragment(&mut self, node: &KdlNode, file: &str, text: &str, issues: &mut Issues) {
+        let mut position_span = None;
+        for prop in node.entries() {
+            let Some(key) = prop.name().map(|n| n.value()) else {
+                issues.push(
+                    Issue::new("`fragment` takes no arguments", file, text)
+                        .at(prop.span(), "unexpected value")
+                        .help("`fragment position=\"after\"`"),
+                );
+                continue;
+            };
+            match key {
+                "position" => match prop.value().as_string() {
+                    Some(p @ ("before" | "after")) => {
+                        self.fragment_after = p == "after";
+                        position_span = Some(prop.span());
+                    }
+                    _ => issues.push(
+                        Issue::new("`position` must be \"before\" or \"after\"", file, text)
+                            .at(prop.span(), "not a position")
+                            .help("before, the default, puts the fragment above the generated block; after puts it below"),
+                    ),
+                },
+                "standard-layer" => match prop.value().as_bool() {
+                    Some(v) => self.standard_layer = v,
+                    None => issues.push(
+                        Issue::new("`standard-layer` must be #true or #false", file, text)
+                            .at(prop.span(), "not a boolean"),
+                    ),
+                },
+                other => issues.push(
+                    Issue::new(format!("unknown fragment property `{other}`"), file, text)
+                        .at(prop.span(), "not part of the schema")
+                        .help("a fragment accepts `position` and `standard-layer`"),
+                ),
+            }
+        }
+
+        if !self.standard_layer {
+            if let Some(span) = position_span {
+                issues.push(
+                    Issue::new(
+                        "`position` says nothing without a standard layer",
+                        file,
+                        text,
+                    )
+                    .at(span, "there is nothing to be before or after")
+                    .help("`standard-layer #false` makes the fragment the only thing this module emits"),
+                );
+            }
+        }
     }
 }
 
@@ -398,22 +505,20 @@ fn providers_on_disk(root: &Path) -> BTreeMap<String, Vec<String>> {
 /// requirement names what would fix it and stops, so the list stays the
 /// complete statement of what is in the image.
 pub fn check_graph(modules: &[Module], root: &Path, issues: &mut Issues) {
-    // What each capability is offered by, and at what position, so that a
-    // requirement satisfied only by a later module can be caught too.
-    let mut offered: BTreeMap<&str, Vec<(usize, &Module)>> = BTreeMap::new();
-    for (index, module) in modules.iter().enumerate() {
+    // What each capability is offered by. Position no longer matters
+    // here: a requirement is an edge in the sort, so a provider is
+    // already above everything that needs it.
+    let mut offered: BTreeMap<&str, Vec<&Module>> = BTreeMap::new();
+    for module in modules {
         for decl in module.provides.iter().chain(module.provides_files.iter()) {
-            offered
-                .entry(decl.name.as_str())
-                .or_default()
-                .push((index, module));
+            offered.entry(decl.name.as_str()).or_default().push(module);
         }
     }
 
     for (capability, providers) in &offered {
         if providers.len() > 1 {
-            let names: Vec<&str> = providers.iter().map(|(_, m)| m.path.as_str()).collect();
-            let (_, first) = providers[0];
+            let names: Vec<&str> = providers.iter().map(|m| m.path.as_str()).collect();
+            let first = providers[0];
             issues.push(
                 Issue::new(
                     format!("`{capability}` is provided by more than one enabled module"),
@@ -437,7 +542,7 @@ pub fn check_graph(modules: &[Module], root: &Path, issues: &mut Issues) {
 
     let on_disk = providers_on_disk(root);
 
-    for (index, module) in modules.iter().enumerate() {
+    for module in modules {
         let hard = module
             .requires
             .iter()
@@ -471,25 +576,7 @@ pub fn check_graph(modules: &[Module], root: &Path, issues: &mut Issues) {
                 continue;
             };
 
-            // Order matters: a requirement provided by a later layer is
-            // not available when this one runs.
-            if let Some((provider_index, provider)) = providers.first() {
-                if *provider_index > index {
-                    issues.push(
-                        Issue::new(
-                            format!(
-                                "`{}` {kind} `{}`, which `{}` provides further down the list",
-                                module.path, decl.name, provider.path
-                            ),
-                            &module.file,
-                            &module.text,
-                        )
-                        .at(decl.span, "provided too late to be usable")
-                        .help("a requirement implies ordering: move the provider above the module that needs it"),
-                    );
-                    continue;
-                }
-
+            if let Some(provider) = providers.first() {
                 // A gated provider only exists on its own flavor, so an
                 // ungated consumer, or one gated elsewhere, would find it
                 // missing on every other target.
@@ -607,6 +694,25 @@ pub fn resolve_collects(
                         .find(|c| &c.file == file)
                         .map(|c| c.into.clone())
                         .unwrap_or_default();
+                    // The pairs reach the runner as env on the standard
+                    // layer, so a module that dropped that layer would
+                    // contribute nothing while looking like it does.
+                    if !module.standard_layer {
+                        issues.push(
+                            Issue::new(
+                                format!(
+                                    "`{}` ships a {file} with no standard layer to collect it from",
+                                    module.path
+                                ),
+                                &module.file,
+                                &module.text,
+                            )
+                            .help(format!(
+                                "`standard-layer #false` makes the fragment the whole layer, so it has to append the file to {into} itself"
+                            )),
+                        );
+                        continue;
+                    }
                     out.entry(module.path.clone())
                         .or_default()
                         .push((file.clone(), into));

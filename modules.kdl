@@ -12,10 +12,17 @@ flavors {
     laptop
 }
 
-// Modules compile into one Containerfile RUN layer each in the build Containerfile
-// (Contaienrfile.generated) in the order below. Therefore:
-// - Place less frequently updated modules earlier in the build to ensure better caching
-// - Ensure that any modules that have dependancies in other modules run first
+// Modules compile into one Containerfile RUN layer each in the build
+// Containerfile (Containerfile.generated). The build order is resolved
+// from the graph, and this list is what it falls back to:
+// - A module that `requires` something builds after whatever provides it,
+//   wherever the two sit here. Dependencies are declared, not ordered by
+//   hand.
+// - Ungated modules build before gated ones, so they stay above the
+//   flavor gate and are shared by every image.
+// - Everything the graph says nothing about builds in the order below, so
+//   this is still where "less frequently updated first, for caching" is
+//   expressed.
 // Flavor specific modules are defined with the following syntax:
 // modules {
 //     flavor "flavor-name" {
@@ -26,13 +33,9 @@ modules {
     module "base"
     module "core/auto-updates"
     module "core/system-just-scripts"
-    module "core/goojust"
     module "core/flatpak"
     module "core/brew"
     module "core/cli-tools"
-
-    module "cli-customizations"
-    module "manage-dotfiles"
 
     module "kernel/cachyos-kernel"
 
@@ -48,10 +51,7 @@ modules {
     module "hardware/yubikey"
 
     module "de/kde-desktop"
-    module "de/falcos-plasma-settings"
-    module "de/plasma-network-audio"
     module "de/bazaar"
-    module "de/kde-theming"
 
     module "media-codecs"
     module "networking"
@@ -66,10 +66,23 @@ modules {
     module "vpn/netbird"
     module "vpn/tailscale"
 
-    module "apps/affinity"
     module "apps/trivalent"
     module "apps/vscodium"
     module "apps/bitwarden"
+
+    // Everything below pins an asset by version and SHA256, so Renovate
+    // bumps one of them most weeks and every layer under it rebuilds.
+    // They sit behind the heavy stable installs (the kernel, the desktop,
+    // the codecs) so a routine bump re-runs a handful of cheap layers
+    // instead of most of the build. Nothing here provides a capability,
+    // which is why the graph is happy to leave them last.
+    module "core/goojust"
+    module "cli-customizations"
+    module "manage-dotfiles"
+    module "de/falcos-plasma-settings"
+    module "de/plasma-network-audio"
+    module "de/kde-theming"
+    module "apps/affinity"
 
     flavor "desktop" {
         module "virtualization/vfio-passthrough"
@@ -80,5 +93,5 @@ modules {
         module "hardware/laptop-tweaks"
     }
 
-    module "core/power-just-scripts" // installed after flavors for preferred justfile ordering
+    module "core/power-just-scripts" // last, so its recipes append last to the collected justfile
 }
