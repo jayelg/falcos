@@ -63,14 +63,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/system-just-scripts,target=/
     --mount=type=tmpfs,target=/tmp \
     MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/core/system-just-scripts
 
-# ---- core/goojust ----
-RUN --mount=type=bind,from=ctx,source=/modules/core/goojust,target=/ctx/modules/core/goojust \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/core/goojust
-
 # ---- core/flatpak ----
 RUN --mount=type=bind,from=ctx,source=/modules/core/flatpak,target=/ctx/modules/core/flatpak \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
@@ -94,22 +86,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/cli-tools,target=/ctx/module
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     bash /ctx/lib/run-module.sh /ctx/modules/core/cli-tools
-
-# ---- cli-customizations ----
-RUN --mount=type=bind,from=ctx,source=/modules/cli-customizations,target=/ctx/modules/cli-customizations \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    OPT_FONTS="0xProto CascadiaMono ComicShannsMono DroidSansMono FiraCode Go-Mono IBMPlexMono JetBrainsMono SourceCodePro Ubuntu" bash /ctx/lib/run-module.sh /ctx/modules/cli-customizations
-
-# ---- manage-dotfiles ----
-RUN --mount=type=bind,from=ctx,source=/modules/manage-dotfiles,target=/ctx/modules/manage-dotfiles \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/manage-dotfiles
 
 # ---- kernel/cachyos-kernel (verbatim from modules/kernel/cachyos-kernel/Containerfile.inc) ----
 # Declares the cachyos kernel variant, overriding Containerfile.template's
@@ -204,22 +180,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/kde-desktop,target=/ctx/module
     --mount=type=tmpfs,target=/tmp \
     bash /ctx/lib/run-module.sh /ctx/modules/de/kde-desktop
 
-# ---- de/falcos-plasma-settings ----
-RUN --mount=type=bind,from=ctx,source=/modules/de/falcos-plasma-settings,target=/ctx/modules/de/falcos-plasma-settings \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/de/falcos-plasma-settings
-
-# ---- de/plasma-network-audio ----
-RUN --mount=type=bind,from=ctx,source=/modules/de/plasma-network-audio,target=/ctx/modules/de/plasma-network-audio \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/de/plasma-network-audio
-
 # ---- de/bazaar ----
 RUN --mount=type=bind,from=ctx,source=/modules/de/bazaar,target=/ctx/modules/de/bazaar \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
@@ -227,14 +187,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/bazaar,target=/ctx/modules/de/
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     MODULE_COLLECT="flatpaks.list=/usr/share/falcos/default-flatpaks" bash /ctx/lib/run-module.sh /ctx/modules/de/bazaar
-
-# ---- de/kde-theming ----
-RUN --mount=type=bind,from=ctx,source=/modules/de/kde-theming,target=/ctx/modules/de/kde-theming \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/de/kde-theming
 
 # ---- media-codecs ----
 RUN --mount=type=bind,from=ctx,source=/modules/media-codecs,target=/ctx/modules/media-codecs \
@@ -308,14 +260,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/vpn/tailscale,target=/ctx/modules
     --mount=type=tmpfs,target=/tmp \
     bash /ctx/lib/run-module.sh /ctx/modules/vpn/tailscale
 
-# ---- apps/affinity ----
-RUN --mount=type=bind,from=ctx,source=/modules/apps/affinity,target=/ctx/modules/apps/affinity \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/apps/affinity
-
 # ---- apps/trivalent ----
 RUN --mount=type=bind,from=ctx,source=/modules/apps/trivalent,target=/ctx/modules/apps/trivalent \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
@@ -339,6 +283,62 @@ RUN --mount=type=bind,from=ctx,source=/modules/apps/bitwarden,target=/ctx/module
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     MODULE_COLLECT="flatpaks.list=/usr/share/falcos/default-flatpaks" bash /ctx/lib/run-module.sh /ctx/modules/apps/bitwarden
+
+# ---- core/goojust ----
+RUN --mount=type=bind,from=ctx,source=/modules/core/goojust,target=/ctx/modules/core/goojust \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/core/goojust
+
+# ---- cli-customizations ----
+RUN --mount=type=bind,from=ctx,source=/modules/cli-customizations,target=/ctx/modules/cli-customizations \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    OPT_FONTS="0xProto CascadiaMono ComicShannsMono DroidSansMono FiraCode Go-Mono IBMPlexMono JetBrainsMono SourceCodePro Ubuntu" bash /ctx/lib/run-module.sh /ctx/modules/cli-customizations
+
+# ---- manage-dotfiles ----
+RUN --mount=type=bind,from=ctx,source=/modules/manage-dotfiles,target=/ctx/modules/manage-dotfiles \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/manage-dotfiles
+
+# ---- de/falcos-plasma-settings ----
+RUN --mount=type=bind,from=ctx,source=/modules/de/falcos-plasma-settings,target=/ctx/modules/de/falcos-plasma-settings \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/de/falcos-plasma-settings
+
+# ---- de/plasma-network-audio ----
+RUN --mount=type=bind,from=ctx,source=/modules/de/plasma-network-audio,target=/ctx/modules/de/plasma-network-audio \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/de/plasma-network-audio
+
+# ---- de/kde-theming ----
+RUN --mount=type=bind,from=ctx,source=/modules/de/kde-theming,target=/ctx/modules/de/kde-theming \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/de/kde-theming
+
+# ---- apps/affinity ----
+RUN --mount=type=bind,from=ctx,source=/modules/apps/affinity,target=/ctx/modules/apps/affinity \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/apps/affinity
 
 # ---- core/power-just-scripts ----
 RUN --mount=type=bind,from=ctx,source=/modules/core/power-just-scripts,target=/ctx/modules/core/power-just-scripts \
