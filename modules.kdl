@@ -12,10 +12,17 @@ flavors {
     laptop
 }
 
-// Modules compile into one Containerfile RUN layer each in the build Containerfile
-// (Contaienrfile.generated) in the order below. Therefore:
-// - Place less frequently updated modules earlier in the build to ensure better caching
-// - Ensure that any modules that have dependancies in other modules run first
+// Modules compile into one Containerfile RUN layer each in the build
+// Containerfile (Containerfile.generated). The build order is resolved
+// from the graph, and this list is what it falls back to:
+// - A module that `requires` something builds after whatever provides it,
+//   wherever the two sit here. Dependencies are declared, not ordered by
+//   hand.
+// - Ungated modules build before gated ones, so they stay above the
+//   flavor gate and are shared by every image.
+// - Everything the graph says nothing about builds in the order below, so
+//   this is still where "less frequently updated first, for caching" is
+//   expressed.
 // Flavor specific modules are defined with the following syntax:
 // modules {
 //     flavor "flavor-name" {
@@ -80,5 +87,5 @@ modules {
         module "hardware/laptop-tweaks"
     }
 
-    module "core/power-just-scripts" // installed after flavors for preferred justfile ordering
+    module "core/power-just-scripts" // last, so its recipes append last to the collected justfile
 }

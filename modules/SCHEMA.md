@@ -73,16 +73,16 @@ modules {
         module "hardware/laptop-tweaks"
     }
 
-    // Back outside, so ungated again. A module here is built once per
-    // flavor because it sits below ARG FLAVOR; put one here only when it
-    // must run after every gated module.
+    // Back outside, so ungated again, and it still builds above every
+    // gated module: where a line sits only breaks ties.
     module "core/power-just-scripts"
 }
 ```
 
-Order is document order, top to bottom, and is the build order: one RUN
-layer per entry. Nesting rather than INI-style section headers makes
-"outside a flavor block means ungated" structural instead of positional.
+One RUN layer per entry, in the order [Build order](#build-order)
+resolves, which is document order wherever the graph says nothing.
+Nesting rather than INI-style section headers makes "outside a flavor
+block means ungated" structural instead of positional.
 
 ### `flavors`
 
@@ -200,7 +200,8 @@ it.
 preference only, and never fails, so a module can prefer to run after an
 optional peer without depending on it. There is no third edge kind: two
 is enough to express everything in this repo, and each additional one
-multiplies the sort's failure modes.
+multiplies the sort's failure modes. What the two edges do to the build
+order is [below](#build-order).
 
 Nothing is auto-included. An unsatisfied `requires` names the modules
 that would fix it and stops; it never adds one. The list stays the
@@ -246,7 +247,7 @@ collects "flatpaks.list" into="/usr/share/falcos/default-flatpaks"
 
 **The declaration says nothing about what the collecting module then does
 with them.** The build collects; interpreting the result is the module's
-business. Today the build appends, in module list order, but that is a
+business. Today the build appends, in build order, but that is a
 detail of the collector and not a promise of this node — which is why it
 is not called `aggregates` or `concatenates`.
 
@@ -262,7 +263,7 @@ contributes reach its layer, so a module that contributes nothing carries
 no such env at all.
 
 One collector per filename, or where a contribution went would depend on
-module list order. A module shipping a collected filename while the
+build order. A module shipping a collected filename while the
 module that collects it is absent is an error — it would otherwise be
 silently ignored, which is how a contribution goes missing without
 anything failing.
@@ -400,6 +401,37 @@ file for every target, and the only per-flavor mechanism is the
 a gated module's fragment only has to when it runs a command of its own,
 which lint checks against the flavor block the module is listed under.
 
+## Build order
+
+Resolved from the graph, not read off the list. A `requires` already
+says "after whatever provides this", so the list does not have to repeat
+it and the two can no longer disagree.
+
+Constraints, in the order they bind:
+
+1. a provider builds before anything that `requires` it or reads a file
+   it `provides-file`s. Hard.
+2. a provider builds before anything declaring `after` it, when it is
+   enabled at all. Soft, and skipped when it would drag an ungated
+   module below the flavor gate — a preference is not worth a layer per
+   flavor.
+3. ungated modules build before gated ones, so nothing lands below `ARG
+   FLAVOR` and gets built once per target for no reason.
+4. anything still tied builds in declaration order.
+
+**Determinism is not negotiable**: the same list produces the same order
+on every machine, because a reshuffle is a full rebuild. That is also
+why there is no `weight` field. Declaration order is already the
+tie-break, and modules.kdl is the image author's file, so wanting one
+module later is expressed by moving its line — a second knob for the
+same thing would only be a way for the two to disagree.
+
+A cycle has no build order at all, so it is a lint failure naming the
+edges that close it.
+
+The resolved order is what the committed `Containerfile.generated`
+shows, layer by layer, and what `manifest summary` prints.
+
 ## Build targets
 
 A **flavor** is an image build variant. A **target** is something the
@@ -475,6 +507,8 @@ Lint fails on all of these, in seconds, before anything builds.
   would satisfy it
 - a `requires-file` no enabled module provides
 - two enabled modules providing the same capability or contract file
+- a requirement satisfied only by a module gated to another flavor
+- a cycle, naming the edges that close it
 
 **Collecting**
 
@@ -513,12 +547,6 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **Ordering by the graph.** The build order is document order today. A
-  deterministic topological sort over `requires` and `after` replaces it,
-  tie broken by declaration order, along with the rule that ungated
-  modules sort above gated ones so nothing lands below `ARG FLAVOR` and
-  gets built once per flavor for no reason. Determinism is not
-  negotiable: a reshuffle is a full rebuild.
 - **The overlay collision check**, and with it an `overrides` node
   declaring that a module's `files/` overlay intentionally replaces a
   path an earlier module shipped. There are zero collisions today, so

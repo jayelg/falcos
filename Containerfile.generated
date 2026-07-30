@@ -340,6 +340,14 @@ RUN --mount=type=bind,from=ctx,source=/modules/apps/bitwarden,target=/ctx/module
     --mount=type=tmpfs,target=/tmp \
     MODULE_COLLECT="flatpaks.list=/usr/share/falcos/default-flatpaks" bash /ctx/lib/run-module.sh /ctx/modules/apps/bitwarden
 
+# ---- core/power-just-scripts ----
+RUN --mount=type=bind,from=ctx,source=/modules/core/power-just-scripts,target=/ctx/modules/core/power-just-scripts \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/core/power-just-scripts
+
 # ---- flavor gate ----
 # Declared here rather than above: an ARG in scope is part of the cache
 # key of every RUN below it, so every layer above this one is shared by
@@ -376,14 +384,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/laptop-tweaks,target=/ct
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     FLAVOR_GATE=laptop bash /ctx/lib/run-module.sh /ctx/modules/hardware/laptop-tweaks
-
-# ---- core/power-just-scripts ----
-RUN --mount=type=bind,from=ctx,source=/modules/core/power-just-scripts,target=/ctx/modules/core/power-just-scripts \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/core/power-just-scripts
 
 # ---- finalize hook order ----
 # Modules shipping a finalize.sh, in build order, resolved on the host.
