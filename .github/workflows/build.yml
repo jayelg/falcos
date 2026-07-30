@@ -286,6 +286,30 @@ jobs:
           fi
           ./scripts/build.sh "${args[@]}"
 
+      # What this job actually built, from the same parser the generator
+      # reads: the modules this target carries, in layer order, with the
+      # options each was given. Descriptions come from the manifests, so a
+      # published image gets a readable record of its contents without
+      # anyone opening forty RUN lines.
+      - name: Summarize the resolved build
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          {
+            echo "## ${IMAGE_NAME}"
+            echo
+            ./scripts/manifest.sh summary "$TARGET"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The expanded build, kept with the run rather than only with the
+      # commit, so a run stays readable after the branch it ran on moves.
+      - name: Upload the generated Containerfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: containerfile-${{ env.IMAGE_NAME }}
+          path: Containerfile.generated
+          retention-days: 30
+
       - name: Setup Syft
         id: setup-syft
         if: env.PUBLISH == 'true'

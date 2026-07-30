@@ -33,11 +33,11 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
 
 # ---- BEGIN MODULES (generated at build time from modules.kdl; see scripts/gen-containerfile.sh) ----
 #
-# Intentionally empty in git. This committed file is the build skeleton:
-# at build time (scripts/build.sh, locally and in CI) one RUN layer per
-# modules.kdl entry is spliced in here and the result is written to
-# Containerfile.generated, which is what actually builds. To change what
-# the image contains, edit modules.kdl, not this file.
+# Empty here on purpose: this file is the skeleton. One RUN layer per
+# modules.kdl entry is spliced in between these markers and the result is
+# written to Containerfile.generated, which is what actually builds and is
+# committed beside this file. To change what the image contains, edit
+# modules.kdl, not this file.
 #
 # ---- END MODULES ----
 

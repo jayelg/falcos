@@ -5,7 +5,7 @@
 //! the image parses a manifest.
 
 use crate::diag::{Issue, Issues};
-use crate::list::{Entry, List};
+use crate::list::{Entry, List, NO_FLAVOR};
 use crate::module::Module;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -99,6 +99,70 @@ pub fn section(
     );
 
     out
+}
+
+/// What a target is made of, as markdown, in the order the layers build.
+/// Written to the CI job summary, so a published image has a record of the
+/// modules it carries and the options each was given without anyone having
+/// to read forty RUN lines. A module's `description` exists for this.
+///
+/// No target means every entry, which is the whole list rather than any
+/// image that gets built.
+pub fn summary(list: &List, modules: &[Module], target: Option<&str>) -> String {
+    let included: Vec<&Entry> = list
+        .entries
+        .iter()
+        .filter(|e| match (&e.flavor, target) {
+            (None, _) => true,
+            (Some(_), None) => true,
+            (Some(gate), Some(target)) => gate == target,
+        })
+        .collect();
+    let gated = included.iter().filter(|e| e.flavor.is_some()).count();
+
+    let mut out = String::new();
+    let count = included.len();
+    let _ = match target {
+        Some(NO_FLAVOR) => writeln!(out, "{count} modules, the ungated set."),
+        Some(target) => writeln!(out, "{count} modules, {gated} of them gated to `{target}`."),
+        None => writeln!(out, "{count} modules, {gated} of them gated to a flavor."),
+    };
+    let _ = write!(
+        out,
+        "\n| Module | Description | Options |\n| --- | --- | --- |\n"
+    );
+
+    for entry in included {
+        let module = modules
+            .iter()
+            .find(|m| m.path == entry.path && m.flavor == entry.flavor);
+        let mut name = format!("`{}`", entry.path);
+        if let Some(flavor) = &entry.flavor {
+            let _ = write!(name, " `[{flavor}]`");
+        }
+        if let Some(variant) = &entry.variant {
+            let _ = write!(name, " `variant={variant}`");
+        }
+        let options: Vec<String> = module
+            .map(|m| m.resolved.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .map(|(name, value)| format!("`{name}=\"{}\"`", cell(value)))
+            .collect();
+        let _ = writeln!(
+            out,
+            "| {name} | {} | {} |",
+            cell(module.map(|m| m.description.as_str()).unwrap_or_default()),
+            options.join(" ")
+        );
+    }
+    out
+}
+
+/// A pipe would end the column, and neither a description nor an option
+/// value is stopped from holding one.
+fn cell(text: &str) -> String {
+    text.replace('|', "\\|")
 }
 
 fn standard(

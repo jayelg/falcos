@@ -6,9 +6,11 @@ The GitHub Actions pipelines.
 
 Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `modules.kdl`, for build testing, and do not push.
 
-Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a generator dry run over `modules.kdl`, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
+Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a regeneration of the Containerfile checked against the committed one, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
 The build itself is [build.sh](../../scripts/build.sh), which `just build` also runs. It owns the Containerfile generation, the build args, the registry cache refs and the Secure Boot secret, so a local build and a CI build of the same commit differ only in the backend that reaches BuildKit. The workflow keeps the policy around it: which events may read and write the cache, and which produce a publishable artifact.
+
+Each build job writes the resolved module set for its target to the run summary, taken from the same parser that generates the Containerfile, and uploads the generated Containerfile as the `containerfile-falcos-<flavor>` artifact.
 
 Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
 
@@ -18,9 +20,9 @@ The attested document is the package inventory. The full file-level SBOM, which 
 
 ### [Build Disk Images](build-disk.yml)
 
-Turns the built image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Which flavor it builds, and which image the ISO switches the installed system to, both come from the installer flavor declared in [Flavors](../../scripts/flavors.sh); the kickstart reference is rendered from it rather than written down.
+Turns a published image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Both the payload and the image the ISO switches the installed system to are the ungated `falcos` build, by rule rather than by a configured value: kargs under `/usr/lib/bootc/kargs.d/` are static, so a payload for an uninspected machine has to be the set that gates on no hardware. The kickstart reference is rendered from that rather than written down.
 
-> **A new target's first publish creates a GHCR package, and GitHub makes new packages private.** CI will not notice, because `GITHUB_TOKEN` carries `packages: read` for the repository's own packages, so the ISO build keeps succeeding while the reference it bakes in is unpullable by anyone else. Flip the package to public after its first push.
+> **This workflow builds from a *published* image, so one has to exist.** An image package is created by a push to the default branch, and GitHub makes a new package private on first publish — and ghcr answers an unauthorised request with 403 rather than 404, so "never pushed" and "private" look identical. Both fail the same way. The workflow checks for this up front and says which it is, rather than letting the failure surface as a bare 403 from the pull. Flip a new package to public after its first push.
 
 ### [Kernel Freshness](kernel-freshness.yml)
 
