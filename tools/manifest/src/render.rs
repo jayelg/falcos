@@ -284,15 +284,19 @@ fn in_target(entry: &Entry, target: Option<&str>) -> bool {
     }
 }
 
-/// Every pinned asset, tab separated, one per line:
+/// Every pinned asset, pipe separated, one per line:
 ///
-///     <module> <name> <manifest> <version> <sha256> <from> <url>
+///     <module>|<name>|<manifest>|<version>|<sha256>|<from>|<url>
 ///
 /// Two consumers, neither of which should be carrying a table of its own:
 /// the checksum workflow, which recomputes a stale hash and needs the
 /// manifest to rewrite, and the SBOM supplement, which needs the payloads
 /// an RPM inventory cannot see. Absent fields are empty, so the column
-/// count is fixed and a reader can `IFS=$'\t' read`.
+/// count is fixed.
+///
+/// Delimited with | rather than a tab because bash `read` collapses
+/// consecutive IFS whitespace characters (including tab), which shifts
+/// columns when a field is empty.
 pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
     let mut out = String::new();
     // A module listed under two flavors is two entries carrying the same
@@ -313,7 +317,7 @@ pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
             seen.push((module.path.as_str(), asset.name.as_str()));
             let _ = writeln!(
                 out,
-                "{}\t{}\tmodules/{}/module.kdl\t{}\t{}\t{}\t{}",
+                "{}|{}|modules/{}/module.kdl|{}|{}|{}|{}",
                 module.path,
                 asset.name,
                 module.path,

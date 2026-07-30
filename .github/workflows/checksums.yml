@@ -71,7 +71,7 @@ jobs:
 
           fixed=()
           # module, name, manifest, version, sha256, hash source, URL
-          while IFS=$'\t' read -r module name file version pinned from url; do
+          while IFS='|' read -r module name file version pinned from url; do
             grep -qxF "$file" <<< "$changed" || continue
             # A pin with no hash is a git ref the module clones, and a
             # manual one is a hash nothing derives: for an asset whose
