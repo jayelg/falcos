@@ -65,13 +65,27 @@ pub fn section(
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor);
 
+        // A fragment adds to the generated block rather than replacing
+        // it, so an entry can emit both, in the declared order.
         let inc = dir.join("Containerfile.inc");
-        let block = if inc.is_file() {
-            verbatim(entry, &inc, flavor_arg_emitted, list, issues)
-        } else {
-            standard(entry, module, collected.get(&entry.path))
-        };
-        let _ = write!(out, "{block}\n\n");
+        let mut blocks: Vec<String> = Vec::new();
+        let fragment_after = module.is_some_and(|m| m.fragment_after);
+        if inc.is_file() && !fragment_after {
+            blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
+        }
+        if module.is_none_or(|m| m.standard_layer) {
+            blocks.push(standard(entry, module, collected.get(&entry.path)));
+        }
+        if inc.is_file() && fragment_after {
+            blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
+        }
+
+        // Once per entry rather than once per block, since the flavor is
+        // a property of the entry and both blocks carry it.
+        if let Some(flavor) = &entry.flavor {
+            let _ = writeln!(out, "# ---- [{flavor}] ----");
+        }
+        let _ = write!(out, "{}\n\n", blocks.join("\n\n"));
 
         if dir.join("finalize.sh").is_file() {
             finalize.push(match &entry.flavor {
@@ -219,9 +233,6 @@ fn standard(
 
     let path = &entry.path;
     let mut out = String::new();
-    if let Some(flavor) = &entry.flavor {
-        let _ = writeln!(out, "# ---- [{flavor}] ----");
-    }
     let _ = write!(
         out,
         "# ---- {path} ----\n\
@@ -236,8 +247,9 @@ fn standard(
 }
 
 /// A module whose needs the field sets cannot express ships a fragment,
-/// which replaces the standard block rather than adding to it.
-fn verbatim(
+/// inlined verbatim above the standard block, or below it when the
+/// manifest says `position "after"`.
+fn fragment(
     entry: &Entry,
     inc: &Path,
     flavor_arg_emitted: bool,
@@ -262,10 +274,12 @@ fn verbatim(
         );
     }
 
-    // The fragment replaces the standard block, so it has to spell the
-    // gate out itself. Left to agree by hand it would silently ship a
-    // gated module on every flavor.
-    if let Some(flavor) = &entry.flavor {
+    // Nothing in a fragment is conditional: the generated Containerfile
+    // is one file for every target, and the only per-flavor mechanism is
+    // the gate the runner checks. The standard block carries it, so a
+    // fragment only has to when it runs something of its own.
+    let runs = body.lines().any(|l| l.trim_start().starts_with("RUN "));
+    if let Some(flavor) = entry.flavor.as_ref().filter(|_| runs) {
         let declared = body
             .split("FLAVOR_GATE=")
             .nth(1)
@@ -290,16 +304,13 @@ fn verbatim(
                 )
                 .at(entry.span, "the flavor gate would be silently ignored")
                 .help(
-                    "a fragment replaces the generated block, so it has to carry the gate itself",
+                    "a fragment is emitted unconditionally, so anything it runs has to carry the gate itself",
                 ),
             ),
         }
     }
 
     let mut out = String::new();
-    if let Some(flavor) = &entry.flavor {
-        let _ = writeln!(out, "# ---- [{flavor}] ----");
-    }
     let _ = write!(
         out,
         "# ---- {path} (verbatim from modules/{path}/Containerfile.inc) ----\n{}",

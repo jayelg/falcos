@@ -62,8 +62,9 @@
 # install_selinux_module /tmp/<generated>.te
 
 ### dkms-helpers.sh — build an out-of-tree kernel module (MOK-signed when a
-### key is mounted). Needs the kernel headers, so a module using this also
-### needs a Containerfile.inc; see hardware/gaming and looking-glass.
+### key is mounted). Needs the kernel headers and the signing key, so a
+### module using this declares `requires "kernel-devel"`, `arg "KERNEL"`
+### and `secret "mok_privkey"`; see hardware/gaming and looking-glass.
 # source /ctx/lib/dkms-helpers.sh
 # kernel_devel_install <extra-build-deps...>
 # dkms_build_module <module-name> "$(dkms_conf_version "$MODDIR/src")" "$MODDIR/src"

@@ -43,7 +43,7 @@ runs much later, in the finalize layer.
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in list order. |
 | `justfile.inc` | goojust recipes. Picked up because `core/goojust` declares it collects this filename; the destination lives there, not here. |
-| `Containerfile.inc` | Verbatim RUN block replacing the standard one — only for extra mounts, build secrets, or ARGs. |
+| `Containerfile.inc` | Verbatim Containerfile lines added above the generated block — only for what the declared fields cannot express, such as an `ARG` with a default or a second layer. Build secrets and args are declared in `module.kdl` instead. |
 | `README.md` | Every module has one; the copy here is a fill-in skeleton. |
 
 ## Ordering & flavors (in modules.kdl)
@@ -94,7 +94,7 @@ SHA256-verified against the pin in `versions.sh`:
 `selinux/*.te` (auto-installed). Use the helper only for a build-time-generated policy:
 - `install_selinux_module <te>` — compile + install a `.te` (write it to `/tmp` first; the helper removes the source)
 
-**dkms-helpers.sh** — out-of-tree kernel modules (MOK-signed when a key is mounted); the module also needs a `Containerfile.inc` for the kernel headers:
+**dkms-helpers.sh** — out-of-tree kernel modules (MOK-signed when a key is mounted); the module also declares `requires "kernel-devel"`, `arg "KERNEL"` and `secret "mok_privkey"` in its manifest:
 - `kernel_devel_install [extra-deps…]` / `kernel_devel_remove [extra-deps…]`
 - `dkms_conf_version <src-dir>` — read `PACKAGE_VERSION` from a `dkms.conf`
 - `dkms_build_module <name> <version> <src-dir>`

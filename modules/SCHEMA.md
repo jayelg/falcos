@@ -362,20 +362,43 @@ next additions when one does.
 
 A module needing something the field sets cannot express — an extra
 builder stage, a second layer, an `ARG` with a default — ships a
-`Containerfile.inc`, which the generator inlines verbatim *instead of*
-the standard block.
+`Containerfile.inc`, which the generator inlines verbatim *alongside* the
+standard block.
 
-Because it replaces the block rather than adding to it, a module with a
-`Containerfile.inc` may not also declare `secret` or `arg`: the fragment
-already spells those out itself, and a declaration it silently ignored
-would be worse than no declaration. Lint enforces this. Fragments are
-planned to become additive rather than replacing, at which point the two
-combine and this restriction lifts.
+Shipping the file is the whole declaration, as with `files/`. The
+optional `fragment` node carries only the two things the file cannot say
+about itself:
 
-One module uses one today: `kernel/cachyos-kernel` declares `ARG
-KERNEL=cachyos`, which is graph shape rather than a parameter, and is the
-line the kernel-freshness workflow rewrites to fall back to the stock
-kernel.
+```kdl
+fragment position="after" standard-layer=#false
+```
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `position=` | `"before"` | where the fragment goes relative to the generated block |
+| `standard-layer=` | `#true` | whether that block is emitted at all |
+
+Because a fragment adds rather than replaces, a module ships only the
+part it actually needs: `kernel/cachyos-kernel`, the one module with a
+fragment today, is down to its `ARG KERNEL=cachyos` — graph shape rather
+than a parameter, and the line the kernel-freshness workflow rewrites to
+fall back to the stock kernel. Its mounts, its build arg and its signing
+secret are declared, and the generator writes the same RUN line the
+fragment used to spell out by hand.
+
+`standard-layer=#false` asks for the full override the generator used to
+do implicitly: the fragment becomes the only thing the module emits, and
+it has to call `run-module.sh` itself and mount everything that needs.
+Nothing then carries the module's `secret`, `arg`, `option` or collected
+files, so declaring any of those alongside it is an error rather than a
+silent omission — the hole the old replacing behaviour left, where a
+declared option was quietly dropped.
+
+A fragment is emitted unconditionally: the generated Containerfile is one
+file for every target, and the only per-flavor mechanism is the
+`FLAVOR_GATE` the runner checks. The standard block carries the gate, so
+a gated module's fragment only has to when it runs a command of its own,
+which lint checks against the flavor block the module is listed under.
 
 ## Build targets
 
@@ -469,9 +492,16 @@ Lint fails on all of these, in seconds, before anything builds.
 
 **Fragments**
 
-- a module declaring `secret` or `arg` alongside a `Containerfile.inc`
+- a `fragment` node in a module that ships no `Containerfile.inc`, or
+  one declared twice
+- a `position` other than `before` or `after`, or one declared alongside
+  `standard-layer=#false`, where there is nothing to be before or after
+- a `secret`, `arg`, `option` or collected file declared alongside
+  `standard-layer=#false`, which removes the layer they would land on
 - a `Containerfile.inc` expanding `FLAVOR` above the `ARG FLAVOR`
   declaration
+- a gated module whose fragment runs a command without carrying the
+  matching `FLAVOR_GATE`
 
 **Reserved**
 
@@ -489,9 +519,6 @@ here.
   modules sort above gated ones so nothing lands below `ARG FLAVOR` and
   gets built once per flavor for no reason. Determinism is not
   negotiable: a reshuffle is a full rebuild.
-- **Additive fragments.** `Containerfile.inc` gains a declared position
-  and stops replacing the generated block, which is what lets the
-  restriction on `secret` and `arg` lift.
 - **The overlay collision check**, and with it an `overrides` node
   declaring that a module's `files/` overlay intentionally replaces a
   path an earlier module shipped. There are zero collisions today, so

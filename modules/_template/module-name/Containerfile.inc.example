@@ -5,22 +5,30 @@
 # a build arg is NOT a reason — declare `secret` and `arg` in module.kdl and
 # the generator writes the mounts for you.
 #
-# When present, the generator inlines this file VERBATIM instead of the
-# standard block, so it fully REPLACES the normal flow: you must call
-# run-module.sh yourself and mount everything it needs. Because it replaces
-# rather than adds, declaring `secret` or `arg` alongside one is a lint
-# error: the fragment already spells them out, and a declaration the
-# generator ignored would be worse than none.
+# The generator inlines this file VERBATIM alongside the standard block, so
+# it ADDS to the normal flow rather than replacing it: the module still gets
+# its usual layer, with its mounts, its options and its flavor gate.
+# Shipping the file is the whole declaration; module.kdl only says where it
+# goes, and only when the defaults are wrong:
 #
-# One module in the repository uses one: kernel/cachyos-kernel, for its
+#   fragment position="after"        # "before", above the block, is default
+#   fragment standard-layer=#false   # emit nothing but this file
+#
+# With `standard-layer #false` the fragment is the only thing this module
+# emits, so it has to call run-module.sh itself and mount everything that
+# needs. Nothing then carries a `secret`, `arg`, `option` or collected file,
+# so declaring any of those alongside it is a lint error.
+#
+# One module in the repository ships one: kernel/cachyos-kernel, for its
 # `ARG KERNEL=cachyos`, which is graph shape rather than a parameter and is
-# the line the kernel-freshness workflow rewrites.
+# the line the kernel-freshness workflow rewrites. Its build arg and signing
+# secret are declared in its manifest, not written out here.
 #
-# A flavor-gated Containerfile.inc must set FLAVOR_GATE itself; the
-# generator cross-checks it against the flavor block it is listed in and
-# errors on a mismatch.
+# A fragment is emitted unconditionally, so on a flavor-gated module
+# anything it RUNs has to set FLAVOR_GATE itself; the generator cross-checks
+# that against the flavor block the module is listed in.
 #
-# Example skeleton (a module needing a build secret):
+# Example skeleton (a full override, which is rarely what you want):
 #
 # RUN --mount=type=bind,from=ctx,source=/modules/GROUP/template,target=/ctx/modules/GROUP/template \
 #     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \

@@ -22,8 +22,9 @@ modules/<group-or-name>/<name>/
                       by 99-finalize.sh in list order and flavor-gated (optional)
   justfile.inc        goojust app recipes, collected at build time by
                       core/goojust, which declares where they go (optional)
-  Containerfile.inc   verbatim RUN block when the standard one isn't enough,
-                      e.g. build secrets or ARGs (optional)
+  Containerfile.inc   verbatim Containerfile lines added above the generated
+                      block, for what the fields can't express, e.g. an ARG
+                      with a default (optional)
 ```
 
 The directory name is the module name in modules.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
