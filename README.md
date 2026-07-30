@@ -5,7 +5,7 @@ Falcos is a framework for a 'build-your-own distro' using an atomic/immutable li
 ## Features
 
 - **Minimal Abstractions**: The repo is a framework for a custom linux image designed to be easy to learn and understand whats happening under the hood while still keeping things organised and easy to maintain.
-- **Module based architecture**: `modules/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and version pinning with SHA hash). `modules.kdl` then defines a definitive list of all modules that are enabled in the built images including common modules and modules specific to different flavor builds (using a `[Flavor_Name]` tags). Modules are then spliced into a generated containerfile at build time.
+- **Module based architecture**: `modules/` Centralizes all build requirements for a feature into a standardized directory structure (This can include a build script with any install or system configuration commands, containerfile commands to include, run time justfile scripts, files to copy, and asset pins with their download URL and SHA256). `modules.kdl` then defines a definitive list of all modules that are enabled in the built images including common modules and modules specific to different flavor builds (using a `[Flavor_Name]` tags). Modules are then spliced into a generated containerfile at build time.
 - **System visibility**: The default base image is [fedora-bootc](https://quay.io/repository/fedora/fedora-bootc) which provides a minimal starting point so that the majority of the system configuration is centralized and visible to the user.
 - **Security**: A script to enrol and use custom kernels with secure-boot enabled. Hardening modules are included eg. Hardened_Malloc. CI automations include a kernel-freshness workflow that check if a custom kernel is stale and pushes a PR to temporarily swap the kernel to stock to minimize know exploit vulnerabilities in stale kernels. The images are signed with Cosign and Syft SPDX scans the built image against SHA256 hashes.
 - **Build Layer Caching and rechunking**: Builtkit is configured to cache all build layers to reduce build timees with each module cached independently. rpm-ostree repacks into smaller content-stable layers to reduce the download sizes of image changes.
@@ -42,12 +42,12 @@ Every layer above the first flavor section is shared by all flavor builds: the f
 ### Image Building
 Images are build using the `.github/workflows/build.yml` workflow, signed and published for bootc images to track updates.
 The workflow runs daily to rebuild with any updates to the base image and modules (that aren't pinned to a version).
-Renovate monitors each module's `versions.sh` file and  generates a daily batch update PR with build test checks if any new versions of module dependancies are available.
+Renovate monitors the asset pins in each module's `module.kdl` and generates a daily batch update PR with build test checks if any new versions of module dependancies are available.
 
 ### Other quality-of-life CI automations
 
 #### Automatically update SHA256 hash for pinned module version bumps 
-the `.github/workflows/checksums.yml` workflow runs after approved Renovate version bump PRs to update the modules `versions.sh` SHA256 hash properties.
+the `.github/workflows/checksums.yml` workflow runs after approved Renovate version bump PRs to update the `sha256` of every asset pin whose version moved, and to regenerate the Containerfile the pins are baked into.
 
 #### Cleanup registry
 

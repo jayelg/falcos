@@ -4,11 +4,11 @@ Shell helpers sourced by the build scripts, not run on their own (except `run-mo
 
 ### [Module Runner](run-module.sh)
 
-Runs one module per RUN layer: flavor gate, repo file, `versions.sh` pins, variant overrides, `module.sh`, `selinux/*.te` policy modules, `files/` overlay, `justfile.inc` append. Keeps the per-module conventions in one place.
+Runs one module per RUN layer: flavor gate, repo file, `module.sh`, `selinux/*.te` policy modules, `files/` overlay, collected files. Keeps the per-module conventions in one place. Asset pins and options arrive resolved as env, so nothing here reads a manifest.
 
 ### [Fetch Helpers](fetch-helpers.sh)
 
-Download-verify-install for pinned upstream release assets: `fetch_verified`, `fetch_extract`, `fetch_install_bin`, `fetch_install_rpm`. Every asset is SHA256-checked against the module's `versions.sh`.
+Download-verify-install for pinned upstream release assets: `fetch_verified`, `fetch_extract`, `fetch_install_bin`, `fetch_install_rpm`. Every asset is SHA256-checked against the `asset` block in the module's `module.kdl` that declared it.
 
 ### [Repo Helpers](repo-helpers.sh)
 

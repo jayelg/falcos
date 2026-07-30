@@ -29,15 +29,14 @@ just keeps it sorted to the top of the modules directory.
 
 ## Anatomy — what each file in `module-name/` does (all optional)
 
-Run order within a module: `repo` → `versions.sh` → `module.sh` →
-`selinux/*.te` → `files/` overlay → collected files. `finalize.sh`
-runs much later, in the finalize layer.
+Run order within a module: `repo` → `module.sh` → `selinux/*.te` →
+`files/` overlay → collected files. `finalize.sh` runs much later, in the
+finalize layer.
 
 | File | Purpose |
 |---|---|
-| `module.kdl` | **Required.** The manifest: description, base families, capabilities, contract files and options. See [SCHEMA.md](../SCHEMA.md). |
-| `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set, pins in scope, and `$OPT_*` for every option declared in `module.kdl`. Omit for a pure-file module. |
-| `versions.sh` | Renovate-tracked pins + SHA256s. `# renovate:` comment must sit directly above its version line. |
+| `module.kdl` | **Required.** The manifest: description, base families, capabilities, contract files, asset pins and options. See [SCHEMA.md](../SCHEMA.md). |
+| `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set, `$ASSET_*` for every asset pin and `$OPT_*` for every option declared in `module.kdl`. Omit for a pure-file module. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
 | `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. Shipping a path another module also ships is a lint failure unless the later one declares `overrides`. |
@@ -69,10 +68,13 @@ runs much later, in the finalize layer.
   installs it. Author rules from real denials with `ausearch -m avc |
   audit2allow`. Only a policy you must *generate* at build time needs the
   imperative helper (write to `/tmp`; the module dir is a read-only mount).
+- **Asset pins live in `module.kdl`**, one `asset` block per download, and
+  reach `module.sh` as `$ASSET_<NAME>_URL` / `_SHA256` / `_VERSION`. The URL
+  is declared once, so nothing outside the module can hold a second copy of
+  it and disagree.
 - **shellcheck runs in CI** on every `*.sh` and on `files/{libexec,system-generators}`
   scripts. Sourcing a lib helper in `module.sh` also stops shellcheck from
-  flagging your pin vars (SC2154); pin/override files use `# shellcheck
-  disable=SC2034`.
+  flagging your `$ASSET_*` env (SC2154).
 - **The modules.kdl entry IS the path** relative to `modules/`. E.g.
   `core/my-module` for `modules/core/my-module/`. No uniqueness
   constraint across groups — `core/tools` and `de/tools` are distinct.
@@ -82,7 +84,7 @@ runs much later, in the finalize layer.
 `module.sh` shows a live, commented call for each — signatures here.
 
 **fetch-helpers.sh** — install pinned release assets; every download is
-SHA256-verified against the pin in `versions.sh`:
+SHA256-verified against the `asset` block that declared it:
 - `fetch_install_bin <url> <sha256> <name> [path-in-archive]` — single binary → `/usr/bin/<name>`
 - `fetch_install_rpm <url> <sha256>` — download, verify, dnf-install an RPM
 - `fetch_extract <url> <sha256> <dir> [extractor args…]` — verify + extract (extension picks the extractor; extra args pass through)

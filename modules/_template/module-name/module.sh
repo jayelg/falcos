@@ -4,11 +4,14 @@
 #
 # Everything below is a commented reference — uncomment and adapt the pieces
 # you need, replacing <placeholders>. Sourced by lib/run-module.sh under
-# `set -euo pipefail`, AFTER repo and versions.sh, so:
+# `set -euo pipefail`, AFTER the repo file, so:
 #   - strict mode is already on (a failing command aborts the build)
 #   - $MODDIR points at this module's directory (/ctx/modules/...)
-#   - version pins from versions.sh are in scope ($TEMPLATE_* below)
-#   - variant overrides from variants/<v>.sh are already applied
+#   - every asset declared in module.kdl is in the environment as
+#     $ASSET_<NAME>_VERSION / _URL / _SHA256, with the URL resolved on
+#     the host ($ASSET_TEMPLATE_* below)
+#   - every option declared in module.kdl is in $OPT_<NAME>, variant
+#     overrides already folded in
 #   - `systemctl` is STUBBED. Don't enable services here; ship a
 #     45-falcos-<name>.preset in files/, or use finalize.sh.
 
@@ -20,31 +23,33 @@
 # dnf5 install -y --enablerepo='<repo-id>' <package-name>
 
 # ─── lib/ helpers — source the ones you use ──────────────────────────────
-# Sourcing a helper also tells shellcheck your $TEMPLATE_* pins may be
+# Sourcing a helper also tells shellcheck your $ASSET_* env may be
 # externally defined, so it won't flag them (SC2154).
 
-### fetch-helpers.sh — install pinned upstream release assets. Every asset is
-### SHA256-verified against the pin in versions.sh.
+### fetch-helpers.sh — install the assets declared in module.kdl. The URL and
+### the SHA256 both come from the pin, so neither is written out here.
 # source /ctx/lib/fetch-helpers.sh
 #
 # fetch_install_bin <url> <sha256> <name> [path-in-archive]
 #   Single-binary release -> /usr/bin/<name>. Archives are extracted first;
 #   give [path-in-archive] when the binary isn't at the archive root.
-# fetch_install_bin "https://example.com/<tool>-${TEMPLATE_VERSION}.tar.gz" \
-#     "$TEMPLATE_SHA256" <tool>
+# fetch_install_bin "$ASSET_TEMPLATE_URL" "$ASSET_TEMPLATE_SHA256" <tool>
 #
 # fetch_install_rpm <url> <sha256>
 #   Download, verify and dnf-install an RPM.
-# fetch_install_rpm "https://example.com/<pkg>-${TEMPLATE_VERSION}.rpm" "$TEMPLATE_SHA256"
+# fetch_install_rpm "$ASSET_TEMPLATE_URL" "$ASSET_TEMPLATE_SHA256"
 #
 # fetch_extract <url> <sha256> <dir> [extractor args...]
 #   Verify + extract into <dir>; extra args pass through (e.g. --strip-components=1).
-# fetch_extract "https://example.com/<src>-${TEMPLATE_VERSION}.tar.gz" \
-#     "$TEMPLATE_SHA256" /tmp/src --strip-components=1
+# fetch_extract "$ASSET_TEMPLATE_URL" "$ASSET_TEMPLATE_SHA256" /tmp/src \
+#     --strip-components=1
 #
 # fetch_verified <url> <sha256> <dest>
 #   Just download + verify, keep the file at <dest> (you handle the rest).
-# fetch_verified "https://example.com/<asset>" "$TEMPLATE_SHA256" /tmp/asset
+# fetch_verified "$ASSET_TEMPLATE_URL" "$ASSET_TEMPLATE_SHA256" /tmp/asset
+#
+# The version is there too, for a path inside the archive:
+# install -Dm755 "/tmp/src/lib<tool>.so.${ASSET_TEMPLATE_VERSION}" /usr/lib/...
 
 ### wrap-helpers.sh — for GUI/Electron apps that crash under the system-wide
 ### hardened_malloc LD_PRELOAD. Wraps the binary to drop the preload.

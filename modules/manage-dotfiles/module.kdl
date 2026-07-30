@@ -1,3 +1,13 @@
 description "chezmoi and the Bitwarden CLI, with a setup-dotfiles recipe to restore a dotfile repo"
 
 supports "fedora"
+
+// The Bitwarden CLI. Releases are tagged cli-v<version>, hence the
+// extractVersion, and no official checksum is published, so the hash is
+// trust-on-first-use like aichat's.
+asset "bw" {
+    renovate datasource="github-releases" depName="bitwarden/clients" extractVersion="^cli-v(?<version>.*)$"
+    version "2026.6.0"
+    url "https://github.com/bitwarden/clients/releases/download/cli-v{version}/bw-linux-{version}.zip"
+    sha256 "392549496c712ab86bfbd6c27302df9fd2c431cfc7a47e26941ac3e3893f4d27"
+}

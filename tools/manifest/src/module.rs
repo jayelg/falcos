@@ -6,6 +6,7 @@
 //! driven, and a declaration beside an existing file could drift both
 //! ways.
 
+use crate::asset::{self, Asset};
 use crate::diag::{Issue, Issues};
 use crate::list::{Entry, List};
 use crate::options::{self, Opt, Variant};
@@ -72,6 +73,10 @@ pub struct Module {
     pub args: Vec<Decl>,
     pub options: Vec<Opt>,
     pub variants: Vec<Variant>,
+    /// Pinned upstream payloads, resolved into env on the layer. The
+    /// version, the hash and the URL used to live in three places, one of
+    /// them another file entirely.
+    pub assets: Vec<Asset>,
     /// Resolved option name to value, ready to become env on the layer.
     pub resolved: Vec<(String, String)>,
     /// Where a Containerfile.inc goes relative to the generated block,
@@ -148,6 +153,7 @@ impl Module {
             args: Vec::new(),
             options: Vec::new(),
             variants: Vec::new(),
+            assets: Vec::new(),
             resolved: Vec::new(),
             fragment_after: false,
             standard_layer: true,
@@ -309,6 +315,23 @@ impl Module {
                         }
                     }
                 }
+                "asset" => {
+                    if let Some(pin) = asset::parse(node, &file, &text, issues) {
+                        if module.assets.iter().any(|a| a.name == pin.name) {
+                            issues.push(
+                                Issue::new(
+                                    format!("asset `{}` is declared twice", pin.name),
+                                    &file,
+                                    &text,
+                                )
+                                .at(pin.span, "already declared above")
+                                .help("two assets under one name would resolve to the same ASSET_* env"),
+                            );
+                        } else {
+                            module.assets.push(pin);
+                        }
+                    }
+                }
                 "variant" => {
                     if let Some(variant) = options::parse_variant(node, &file, &text, issues) {
                         if module.variants.iter().any(|v| v.name == variant.name) {
@@ -355,6 +378,12 @@ impl Module {
                         .options
                         .iter()
                         .map(|o| ("option", o.name.as_str(), o.span)),
+                )
+                .chain(
+                    module
+                        .assets
+                        .iter()
+                        .map(|a| ("asset", a.name.as_str(), a.span)),
                 );
             for (kind, name, span) in dropped {
                 issues.push(

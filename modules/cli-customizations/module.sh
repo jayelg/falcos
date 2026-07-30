@@ -18,30 +18,29 @@ dnf5 install -y "${CUSTOMIZATION_PACKAGES[@]}"
 source /ctx/lib/fetch-helpers.sh
 
 ### aichat CLI
-fetch_install_bin "https://github.com/sigoden/aichat/releases/download/v${AICHAT_VERSION}/aichat-v${AICHAT_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    "$AICHAT_SHA256" aichat
+fetch_install_bin "$ASSET_AICHAT_URL" "$ASSET_AICHAT_SHA256" aichat
 
 ### Starship prompt
-fetch_install_bin "https://github.com/starship/starship/releases/download/v${STARSHIP_VERSION}/starship-x86_64-unknown-linux-musl.tar.gz" \
-    "$STARSHIP_SHA256" starship
+fetch_install_bin "$ASSET_STARSHIP_URL" "$ASSET_STARSHIP_SHA256" starship
 
 ### Flyline (Bash readline replacement)
-fetch_extract "https://github.com/HalFrgrd/flyline/releases/download/v${FLYLINE_VERSION}/libflyline-v${FLYLINE_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
-    "$FLYLINE_SHA256" /tmp/flyline
-install -Dm755 "/tmp/flyline/libflyline.so.${FLYLINE_VERSION}" /usr/lib/bash/libflyline.so
+fetch_extract "$ASSET_FLYLINE_URL" "$ASSET_FLYLINE_SHA256" /tmp/flyline
+install -Dm755 "/tmp/flyline/libflyline.so.${ASSET_FLYLINE_VERSION}" /usr/lib/bash/libflyline.so
 rm -rf /tmp/flyline
 
 ### Nerd Fonts
 # The pin is of the release's SHA-256.txt manifest; each font archive is
 # then verified against the manifest, so one pin covers all of them
-fetch_verified "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/SHA-256.txt" \
-    "$NERD_FONTS_SHA256" /tmp/nerdfonts-sha.txt
+fetch_verified "$ASSET_NERD_FONTS_URL" "$ASSET_NERD_FONTS_SHA256" /tmp/nerdfonts-sha.txt
 # Which families to install is the image author's call, declared as the
 # `fonts` option in module.kdl and arriving here resolved.
 read -ra NERD_FONTS <<< "$OPT_FONTS"
 for font in "${NERD_FONTS[@]}"; do
+    # Each font sits beside the pinned manifest in the same release, so the
+    # release URL is taken from the pin rather than written out a second
+    # time where the two could drift apart.
     curl --retry 3 -fsSLo "/tmp/${font}.tar.xz" \
-        "https://github.com/ryanoasis/nerd-fonts/releases/download/v${NERD_FONTS_VERSION}/${font}.tar.xz"
+        "${ASSET_NERD_FONTS_URL%/*}/${font}.tar.xz"
     (cd /tmp && grep " ${font}\.tar\.xz$" nerdfonts-sha.txt | sha256sum -c -)
     mkdir -p "/usr/share/fonts/nerd-fonts/${font}"
     tar -xJf "/tmp/${font}.tar.xz" -C "/usr/share/fonts/nerd-fonts/${font}"

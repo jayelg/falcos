@@ -5,6 +5,4 @@
 # into an early layer). The update *mechanism* it surfaces lives in the
 # auto-updates module.
 source /ctx/lib/fetch-helpers.sh
-fetch_install_rpm \
-    "https://github.com/jayelg/falcos-bootc-updates/releases/download/v${FALCOS_BOOTC_UPDATES_VERSION}/falcos-bootc-updates-${FALCOS_BOOTC_UPDATES_VERSION}-1.fc44.x86_64.rpm" \
-    "$FALCOS_BOOTC_UPDATES_SHA256"
+fetch_install_rpm "$ASSET_FALCOS_BOOTC_UPDATES_URL" "$ASSET_FALCOS_BOOTC_UPDATES_SHA256"

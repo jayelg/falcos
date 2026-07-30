@@ -7,5 +7,4 @@ dnf5 install -y chezmoi jq
 
 ### Bitwarden CLI
 source /ctx/lib/fetch-helpers.sh
-fetch_install_bin "https://github.com/bitwarden/clients/releases/download/cli-v${BW_VERSION}/bw-linux-${BW_VERSION}.zip" \
-    "$BW_SHA256" bw
+fetch_install_bin "$ASSET_BW_URL" "$ASSET_BW_SHA256" bw

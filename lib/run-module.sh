@@ -8,15 +8,15 @@
 #                     flavor the module is listed under in modules.kdl)
 #                     skips the module on flavors it doesn't target
 #   2. repo           sourced if present, idempotent via its REPO_ID
-#   3. versions.sh    Renovate-tracked pins, sourced if present
-#   4. module.sh      the module's own install logic (sourced, so it
-#                     inherits strict mode, the pins and OPT_* for every
-#                     option the module declares; MODDIR points at the
+#   3. module.sh      the module's own install logic (sourced, so it
+#                     inherits strict mode, and reads ASSET_* for every
+#                     pin and OPT_* for every option the module declares,
+#                     both resolved on the host; MODDIR points at the
 #                     module directory). Optional: a pure-file module
 #                     (just a files/ overlay) omits it.
-#   5. selinux/       each *.te compiled and installed as a policy module
-#   6. files/         overlay copied verbatim into the image
-#   7. collected      each file this module ships that another module
+#   4. selinux/       each *.te compiled and installed as a policy module
+#   5. files/         overlay copied verbatim into the image
+#   6. collected      each file this module ships that another module
 #                     collects. The pairs arrive resolved in
 #                     MODULE_COLLECT, so no path is written down here
 
@@ -45,11 +45,6 @@ if [ -f "$MODDIR/repo" ]; then
         # shellcheck source=/dev/null
         source "$MODDIR/repo"
     fi
-fi
-
-if [ -f "$MODDIR/versions.sh" ]; then
-    # shellcheck source=/dev/null
-    source "$MODDIR/versions.sh"
 fi
 
 # A module may be pure files (no install logic): its module.sh is

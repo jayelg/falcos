@@ -25,7 +25,8 @@ ARG KERNEL=stock
 ## Build phases and modules: one RUN layer each for independent BuildKit
 ## caching. A phase is a build-phases/*.sh, ordered by its number around
 ## the module layers, which build at 50. A module runs through
-## lib/run-module.sh (repo file, version pins, files overlay).
+## lib/run-module.sh (repo file, module.sh, SELinux policy, files overlay),
+## with its asset pins and options already resolved into env.
 
 # ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----
 #

@@ -9,3 +9,12 @@ requires-file "/usr/share/falcos/sb_cert.der"
 // kvmfr is built and signed exactly like xone.
 arg "KERNEL"
 secret "mok_privkey"
+
+// The kvmfr source is cloned at an upstream release tag, so nothing is
+// downloaded and there is no url or sha256 to declare. The module's own
+// version comes from that tag's dkms.conf rather than from a second pin
+// here that could disagree with it.
+asset "looking-glass" {
+    renovate datasource="github-releases" depName="gnif/LookingGlass"
+    version "B7"
+}

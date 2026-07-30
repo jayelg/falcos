@@ -3,3 +3,13 @@ description "Plasma settings module for network audio devices"
 supports "fedora"
 
 requires "plasma-desktop"
+
+// The RPM filename does not derive from the tag, so a Renovate bump here
+// needs a hand-written follow-up in the URL below, and the hash cannot be
+// recomputed from a URL that no longer resolves.
+asset "plasma-network-audio" {
+    renovate datasource="github-releases" depName="johngrantdev/plasma-network-audio"
+    version "v0.1-alpha.1"
+    url "https://github.com/johngrantdev/plasma-network-audio/releases/download/{version}/plasma-network-audio-0.1-0.alpha_1.fc44.x86_64.rpm"
+    sha256 "685cffb92549d8eb8c31e598782ae29c99f859bfd8adef842ee9ee8821864b4e" from="manual"
+}
