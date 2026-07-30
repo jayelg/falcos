@@ -129,6 +129,8 @@ The build order is resolved from what the modules declare: one that `requires` a
 
 To exclude a module from the build, you can either delete it or comment it out. Module directories in `modules/` will not be included unless it is defined in `modules.kdl`.
 
+A module kept in another repository is included the same way, with a `source` block on its entry pinning the archive, the ref and its SHA256. It is fetched and verified on the host before the build and then builds as any other module does, so the only difference in the image is which repository the layer came from. See [out-of-tree modules](modules/README.md#out-of-tree-modules).
+
 To include a module in one flavor only, nest it in a `flavor "<name>" { }` block naming a declared flavor. Modules outside any such block are ungated and build once, shared by every flavor, wherever they are listed: an ungated module always sorts above the gated ones, so a line after a flavor block no longer costs a layer per target.
 
 ## Installation
