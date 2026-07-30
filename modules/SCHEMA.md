@@ -226,6 +226,26 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
 
+### Overlay collisions
+
+Every `files/` overlay is copied over the image root in build order, so
+two modules shipping the same path means the later one wins and the
+earlier one's file never reaches the image. Nothing about that is
+visible in either module, so it is an error.
+
+| Node | Meaning |
+| --- | --- |
+| `overrides "<abs-path>"` | this module's overlay knowingly replaces a path an earlier module ships |
+
+Checked both ways. Without it a collision fails; with nothing to
+override it fails too, so the escape hatch cannot outlive the collision
+it was added for. Two modules gated to different flavors never land in
+the same image, so they are not a collision.
+
+There are zero collisions today, which is why the check and the escape
+hatch arrive together: an escape hatch with nothing to escape, and no
+check to escape from, would be surface nothing could verify.
+
 ### Collecting
 
 A module that wants every copy of a filename in the image says so, and
@@ -510,6 +530,12 @@ Lint fails on all of these, in seconds, before anything builds.
 - a requirement satisfied only by a module gated to another flavor
 - a cycle, naming the edges that close it
 
+**Overlays**
+
+- two enabled modules that land in the same image shipping the same
+  `files/` path, without the later one declaring `overrides`
+- an `overrides` for a path no earlier module ships
+
 **Collecting**
 
 - shipping a collected filename while the module that collects it is not
@@ -547,11 +573,6 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **The overlay collision check**, and with it an `overrides` node
-  declaring that a module's `files/` overlay intentionally replaces a
-  path an earlier module shipped. There are zero collisions today, so
-  both arrive together: an escape hatch with nothing to escape, and no
-  check to escape from, would be surface nothing could verify.
 - **`asset` blocks replacing `versions.sh`**: datasource, version,
   sha256, URL template and verify mode, one block per asset. Pins must
   stay Renovate-readable, so an asset's version has to be a flat

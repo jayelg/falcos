@@ -40,7 +40,7 @@ runs much later, in the finalize layer.
 | `versions.sh` | Renovate-tracked pins + SHA256s. `# renovate:` comment must sit directly above its version line. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
-| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. |
+| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. Shipping a path another module also ships is a lint failure unless the later one declares `overrides`. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in build order. |
 | `justfile.inc` | goojust recipes. Picked up because `core/goojust` declares it collects this filename; the destination lives there, not here. |
 | `Containerfile.inc` | Verbatim Containerfile lines added above the generated block — only for what the declared fields cannot express, such as an `ARG` with a default or a second layer. Build secrets and args are declared in `module.kdl` instead. |

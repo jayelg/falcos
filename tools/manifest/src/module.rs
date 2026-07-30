@@ -57,6 +57,11 @@ pub struct Module {
     /// Exact paths one module writes and another reads.
     pub provides_files: Vec<Decl>,
     pub requires_files: Vec<Decl>,
+    /// Paths this module's files/ overlay knowingly replaces. Two
+    /// overlays writing the same path is an error without one of these,
+    /// because the winner is otherwise decided by build order and
+    /// nothing says it was meant to.
+    pub overrides: Vec<Decl>,
     /// The flavor this module is gated to, from the list rather than the
     /// manifest: a module never names a flavor.
     pub flavor: Option<String>,
@@ -136,6 +141,7 @@ impl Module {
             after: Vec::new(),
             provides_files: Vec::new(),
             requires_files: Vec::new(),
+            overrides: Vec::new(),
             flavor: entry.flavor.clone(),
             collects: Vec::new(),
             secrets: Vec::new(),
@@ -194,7 +200,7 @@ impl Module {
                         _ => module.after.extend(decls),
                     }
                 }
-                kind @ ("provides-file" | "requires-file") => {
+                kind @ ("provides-file" | "requires-file" | "overrides") => {
                     for path in string_args(node) {
                         if !path.starts_with('/') {
                             issues.push(
@@ -203,20 +209,17 @@ impl Module {
                                     &file,
                                     &text,
                                 )
-                                .at(
-                                    node.name().span(),
-                                    "a contract file is an exact path in the image",
-                                ),
+                                .at(node.name().span(), "an exact path in the image"),
                             );
                         }
                         let decl = Decl {
                             name: path.to_string(),
                             span: node.name().span(),
                         };
-                        if kind == "provides-file" {
-                            module.provides_files.push(decl);
-                        } else {
-                            module.requires_files.push(decl);
+                        match kind {
+                            "provides-file" => module.provides_files.push(decl),
+                            "requires-file" => module.requires_files.push(decl),
+                            _ => module.overrides.push(decl),
                         }
                     }
                 }

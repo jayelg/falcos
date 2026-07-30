@@ -39,6 +39,14 @@ supports "fedora"
 // provides-file "/usr/lib/falcos/example-marker"
 // requires-file "/usr/share/falcos/sb_cert.der"
 
+// OPTIONAL. Overlay overrides: the files/ overlay is copied over the
+// image root in build order, so two modules shipping the same path
+// means the later one wins silently. That is a lint failure unless the
+// later module says it meant to, here. The declaration is checked, so
+// it cannot outlive the collision it was added for.
+//
+// overrides "/etc/profile.d/zz-bling.sh"
+
 // OPTIONAL. Options: typed, declared here, set by the image author in
 // modules.kdl, and arriving in module.sh as env. This is what turns a
 // hardcoded list inside a module's own script into something an image
