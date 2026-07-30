@@ -19,12 +19,6 @@ COPY modules/ /modules/
 # Pinned fedora-bootc digest tags break Renovate.
 FROM quay.io/fedora/fedora-bootc:44
 
-### Kernel Build argument
-# Don't update the below ARG for custom kernels.
-# Kernels can be added as modules defined in modules.kdl.
-# A kernel module overrides this value during the build.
-ARG KERNEL=stock
-
 ## Build phases and modules: one RUN layer each for independent BuildKit
 ## caching. A phase is a build-phases/*.sh, ordered by its number around
 ## the module layers, which build at 50. A module runs through
@@ -90,9 +84,10 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/cli-tools,target=/ctx/module
 
 # ---- kernel/cachyos-kernel ----
 # verbatim from modules/kernel/cachyos-kernel/Containerfile.inc:
-# Declares the cachyos kernel variant, overriding Containerfile.template's
-# default ARG KERNEL=stock. This line is the target of the kernel-freshness
-# workflow fallback/restore seds (stock <-> cachyos).
+# Declares the cachyos kernel variant. This is the only declaration of the
+# KERNEL arg: the skeleton no longer carries a default, so the kernel
+# module owns it entirely. This line is the target of the kernel-freshness
+# workflow fallback/restore seds (cachyos <-> stock).
 #
 # An ARG with a default is graph shape rather than a parameter, which is
 # the one thing the declared fields cannot express. Everything else this
@@ -443,7 +438,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/laptop-tweaks,target=/ct
 
 # ---- finalize hook order ----
 # Modules shipping a finalize.sh, in build order, resolved on the host.
-ARG FINALIZE_ORDER="core/auto-updates"
+ARG FINALIZE_ORDER="core/auto-updates kernel/cachyos-kernel de/kde-desktop"
 
 # ---- image version ----
 # The YYYYMMDD build date in CI. Below the modules because an ARG in
