@@ -2,6 +2,10 @@ description "Plasma theming: Darkly, the Ant colour scheme, Papirus icons and a 
 
 supports "fedora"
 
+packages {
+    fedora "papirus-icon-theme" "plasma-wallpapers-dynamic" "plasma-wallpapers-dynamic-builder"
+}
+
 // Installs colour schemes, a desktop theme and a plasmoid into Plasma's
 // own directories.
 requires "plasma-desktop"

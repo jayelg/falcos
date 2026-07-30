@@ -3,14 +3,6 @@
 
 source /ctx/lib/fetch-helpers.sh
 
-# winetricks drives the prefix setup; Wine's OpenCL passthrough goes through
-# the base image's OpenCL-ICD-Loader with the rusticl ICD (mesa-libOpenCL,
-# modules/media-codecs); zstd for the vkd3d-proton tarball below.
-# 7zip needed at runtime by falcos affinity-setup to extract the .NET 4.8
-# offline installer's x64 MSI (bypassing the 32-bit self-extractor which
-# fails on this WoW64-only Wine build).
-dnf5 install -y winetricks clinfo zstd 7zip
-
 ### Patched Wine (WoW64 build, no 32-bit runtime needed)
 fetch_extract "$ASSET_WINE_AFFINITY_URL" "$ASSET_WINE_AFFINITY_SHA256" /tmp/wine-affinity
 # Top-level directory name varies between releases; locate bin/wine and

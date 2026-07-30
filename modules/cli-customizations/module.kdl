@@ -2,6 +2,10 @@ description "Opinionated shell UX: eza, bat, ripgrep, fd, zoxide, starship, flyl
 
 supports "fedora"
 
+packages {
+    fedora "bat" "eza" "fd-find" "gum" "ripgrep" "ugrep" "zoxide"
+}
+
 // Which Nerd Font families to install. A list, because the set is the
 // whole point: one pin covers every family in the release, so adding or
 // dropping one costs nothing but disk.

@@ -441,6 +441,42 @@ Absence is not a mark: the next reader takes a missing annotation for an
 oversight and wires it up, which is exactly what the reason exists to
 prevent.
 
+### Packages
+
+Declared packages instead of calling the installer directly, so the
+generator emits one batched transaction per layer, package sets lint can
+inspect, and there are no scattered `dnf5 install -y` calls. Adding a
+second base family later is a data change in one place: the module
+manifest.
+
+```kdl
+packages {
+    fedora "just" "fastfetch"
+    fedora "tailscale" enablerepo="tailscale-stable"
+}
+```
+
+Each child node names a base family and carries the package names as
+positional arguments. On Fedora the generator emits `dnf5 install -y`
+for each unique (family, enablerepo) group; a second family would pick
+its own verb.
+
+| Property | Meaning |
+| --- | --- |
+| `enablerepo=` | install from a repo that was added disabled (the `repo` file pattern). **Not yet usable**: the repo is configured inside `run-module.sh`, after the generated `dnf5 install` runs. For now, `--enablerepo` packages must stay in `module.sh`. |
+
+Only the family the build targets is emitted. A package list for another
+family sits harmlessly in the manifest until that family becomes a build
+target.
+
+A module with complex package operations (group install, remove, copr
+enable, distro-sync, versionlock) keeps those in `module.sh`. The
+declaration covers the simple case — one batched install per layer —
+which is most of them.
+
+Packages are installed before `module.sh` runs, chained with `&&`, so a
+failure stops the layer and the module's own script still executes.
+
 ### Build inputs
 
 The parameters a module needs from the build itself. These exist because
@@ -690,8 +726,5 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **`packages { fedora "..." }`**, declaring packages instead of calling
-  the installer, and `supports` becoming enforced against the base family
-  rather than merely declared.
 - **`source`, `ref` and `sha256`** on list entries, for out-of-tree
   modules.

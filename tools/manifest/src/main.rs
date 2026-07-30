@@ -18,7 +18,7 @@ mod overlay;
 mod render;
 
 use list::List;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -108,11 +108,17 @@ fn main() -> ExitCode {
         .filter_map(|entry| module::Module::load(entry, &list, &root, &mut issues))
         .collect();
 
+    // The base family this build targets, derived from the Containerfile
+    // skeleton or set explicitly. Validated against each module's
+    // `supports` so a portability gap surfaces at lint rather than
+    // mid-build.
+    let base_family = base_family(&root);
+
     // From here down, list order is build order: the graph has already
     // had its say, so nothing else needs to know the two ever differed.
     let order = order::sort(&list, &modules, &mut issues);
     order::apply(&mut list, &mut modules, &order);
-    module::check_graph(&modules, &root, &mut issues);
+    module::check_graph(&modules, &root, &base_family, &mut issues);
     overlay::check(&modules, &root, &mut issues);
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
@@ -208,4 +214,39 @@ fn lines(items: impl IntoIterator<Item = String>) -> String {
         .map(|s| s + "\n")
         .collect::<Vec<_>>()
         .concat()
+}
+
+/// The base family this build targets. Derived from the `FROM` line in
+/// Containerfile.template, or overridden with `BASE_FAMILY`.
+/// "fedora" is the only one today; a second would be a porting effort.
+fn base_family(root: &Path) -> String {
+    if let Ok(family) = std::env::var("BASE_FAMILY") {
+        if !family.is_empty() {
+            return family;
+        }
+    }
+    let template = root.join("Containerfile.template");
+    if let Ok(text) = std::fs::read_to_string(&template) {
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("FROM ") {
+                let image = trimmed
+                    .strip_prefix("FROM ")
+                    .unwrap_or(trimmed)
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("");
+                // quay.io/fedora/fedora-bootc:44 -> fedora
+                if let Some(family) = image
+                    .split('/')
+                    .find(|seg| *seg == "fedora")
+                    .map(|s| s.to_string())
+                {
+                    return family;
+                }
+            }
+        }
+    }
+    // The only base today; a second one would be explicit.
+    "fedora".to_string()
 }

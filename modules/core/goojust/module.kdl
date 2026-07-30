@@ -4,6 +4,10 @@ supports "fedora"
 
 collects "justfile.inc" into="/usr/share/goojust/justfile.apps"
 
+packages {
+    fedora "just" "fastfetch"
+}
+
 // Own repo, prebuilt static binary, with a .sha256 sidecar per asset.
 asset "goojust" {
     renovate datasource="github-releases" depName="jayelg/goojust"

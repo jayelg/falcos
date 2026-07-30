@@ -1,3 +1,7 @@
 description "Mullvad VPN daemon and client"
 
 supports "fedora"
+
+packages {
+    fedora "mullvad-vpn"
+}

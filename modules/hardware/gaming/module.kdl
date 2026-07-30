@@ -2,6 +2,10 @@ description "Xbox controller support via the xone driver, plus gamemode"
 
 supports "fedora"
 
+packages {
+    fedora "gamemode"
+}
+
 // xone is a DKMS module: it needs kernel headers to build against, and
 // the enrolled certificate to sign against. Declared as a capability
 // rather than as kernel/cachyos-kernel, so swapping the kernel provider

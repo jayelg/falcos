@@ -2,6 +2,10 @@ description "Affinity Photo, Designer and Publisher, under a patched Wine prefix
 
 supports "fedora"
 
+packages {
+    fedora "winetricks" "clinfo" "zstd" "7zip"
+}
+
 // None of these upstreams publish a checksum, so every hash here is
 // trust-on-first-use: taken at PR time, which still catches a release
 // asset swapped after the pin was made.

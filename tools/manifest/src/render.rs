@@ -460,6 +460,10 @@ fn standard(
         env.insert_str(0, &format!("{name}=${{{name}}} "));
     }
 
+    // Declared packages, one dnf5 install per unique (family, enablerepo)
+    // group, chained with && before the module runner.
+    let packages_cmd = packages_install(module);
+
     let path = &entry.path;
     let mut out = String::new();
     let _ = write!(
@@ -469,8 +473,32 @@ fn standard(
          --mount=type=cache,target=/var/cache \\\n    \
          --mount=type=cache,target=/var/log \\\n    \
          --mount=type=tmpfs,target=/tmp \\\n    \
-         {secrets}{assets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
+         {secrets}{assets}{env}{packages_cmd}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
     );
+    out
+}
+
+/// The dnf5 install commands for declared packages, if any. One command
+/// per unique (family, enablerepo) group, each ending with ` && ` so the
+/// runner still executes when there are none. On Fedora the verb is
+/// always dnf5; a second family would pick its own.
+fn packages_install(module: Option<&Module>) -> String {
+    let groups = match module {
+        Some(m) if !m.packages.is_empty() => m.packages.as_slice(),
+        _ => return String::new(),
+    };
+    let mut out = String::new();
+    for group in groups {
+        let pkgs = group.packages.join(" ");
+        match &group.enablerepo {
+            Some(repo) => {
+                let _ = write!(out, "dnf5 install -y --enablerepo='{repo}' {pkgs} && ");
+            }
+            None => {
+                let _ = write!(out, "dnf5 install -y {pkgs} && ");
+            }
+        }
+    }
     out
 }
 

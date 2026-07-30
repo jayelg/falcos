@@ -3,18 +3,6 @@
 # a fancier prompt/readline, an AI CLI, and Nerd Fonts. Distinct from
 # cli-tools, which stays traditional utilities only.
 
-### Modern CLI tooling (dnf)
-CUSTOMIZATION_PACKAGES=(
-    bat        # cat
-    eza        # ls
-    fd-find    # find
-    gum        # TUI scripting helper
-    ripgrep    # grep (additive: rg)
-    ugrep      # grep (aliased)
-    zoxide     # cd
-)
-dnf5 install -y "${CUSTOMIZATION_PACKAGES[@]}"
-
 source /ctx/lib/fetch-helpers.sh
 
 ### aichat CLI
