@@ -14,14 +14,23 @@ if ! command -v shellcheck > /dev/null 2>&1; then
     exit 1
 fi
 
+# Every module the list pins, so the checks below see the same tree a
+# build does rather than failing on a module that is not on disk yet.
+./scripts/fetch-modules.sh
+
 # -s bash because module scripts are sourced fragments without a
 # shebang. Extensionless runtime scripts
 # (libexec helpers, systemd generators) are matched by path instead of
 # extension. Repo-wide excludes live in .shellcheckrc.
+#
+# modules/.remote is pruned: a fetched module is reviewed as a pin and
+# cannot be edited here, so a style failure in one would block every
+# build with nothing in this repository to fix.
 mapfile -t scripts < <(
-    find build-phases scripts lib modules -name '*.sh' -type f
-    find modules -path '*/files/*' -type f \
-        \( -path '*/libexec/*' -o -path '*/system-generators/*' \)
+    find build-phases scripts lib modules -path modules/.remote -prune -o \
+        -name '*.sh' -type f -print
+    find modules -path modules/.remote -prune -o -path '*/files/*' -type f \
+        \( -path '*/libexec/*' -o -path '*/system-generators/*' \) -print
 )
 shellcheck -s bash "${scripts[@]}"
 echo "lint: shellcheck passed on ${#scripts[@]} scripts"

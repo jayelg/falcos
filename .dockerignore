@@ -15,6 +15,9 @@ output
 _build*
 # Generated files, not build-phases/ which the pattern does not match
 build
+# modules/.remote is deliberately absent: it holds the out-of-tree
+# modules modules.kdl pins, fetched before the build, and their layers
+# mount it out of the ctx stage like any other module.
 # Tracked, so a checkout has it, and rewritten by every build. The
 # frontend reads it as the dockerfile rather than out of the context, so
 # excluding it costs nothing and keeps a regeneration off the ctx stage.

@@ -40,6 +40,12 @@ if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
     exit 1
 fi
 
+# Out-of-tree modules first: the section below emits a layer per module
+# directory, so anything modules.kdl pins has to be on disk before the
+# generator reads it. A no-op when nothing is pinned, and offline when
+# everything is already fetched.
+./scripts/fetch-modules.sh
+
 # Written to a file rather than held in a variable: the section ends in a
 # blank line, which a command substitution would strip.
 section_file="$(mktemp)"
