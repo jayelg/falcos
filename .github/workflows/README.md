@@ -30,7 +30,9 @@ Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV 
 
 ### [Checksums](checksums.yml)
 
-Release assets pinned with a repo-tracked SHA256 (Bitwarden CLI, flyline, the Affinity Wine/DXVK/vkd3d-proton tarballs, the falcos-bootc-updates RPM) are listed in a table inside the workflow. On PRs that bump their version pins (Renovate), this recomputes every stale checksum in one pass, pushes a single fixup commit to the PR branch and dispatches validation builds. One workflow covers every asset so concurrent fixup pushes to the same branch cannot race.
+The mechanical follow-up to a pin bump. Renovate can move an asset's `version` but cannot recompute its `sha256`, and both are baked into `Containerfile.generated`, which lint checks for drift. On a PR touching a module manifest this recomputes every stale checksum in one pass, regenerates the Containerfile, pushes a single fixup commit to the PR branch and dispatches a validation build. One workflow covers every asset so concurrent fixup pushes to the same branch cannot race.
+
+It carries no list of assets: `manifest.sh assets` reports every pin with its resolved URL, which is the same resolution the build uses, so what this hashes and what the build fetches cannot disagree. Only the manifests the PR actually touched are checked, and a pin whose `sha256` is `from="manual"` is skipped — for an asset whose filename does not follow from its version, recomputing would hash whatever the old URL still serves.
 
 ### [Clean up Registry](cleanup-registry.yml)
 
