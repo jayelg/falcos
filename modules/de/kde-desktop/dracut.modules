@@ -1,0 +1,9 @@
+# dracut modules this module needs in the initramfs.
+# One dracut module name per line. Blank lines and # comments are ignored.
+# Collected at build time by run-module.sh into
+# /usr/lib/falcos/dracut.modules, which the kernel module's finalize hook
+# reads for its single dracut run.
+
+# Boot splash and the graphical disk passphrase prompt. plymouth itself is
+# installed by this module's module.sh.
+plymouth

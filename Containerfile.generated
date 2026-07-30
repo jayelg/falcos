@@ -175,7 +175,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/kde-desktop,target=/ctx/module
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/de/kde-desktop
+    MODULE_COLLECT="dracut.modules=/usr/lib/falcos/dracut.modules" bash /ctx/lib/run-module.sh /ctx/modules/de/kde-desktop
 
 # ---- de/bazaar ----
 RUN --mount=type=bind,from=ctx,source=/modules/de/bazaar,target=/ctx/modules/de/bazaar \
@@ -438,7 +438,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/laptop-tweaks,target=/ct
 
 # ---- finalize hook order ----
 # Modules shipping a finalize.sh, in build order, resolved on the host.
-ARG FINALIZE_ORDER="core/auto-updates kernel/cachyos-kernel de/kde-desktop"
+ARG FINALIZE_ORDER="core/auto-updates kernel/cachyos-kernel"
 
 # ---- image version ----
 # The YYYYMMDD build date in CI. Below the modules because an ARG in

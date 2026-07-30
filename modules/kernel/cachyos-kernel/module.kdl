@@ -8,6 +8,11 @@ provides "kernel-devel"
 provides-file "/usr/share/falcos/sb_cert.der"
 provides-file "/usr/lib/falcos/kernel-package"
 
+// The initramfs is built here, once, in this module's finalize hook. A
+// module that needs a dracut module in it ships a dracut.modules naming
+// it rather than rebuilding the initramfs itself.
+collects "dracut.modules" into="/usr/lib/falcos/dracut.modules"
+
 // The kernel variant the fragment declares, and the optional MOK key the
 // modules are signed with. The Secure Boot cert itself ships in this
 // module's files/ overlay.

@@ -12,7 +12,7 @@ A drop-in directory: every `*.sh` here becomes one RUN layer, in the order its n
 
 - [00-setup.sh](00-setup.sh) -- pre-install workarounds (systemctl stub, `/opt` shuffle) and `dnf5-plugins` for the module repo files. First RUN layer.
 - [50-flavor.sh](50-flavor.sh) -- applies os-release branding (NAME, PRETTY_NAME, DEFAULT_HOSTNAME) via [lib/brand-helpers.sh](../lib/brand-helpers.sh). Runs after all modules; the desktop/laptop layer cache forks here. Flavor-specific files ship in flavor-gated modules (e.g. `virtualization/vfio-passthrough`, `hardware/laptop-tweaks`).
-- [99-finalize.sh](99-finalize.sh) -- restores systemctl, regenerates the initramfs, relocates `/opt` payloads, applies the falcos systemd presets, runs per-module `finalize.sh` hooks, and the remaining global tweaks (GRUB os-prober, composefs SELinux workaround). Last RUN layer.
+- [99-finalize.sh](99-finalize.sh) -- restores systemctl, relocates `/opt` payloads, applies the falcos systemd presets, runs per-module `finalize.sh` hooks, and the remaining global tweaks (GRUB os-prober, composefs SELinux workaround). Last RUN layer. The initramfs is built by the kernel module's hook, not here.
 
 What a phase gets depends on which side of the modules it is on, because the difference is a property of the build rather than of the script:
 
@@ -30,6 +30,8 @@ Modules ship `*falcos*.preset` files (`usr/lib/systemd/system-preset/` and `user
 ### Module finalize hooks
 
 A module that needs run-once logic with real `systemctl` or the final image (service masking, `policy.json` edits) ships a `finalize.sh`; 99-finalize.sh sources them in modules.kdl order, flavor-gated, after systemctl is restored. See `core/auto-updates`.
+
+Order between hooks is deliberately not a thing a module can rely on. Two modules that both need something done to the same artifact share a collected file instead: the kernel module's hook builds the initramfs from `dracut.modules`, which any module can contribute a name to.
 
 ### [Shared Libraries](../lib)
 

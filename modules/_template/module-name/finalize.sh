@@ -8,9 +8,12 @@
 #   - $MODDIR points at this module's directory
 #
 # Genuinely global operations (/opt relocation, SELinux workaround,
-# service enablement) live in 99-finalize.sh. Initramfs regeneration is
-# owned by the kernel module's finalize.sh; a desktop module that installs
-# plymouth rebuilds it again from its own finalize hook.
+# service enablement) live in 99-finalize.sh. Hooks are sourced in build
+# order, but do not write one that depends on that: a module needing
+# something another module's hook does shares a collected file with it
+# instead. Initramfs regeneration is the example: the kernel module's
+# hook builds it once, from the dracut module names any module can
+# contribute by shipping a dracut.modules.
 
 # Example: mask a unit that only makes sense to disable on the final image.
 # systemctl mask example-noisy.timer
