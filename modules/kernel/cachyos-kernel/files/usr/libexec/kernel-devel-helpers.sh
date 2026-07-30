@@ -3,7 +3,10 @@
 # the COPR and package names live with the only thing that knows them.
 # Installed into the image by this module's files/ overlay; callers source
 # it from /usr/libexec/kernel-devel-helpers.sh after the kernel module
-# has run.
+# has run, and declare that path as a requires-file.
+#
+# Build-time only. The kernel module's finalize.sh removes it once every
+# module layer has run, so it is never part of the shipped image.
 
 case "$KERNEL" in
     cachyos)

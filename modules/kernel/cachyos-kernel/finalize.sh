@@ -33,3 +33,12 @@ dracut --force --no-hostonly --reproducible \
     --add "${DRACUT_MODULES[*]}" \
     --kver "$KVER" \
     "/usr/lib/modules/${KVER}/initramfs.img"
+
+# The kernel-devel helpers exist for the build and nothing else: every
+# DKMS consumer sources them from its own module layer, and all of those
+# are below the finalize phase, so by here nobody can still want them.
+# Removed by the module that ships them rather than by a global cleanup
+# that would have to know the path. A finalize hook that wanted them
+# would be the thing that breaks, which is why they are declared as a
+# contract file and not left as a comment.
+rm -f /usr/libexec/kernel-devel-helpers.sh

@@ -8,6 +8,7 @@ supports "fedora"
 // does not break this.
 requires "kernel-devel"
 requires-file "/usr/share/falcos/sb_cert.der"
+requires-file "/usr/libexec/kernel-devel-helpers.sh"
 
 // The xone DKMS build targets, and signs for, whichever kernel variant
 // the image ships, and the signing key arrives as a build secret.

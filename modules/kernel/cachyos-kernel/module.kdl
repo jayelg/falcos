@@ -8,6 +8,11 @@ provides "kernel-devel"
 provides-file "/usr/share/falcos/sb_cert.der"
 provides-file "/usr/lib/falcos/kernel-package"
 
+// The install and remove helpers for those headers, which lib/dkms-helpers.sh
+// sources. Build-time only: this module's finalize hook removes it once
+// every DKMS consumer has built.
+provides-file "/usr/libexec/kernel-devel-helpers.sh"
+
 // The initramfs is built here, once, in this module's finalize hook. A
 // module that needs a dracut module in it ships a dracut.modules naming
 // it rather than rebuilding the initramfs itself.

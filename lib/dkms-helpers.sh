@@ -11,7 +11,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/sign-helpers.sh"
 
 # kernel_devel_install and kernel_devel_remove live in the kernel module,
 # which has already installed them into the image by the time a DKMS
-# consumer runs.
+# consumer runs. A module sourcing this declares that path as a
+# requires-file: the kernel module removes it in its finalize hook, so
+# only a module layer is early enough to read it.
 source /usr/libexec/kernel-devel-helpers.sh
 
 # Shared build deps for kernel_devel_install/kernel_devel_remove. The remove
