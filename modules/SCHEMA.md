@@ -443,6 +443,14 @@ whole RUN block to get one.
 that skips what the secret enables, and the alternative is a repository
 that only its owner can build.
 
+Where the value comes from is a convention, not a second declaration: the
+build workflow writes every ID the target declares from the repository
+secret of the same name uppercased, so `secret "mok_privkey"` reads
+`MOK_PRIVKEY`. Adding a secret to a module is therefore a manifest line
+and a repository setting, with no workflow edit. A declared ID the
+repository has no secret for is a warning and an absent file, which is
+the `required=false` case above.
+
 An `arg` must be declared somewhere above the module's layer, or the
 generator fails rather than expanding it to an empty string.
 

@@ -255,27 +255,40 @@ jobs:
             io.artifacthub.package.prerelease=false
             containers.bootc=1
 
-      # Optional Secure Boot signing key, only when a module in this
-      # target declares `secret "mok_privkey"`. Gated on PUBLISH so a
-      # build that never ships an image never has the private key on disk.
-      - name: Check whether this target needs the MOK signing key
-        id: mok
+      # Build secrets, derived from the manifests rather than named here.
+      # Every ID a module in this target declares is written from the
+      # repository secret of the same name uppercased, so `secret
+      # "mok_privkey"` reads MOK_PRIVKEY and adding a second secret to a
+      # module needs no workflow edit.
+      #
+      # Gated on PUBLISH, so a build that never ships an image never has a
+      # private key on disk. A declared ID the repository has no secret
+      # for is a warning and no file: every secret is `required=false` in
+      # the Containerfile, so a fork builds cleanly without them, and an
+      # empty file would look like a key while signing nothing.
+      #
+      # The directory is the interface to the build step below: one file
+      # per secret, named by its ID.
+      - name: Write the declared build secrets
+        if: env.PUBLISH == 'true'
         env:
           TARGET: ${{ matrix.target }}
-        run: |
-          if ./scripts/manifest.sh secrets "$TARGET" | grep -qx 'mok_privkey'; then
-            echo "needed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Write MOK signing key
-        if: env.PUBLISH == 'true' && steps.mok.outputs.needed == 'true'
+          ALL_SECRETS: ${{ toJSON(secrets) }}
         run: |
           umask 077
-          printf '%s' "$MOK_PRIVATE_KEY" > "${RUNNER_TEMP}/mok_privkey.pem"
-        env:
-          MOK_PRIVATE_KEY: ${{ secrets.MOK_PRIVATE_KEY }}
+          mkdir -p "${RUNNER_TEMP}/build-secrets"
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            name="${id^^}"
+            value="$(jq -r --arg n "$name" '.[$n] // empty' <<< "$ALL_SECRETS")"
+            if [ -z "$value" ]; then
+              echo "::warning::a module declares the build secret '${id}'," \
+                "but this repository has no '${name}' secret. Building without it."
+              continue
+            fi
+            printf '%s' "$value" > "${RUNNER_TEMP}/build-secrets/${id}"
+            echo "wrote build secret ${id} from ${name}"
+          done < <(./scripts/manifest.sh secrets "$TARGET")
 
       # The runner's BuildKit builder. BuildKit content-addresses each RUN
       # --mount by the mounted path, which the Containerfile's narrow
@@ -295,7 +308,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # scripts/build.sh owns the Containerfile generation, the build args,
-      # the cache refs and the secret wiring; `just build` runs the same
+      # the cache refs and how a secret reaches BuildKit; `just build` runs the same
       # script, so a local build of this commit and this one cannot differ
       # in anything but the backend that reaches BuildKit. What stays here
       # is CI policy: which events may read and write the registry cache,
@@ -318,9 +331,15 @@ jobs:
           IMAGE_VERSION: ${{ steps.date.outputs.version }}
           TAGS: ${{ steps.metadata.outputs.tags }}
           LABELS: ${{ steps.metadata.outputs.labels }}
-          MOK_KEY_PATH: ${{ env.PUBLISH == 'true' && steps.mok.outputs.needed == 'true' && format('{0}/mok_privkey.pem', runner.temp) || '' }}
         run: |
           args=(--backend buildx --flavor "$TARGET")
+          # Whatever the step above wrote, by the ID it named the file
+          # with. Absent on a build that does not publish, and absent per
+          # secret the repository does not hold.
+          for secret in "${RUNNER_TEMP}"/build-secrets/*; do
+            [ -f "$secret" ] || continue
+            args+=(--secret "$(basename "$secret")=${secret}")
+          done
           if [ -n "$KERNEL_INPUT" ]; then
             args+=(--kernel "$KERNEL_INPUT")
           fi

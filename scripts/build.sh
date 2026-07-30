@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The single build invocation. `just build` and the build workflow both
-# call this, so build args, cache refs and the signing secret cannot drift
+# call this, so build args, cache refs and build secrets cannot drift
 # between a local build and CI. Backends differ only in how they reach
 # BuildKit:
 #
@@ -17,7 +17,7 @@
 #             rather than quietly producing a different image.
 #
 # Everything else — which Containerfile is built, which build args and
-# secret it gets, which cache refs are read and written — is decided here
+# secrets it gets, which cache refs are read and written — is decided here
 # once for every caller.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -30,7 +30,7 @@ buildkit_container=falcos-buildkitd
 buildkit_volume=falcos-buildkit
 # Paths inside that container, not on the host
 buildkit_context=/build
-buildkit_secret=/run/secrets/mok_privkey
+buildkit_secret_dir=/run/secrets
 
 die() {
     echo "build: $*" >&2
@@ -48,6 +48,9 @@ usage: scripts/build.sh [options]
                       decides, which is how the kernel-freshness fallback
                       switches the whole pipeline to the stock kernel)
   --tag <ref>         tag the result; repeatable
+  --secret <id>=<path>
+                      mount <path> as the build secret <id>, one of the
+                      IDs `scripts/manifest.sh secrets` lists; repeatable
   --backend <name>    buildkit, buildx or buildah (default: $BUILD_BACKEND,
                       else buildkit)
   --oci-output <path> write an OCI archive here instead of loading the image
@@ -62,7 +65,8 @@ Environment:
   IMAGE_VERSION       stamped into the image (default: today, UTC)
   IMAGE_REGISTRY      registry holding the layer cache (default: derived
                       from the origin remote)
-  MOK_KEY_PATH        Secure Boot signing key, mounted as a build secret
+  MOK_KEY_PATH        shorthand for `--secret mok_privkey=<path>`, the one
+                      secret a local build is likely to have
 EOF
 }
 
@@ -76,6 +80,7 @@ cache_to=0
 reset=0
 tags=()
 labels=()
+secrets=()
 
 need_value() {
     [ "$2" -ge 2 ] || die "$1 needs a value"
@@ -96,6 +101,11 @@ while [ $# -gt 0 ]; do
         --tag)
             need_value "$1" "$#"
             tags+=("$2")
+            shift 2
+            ;;
+        --secret)
+            need_value "$1" "$#"
+            secrets+=("$2")
             shift 2
             ;;
         --backend)
@@ -169,12 +179,34 @@ while IFS= read -r line; do
     if [ -n "$line" ]; then labels+=("$line"); fi
 done <<< "${LABELS:-}"
 
-# An empty MOK_KEY_PATH means "no signing key", which is a supported build.
-# A non-empty one that does not exist is a typo, and silently shipping
-# unsigned kernel modules is the expensive way to find out.
-mok_key="${MOK_KEY_PATH:-}"
-[ -z "$mok_key" ] || [ -f "$mok_key" ] \
-    || die "MOK_KEY_PATH is set to '${mok_key}' but that file does not exist"
+# Build secrets. Every module declares the IDs it wants, the workflow
+# derives them from the manifests and passes one --secret per ID, and
+# nothing here knows what any of them is for: this script mounts what it
+# is given. Every secret is `required=false` in the Containerfile, so a
+# build with none of them is a supported build that skips what they
+# enable.
+#
+# MOK_KEY_PATH is shorthand for the one a local build is likely to have,
+# since a human exporting an env var should not have to know the manifest
+# ID. Both spellings at once is a typo, not a merge.
+if [ -n "${MOK_KEY_PATH:-}" ]; then
+    for pair in "${secrets[@]}"; do
+        [ "${pair%%=*}" != "mok_privkey" ] \
+            || die "MOK_KEY_PATH and --secret mok_privkey= both set; use one"
+    done
+    secrets+=("mok_privkey=${MOK_KEY_PATH}")
+fi
+
+# A declared secret whose file is missing is a typo, and silently
+# shipping unsigned kernel modules is the expensive way to find out.
+for pair in "${secrets[@]}"; do
+    case "$pair" in
+        ?*=?*) ;;
+        *) die "--secret takes <id>=<path>, got '${pair}'" ;;
+    esac
+    [ -f "${pair#*=}" ] \
+        || die "secret '${pair%%=*}' points at '${pair#*=}', which does not exist"
+done
 
 # ---- registry layer cache ------------------------------------------------
 # One cache repo, one tag per target (a cache export is a single manifest
@@ -240,8 +272,10 @@ buildkitd_ensure() {
         --volume "${buildkit_volume}:/var/lib/buildkit"
         --volume "${PWD}:${buildkit_context}:ro"
     )
-    [ -z "$mok_key" ] \
-        || run_args+=(--volume "${mok_key}:${buildkit_secret}:ro")
+    local pair
+    for pair in "${secrets[@]}"; do
+        run_args+=(--volume "${pair#*=}:${buildkit_secret_dir}/${pair%%=*}:ro")
+    done
 
     # The daemon outlives a build but its mounts are fixed at start, so
     # the config it was started with is stamped on it and a changed one
@@ -294,7 +328,7 @@ build_buildkit() {
         --local "dockerfile=${buildkit_context}"
         --opt "filename=${containerfile}"
     )
-    local arg label ref tag first
+    local arg label ref tag first pair
 
     for arg in "${build_args[@]}"; do args+=(--opt "build-arg:${arg}"); done
     for label in "${labels[@]}"; do args+=(--opt "label:${label}"); done
@@ -303,8 +337,11 @@ build_buildkit() {
     done
     [ -z "$cache_export_ref" ] \
         || args+=(--export-cache "type=registry,ref=${cache_export_ref}")
-    [ -z "$mok_key" ] \
-        || args+=(--secret "id=mok_privkey,src=${buildkit_secret}")
+    # src is the path inside the daemon container, where buildkitd_ensure
+    # mounted it, not the host path.
+    for pair in "${secrets[@]}"; do
+        args+=(--secret "id=${pair%%=*},src=${buildkit_secret_dir}/${pair%%=*}")
+    done
 
     # buildctl writes the exported image to stdout when it is given no
     # destination, so the tarball streams straight into podman storage
@@ -325,7 +362,7 @@ build_buildkit() {
 
 build_buildx() {
     local args=(build --file "$containerfile")
-    local arg tag label ref
+    local arg tag label ref pair
 
     for arg in "${build_args[@]}"; do args+=(--build-arg "$arg"); done
     for tag in "${tags[@]}"; do args+=(--tag "$tag"); done
@@ -335,8 +372,9 @@ build_buildx() {
     done
     [ -z "$cache_export_ref" ] \
         || args+=(--cache-to "type=registry,ref=${cache_export_ref}")
-    [ -z "$mok_key" ] \
-        || args+=(--secret "id=mok_privkey,src=${mok_key}")
+    for pair in "${secrets[@]}"; do
+        args+=(--secret "id=${pair%%=*},src=${pair#*=}")
+    done
     # An attestation index is not the shape bootc and cosign expect, so the
     # output stays a single image manifest.
     args+=(--provenance=false)
@@ -351,13 +389,14 @@ build_buildx() {
 # any change under modules/, lib/ or build-phases/.
 build_buildah() {
     local args=(build --file "$containerfile")
-    local arg tag label
+    local arg tag label pair
 
     for arg in "${build_args[@]}"; do args+=(--build-arg "$arg"); done
     for tag in "${tags[@]}"; do args+=(--tag "$tag"); done
     for label in "${labels[@]}"; do args+=(--label "$label"); done
-    [ -z "$mok_key" ] \
-        || args+=(--secret "id=mok_privkey,src=${mok_key}")
+    for pair in "${secrets[@]}"; do
+        args+=(--secret "id=${pair%%=*},src=${pair#*=}")
+    done
     [ -z "$oci_output" ] \
         || die "the buildah backend cannot write an OCI archive"
     [ "${#cache_import_refs[@]}" -eq 0 ] \

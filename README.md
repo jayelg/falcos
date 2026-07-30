@@ -169,11 +169,21 @@ One-time setup:
 1. `just generate-mok-key` — creates the key pair under `~/.local/share/falcos/`.
 2. Copy the public cert into the repo and commit it:
    `cp ~/.local/share/falcos/sb_cert.der modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
-3. Add the private key contents as the `MOK_PRIVATE_KEY` GitHub Actions secret (for local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`).
+3. Add the private key contents as the `MOK_PRIVKEY` GitHub Actions secret -- the module manifests declare the secret as `mok_privkey`, and the workflow finds the repository secret by uppercasing that (for local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`).
 4. On each machine, after deploying a signed image:
    `sudo mokutil --import /usr/share/falcos/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.
 
 The private key never enters the repo or the image; CI mounts it as a BuildKit secret and DKMS-generated throwaway keys are scrubbed from the image.
+
+Rotating the key. A MOK is a list, so enrolling the new cert before anything is signed with it leaves no machine unbootable:
+
+1. `just generate-mok-key`, which refuses to overwrite an existing key.
+2. Copy the new `sb_cert.der` to each machine by hand and enroll it there while that machine still runs the old image: `sudo mokutil --import sb_cert.der`, reboot, complete MokManager. The old key stays enrolled, so the running image keeps booting. Step 4 of the setup above reads the cert out of the image, which carries the new one only after the update has landed, so it is the wrong order for a rotation.
+3. Commit the new cert, and set `MOK_PRIVKEY` to the new private key.
+4. Build and publish. Machines update and boot on the new key.
+5. Once every machine is on it, `sudo mokutil --delete` the old cert.
+
+The wrong key never blocks an update. `bootc upgrade` verifies the image with cosign, which is independent of the MOK, so an image signed by an unenrolled key (or by no key, when `MOK_PRIVKEY` is missing and the build logs a warning) stages normally and then fails to boot on Secure Boot machines only. Recovery is selecting the previous deployment in GRUB, at the console, since MokManager cannot be driven over SSH.
 
 ## References
 
