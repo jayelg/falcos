@@ -88,11 +88,16 @@ for scope in system user; do
             # shellcheck disable=SC2086
             unit_file="$(find ${unit_dirs} -name "${unit}" -print -quit 2>/dev/null || true)"
             if [ -z "$unit_file" ] || [ ! -f "$unit_file" ]; then
-                fail "${unit}: unit file not found in ${unit_dirs}"
+                # disable on a missing unit is a no-op, not a config error
+                if [ "$verb" = "enable" ]; then
+                    fail "${unit}: unit file not found in ${unit_dirs}"
+                else
+                    echo "        ${unit} (not present, ${verb}d)"
+                fi
                 continue
             fi
 
-            if [ "$scope" = "system" ]; then
+            if [ "$scope" = "system" ] && [ "$verb" = "enable" ]; then
                 if out="$(systemd-analyze verify --no-pager "$unit" 2>&1)"; then
                     echo "        ${unit} ok"
                 else
