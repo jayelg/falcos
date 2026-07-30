@@ -388,7 +388,8 @@ RUN --mount=type=bind,from=ctx,source=/modules/apps/affinity,target=/ctx/modules
     ASSET_WINTYPES_SHIM_VERSION="f8a2d42ba3abc5dcdc584daa6728a2fa019be72e" \
     ASSET_WINTYPES_SHIM_URL="https://github.com/ElementalWarrior/wine-wintypes.dll-for-affinity/raw/f8a2d42ba3abc5dcdc584daa6728a2fa019be72e/wintypes_shim.dll.so" \
     ASSET_WINTYPES_SHIM_SHA256="a5cae5038f3f147a6e1e8973a1af097da38fe28869ebf1da94243d64bfebbff6" \
-    ASSET_VC_REDIST_URL="https://aka.ms/vs/17/release/vc_redist.x64.exe" \
+    ASSET_VC_REDIST_VERSION="14.44.35211" \
+    ASSET_VC_REDIST_URL="https://download.visualstudio.microsoft.com/download/pr/9b0d1fa5-c16d-4ee8-97f0-c2734086ece8/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe" \
     ASSET_VC_REDIST_SHA256="cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b" \
     ASSET_DOTNET48_URL="https://download.visualstudio.microsoft.com/download/pr/7afca223-55d2-470a-8edc-6a1739ae3252/abd170b4b0ec15ad0222a809b761a036/ndp48-x86-x64-allos-enu.exe" \
     ASSET_DOTNET48_SHA256="95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53" \

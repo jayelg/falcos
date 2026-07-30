@@ -53,9 +53,21 @@ asset "wintypes-shim" {
 }
 
 // 64-bit VC++ 2022 redistributable, needed by dotnet48 and Affinity itself.
+// The URL is the permalink aka.ms/vs/17/release/vc_redist.x64.exe redirects
+// to, which is content addressed: the uppercase SHA256 in its path is the
+// hash pinned below. aka.ms itself is the *latest* redist, so Microsoft
+// repoints it at every VS servicing release and the pinned hash stopped
+// matching without anything here changing -- a build failure at a time
+// nobody chose. This URL cannot move under the pin.
+//
+// The cost is the other direction: a newer redist has to be adopted
+// deliberately, by resolving aka.ms again and taking the permalink and hash
+// it lands on. Nothing about that is automatic, which is the honest state
+// of a dependency with no version feed to watch.
 asset "vc-redist" {
-    manual "aka.ms/vs/17/release is Microsoft's permanent latest-version URL, so there is no version to track and the bytes change at every VS servicing release"
-    url "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    manual "no version feed exists for the redist, so moving to a newer one means resolving the aka.ms redirect by hand and taking the permalink it lands on"
+    version "14.44.35211"
+    url "https://download.visualstudio.microsoft.com/download/pr/9b0d1fa5-c16d-4ee8-97f0-c2734086ece8/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe"
     sha256 "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b" from="manual"
 }
 
