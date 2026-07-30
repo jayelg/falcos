@@ -21,3 +21,9 @@ ln -s /usr/bin/true /usr/bin/systemctl
 # dnf5 copr/config-manager plugins, needed by the module repo files
 # sourced in lib/run-module.sh.
 dnf5 install -y dnf5-plugins
+
+# checkpolicy provides checkmodule, needed by the SELinux .te compilation
+# in lib/selinux-helpers.sh. Installed explicitly so that removing a
+# package it used to ride in on does not break SELinux policy compilation
+# silently.
+dnf5 install -y checkpolicy
