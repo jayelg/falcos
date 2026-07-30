@@ -1,32 +1,16 @@
 #!/bin/bash
-# Runs after all install phases: restores systemctl, regenerates the
-# initramfs, applies the falcos systemd presets, runs per-module
-# finalize.sh hooks, and the remaining global tweaks (bootloader, SELinux
-# workaround). Only genuinely global, run-once operations live here;
-# module-owned finalize logic lives in each module's finalize.sh.
+# Runs after all install phases: restores systemctl, applies the falcos
+# systemd presets, runs per-module finalize.sh hooks, and the remaining
+# global tweaks (bootloader, SELinux workaround). Only genuinely global,
+# run-once operations live here; module-owned finalize logic lives in each
+# module's finalize.sh. Initramfs regeneration is now owned by the kernel
+# module's finalize.sh.
 
 set -ouex pipefail
 
 # Restore systemctl (stubbed in 00-setup.sh)
 rm /usr/bin/systemctl
 mv /usr/bin/systemctl.bak /usr/bin/systemctl
-
-### Regenerate initramfs
-#   --add ostree   required for atomic updates
-#   --add crypt    LUKS passphrase prompting
-#   --add plymouth boot splash / graphical passphrase prompt (only when
-#                  installed, it comes with the kde-desktop module)
-# Kernel package identity is written by the kernel module at
-# /usr/lib/falcos/kernel-package so 99-finalize doesn't need to know
-# which kernel variant is installed.
-KERNEL_PKG="$(cat /usr/lib/falcos/kernel-package 2>/dev/null || echo 'kernel-core')"
-KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$KERNEL_PKG")"
-DRACUT_MODULES="ostree crypt"
-rpm -q plymouth &>/dev/null && DRACUT_MODULES+=" plymouth"
-export DRACUT_NO_XATTR=1
-dracut --force --no-hostonly --reproducible --add "$DRACUT_MODULES" \
-    --kver "$KVER" \
-    "/usr/lib/modules/${KVER}/initramfs.img"
 
 # Relocate /opt payloads (e.g. mullvad-vpn) into /usr, symlinked from
 # /var/opt via tmpfiles. /var content only seeds a machine on first
