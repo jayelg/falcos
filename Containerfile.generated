@@ -87,7 +87,8 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/cli-tools,target=/ctx/module
     --mount=type=tmpfs,target=/tmp \
     bash /ctx/lib/run-module.sh /ctx/modules/core/cli-tools
 
-# ---- kernel/cachyos-kernel (verbatim from modules/kernel/cachyos-kernel/Containerfile.inc) ----
+# ---- kernel/cachyos-kernel ----
+# verbatim from modules/kernel/cachyos-kernel/Containerfile.inc:
 # Declares the cachyos kernel variant, overriding Containerfile.template's
 # default ARG KERNEL=stock. This line is the target of the kernel-freshness
 # workflow fallback/restore seds (stock <-> cachyos).
@@ -98,7 +99,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/cli-tools,target=/ctx/module
 # below this fragment.
 ARG KERNEL=cachyos
 
-# ---- kernel/cachyos-kernel ----
 RUN --mount=type=bind,from=ctx,source=/modules/kernel/cachyos-kernel,target=/ctx/modules/kernel/cachyos-kernel \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \

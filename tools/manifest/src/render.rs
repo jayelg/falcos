@@ -102,11 +102,14 @@ pub fn section(
             blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
         }
 
-        // Once per entry rather than once per block, since the flavor is
-        // a property of the entry and both blocks carry it.
+        // One banner per entry, never one per block: two of them under
+        // the same name reads as the module being emitted twice, which
+        // is the first thing a reviewer would go looking for. The
+        // fragment labels itself underneath instead.
         if let Some(flavor) = &entry.flavor {
             let _ = writeln!(out, "# ---- [{flavor}] ----");
         }
+        let _ = writeln!(out, "# ---- {} ----", entry.path);
         let _ = write!(out, "{}\n\n", blocks.join("\n\n"));
 
         if dir.join("finalize.sh").is_file() {
@@ -335,8 +338,7 @@ fn standard(
     let mut out = String::new();
     let _ = write!(
         out,
-        "# ---- {path} ----\n\
-         RUN --mount=type=bind,from=ctx,source=/modules/{path},target=/ctx/modules/{path} \\\n    \
+        "RUN --mount=type=bind,from=ctx,source=/modules/{path},target=/ctx/modules/{path} \\\n    \
          --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \\\n    \
          --mount=type=cache,target=/var/cache \\\n    \
          --mount=type=cache,target=/var/log \\\n    \
@@ -413,7 +415,7 @@ fn fragment(
     let mut out = String::new();
     let _ = write!(
         out,
-        "# ---- {path} (verbatim from modules/{path}/Containerfile.inc) ----\n{}",
+        "# verbatim from modules/{path}/Containerfile.inc:\n{}",
         body.trim_end_matches('\n')
     );
     out
