@@ -11,7 +11,8 @@
 #
 #   lag > 7 days            open/update a tracking issue
 #   lag > 14 days / EOL /   also open a PR changing the module's
-#   unpatched KEV CVE       Containerfile.inc ARG KERNEL to stock
+#   unpatched KEV CVE       Containerfile.inc ARG KERNEL to stock, with
+#                           the regenerated Containerfile alongside it
 #   upstream catches up     close issue; if fallback was merged, open
 #                           restore PR back to custom kernel
 #
@@ -101,6 +102,10 @@ jobs:
                 echo "expected 'ARG KERNEL=${from}' in ${part_file}" >&2
                 exit 1
               fi
+              # Containerfile.generated is committed and inlines this
+              # fragment, so flipping the fragment alone opens a PR that
+              # fails the drift check in lint. Staged by the -a below.
+              ./scripts/gen-containerfile.sh
               git commit -am "$title"
               git push -f origin "$branch"
               {
