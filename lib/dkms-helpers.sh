@@ -9,6 +9,11 @@
 source "$(dirname "${BASH_SOURCE[0]}")/kernel-helpers.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/sign-helpers.sh"
 
+# kernel_devel_install and kernel_devel_remove live in the kernel module,
+# which has already installed them into the image by the time a DKMS
+# consumer runs.
+source /usr/libexec/kernel-devel-helpers.sh
+
 # Shared build deps for kernel_devel_install/kernel_devel_remove. The remove
 # list is smaller on purpose: git is a permanent package owned by
 # modules/dev-tools and openssl ships in the fedora-bootc base,
