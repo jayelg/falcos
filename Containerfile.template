@@ -16,12 +16,6 @@ COPY modules/ /modules/
 # Pinned fedora-bootc digest tags break Renovate.
 FROM quay.io/fedora/fedora-bootc:44
 
-### Kernel Build argument
-# Don't update the below ARG for custom kernels.
-# Kernels can be added as modules defined in modules.kdl.
-# A kernel module overrides this value during the build.
-ARG KERNEL=stock
-
 ## Build phases and modules: one RUN layer each for independent BuildKit
 ## caching. A phase is a build-phases/*.sh, ordered by its number around
 ## the module layers, which build at 50. A module runs through
