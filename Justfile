@@ -20,9 +20,9 @@ check:
 fix:
     just --unstable --fmt -f Justfile
 
-# Generate Containerfile.generated from the Containerfile skeleton +
-# components.list. Every build regenerates it first, so this is only for
-# inspecting what a build would use.
+# Regenerate Containerfile.generated from the Containerfile skeleton and
+# modules.kdl, then commit it: it is tracked, and lint fails on a stale
+# one. Builds regenerate it too, so no build can use a stale one.
 [group('Utility')]
 generate:
     ./scripts/gen-containerfile.sh
@@ -32,7 +32,7 @@ generate:
 clean:
     #!/usr/bin/bash
     set -eoux pipefail
-    rm -rf _build* output/ Containerfile.generated
+    rm -rf _build* output/
 
 # Sudo Clean Repo
 [group('Utility')]
@@ -70,7 +70,7 @@ build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh de
 
 # Fallback for a host where the BuildKit container can't run. Caches on
 # the whole ctx stage, so it rebuilds every layer after any change under
-# components/, lib/ or build-phases/.
+# modules/, lib/ or build-phases/.
 
 # Build the image with buildah instead of BuildKit
 [group('Utility')]
@@ -124,7 +124,7 @@ generate-mok-key dir=(env("HOME") + "/.local/share/falcos"):
     echo "Public cert: $CERT"
     echo
     echo "Next steps:"
-    echo "  1. cp $CERT components/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
+    echo "  1. cp $CERT modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der"
     echo "  2. Commit that cert, and add MOK_PRIVATE_KEY as a GitHub Actions secret (contents of $KEY)."
     echo "  3. After deploying a signed image, on the target machine run:"
     echo "       sudo mokutil --import /usr/share/falcos/sb_cert.der"
@@ -206,10 +206,9 @@ build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_bui
 [group('Build Virtual Machine Image')]
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Wraps whatever image target_image names, but renders the kickstart from
-# the installer flavor, the same declaration CI renders from, so the
-# reference a local ISO installs is the one CI ships. Pass a flavor to
-# override it.
+# Wraps whatever image target_image names, but renders the kickstart the
+# same way CI does, so the reference a local ISO installs is the one CI
+# ships. Pass a flavor to override it.
 
 # Build an ISO installer image
 [group('Build Virtual Machine Image')]
@@ -232,12 +231,13 @@ rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_r
 [group('Build Virtual Machine Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Builds the installer flavor rather than the flavor list default, so the
-# payload and the kickstart reference agree.
+# Builds the ungated image rather than the default flavor, so the payload
+# and the kickstart reference agree: an installer lays down the set that
+# gates on no hardware.
 
 # Rebuild an ISO installer image
 [group('Build Virtual Machine Image')]
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor=`./scripts/flavors.sh installer`: (build target_image tag flavor)
+rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor="none": (build target_image tag flavor)
     just build-iso "${target_image}" "${tag}" "${flavor}"
 
 # Run a virtual machine with the specified image type
@@ -312,7 +312,7 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
       --vsock=false --pass-ssh-key=false \
       -i ./output/**/*.{{ type }}
 
-# Runs shellcheck over every Bash script, validates components.list and
+# Runs shellcheck over every Bash script, validates modules.kdl and
 # renders the installer config, the same script the build workflow gates on
 lint:
     ./scripts/lint.sh

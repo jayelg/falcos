@@ -15,7 +15,7 @@
 # image's name. The ln restores the symlink on images where it was already
 # a detached file.
 brand_os_release() {
-    local name="Falcos" pretty_name="" default_hostname="${FLAVOR:-laptop}" image_version="${IMAGE_VERSION:-dev}" arg
+    local name="Falcos" pretty_name="" default_hostname="" image_version="${IMAGE_VERSION:-dev}" arg
     for arg in "$@"; do
         case "$arg" in
             NAME=*) name="${arg#NAME=}" ;;
@@ -30,6 +30,12 @@ brand_os_release() {
     done
     if [ -z "$pretty_name" ]; then
         pretty_name="Falcos ${image_version}"
+    fi
+    # The brand, not the flavor. A flavor is an image variant, not a
+    # machine identity, and the ungated build has no flavor to follow.
+    # Derived from NAME so an override moves both together.
+    if [ -z "$default_hostname" ]; then
+        default_hostname="${name,,}"
     fi
 
     sed -i \

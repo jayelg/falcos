@@ -7,8 +7,7 @@
 # offers no flag for that reference on anaconda-iso, the way --rootfs and
 # --use-librepo can be passed as arguments. Rendering it here rather than
 # committing the result is what keeps the reference derived: a fork's ISO
-# installs the fork's image, and the flavor is the one declaration in
-# scripts/flavors.sh rather than a string in a config file.
+# installs the fork's image, with nothing to keep in sync by hand.
 #
 # Prints the absolute path it wrote, so a caller can hand it straight to
 # bootc-image-builder; everything else goes to stderr. Absolute because
@@ -30,8 +29,7 @@ usage() {
     cat >&2 <<'EOF'
 usage: scripts/render-iso-config.sh [options]
 
-  --flavor <name>   flavor the ISO installs (default:
-                    scripts/flavors.sh installer)
+  --flavor <name>   target the ISO installs (default: the ungated build)
   --tag <tag>       tag it tracks (default: $DEFAULT_TAG, else latest)
 
 Environment:
@@ -65,10 +63,14 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# The default is the declared installer flavor, never the flavor list's
-# default: that one is a build-order fact and says nothing about which
-# image belongs on a machine nobody has inspected.
-flavor="${flavor:-$(./scripts/flavors.sh installer)}"
+# The ungated build, by rule rather than by a value kept in sync. Kargs
+# under /usr/lib/bootc/kargs.d/ are static and cannot be made conditional
+# on hardware, so a payload laid down on a machine nobody has inspected
+# must be the set that gates on none of it: the desktop flavor's VFIO
+# kargs would bind devices to vfio-pci at boot on unknown hardware.
+# Moving to a device flavor afterwards is a `bootc switch`, made cheap by
+# rechunking. Pass --flavor to override deliberately.
+flavor="${flavor:-none}"
 ./scripts/flavors.sh check "$flavor"
 
 IMAGE_REF="$(./scripts/registry.sh ref "$(./scripts/flavors.sh image "$flavor")"):${tag}"

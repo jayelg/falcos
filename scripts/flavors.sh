@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# The only reader of ARG FLAVORS in Containerfile.base. Everything that
-# needs to know which flavors exist asks this script: the Containerfile
-# generator, the CI build matrix, the per-flavor cache tags, the registry
-# cleanup, the disk build and the Justfile. Adding or renaming a flavor is
-# one edit to ARG FLAVORS and nothing else.
+# Image naming, over the flavor set declared in modules.kdl. Everything
+# that needs to know which flavors exist asks this script: the CI build
+# matrix, the per-flavor cache tags, the registry cleanup, the disk build
+# and the Justfile.
+#
+# scripts/manifest.sh owns what the flavors *are*; this owns what they are
+# called once published. scripts/registry.sh owns where they live.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-skeleton=Containerfile.base
-
-# Published images are <prefix>-<flavor>; the buildx registry cache is
-# <prefix>-cache, one tag per flavor.
-prefix=falcos
-
-# The flavor a fresh installer lays down, and the one its kickstart makes
-# the installed system track. Declared here rather than inferred from the
-# list: the first entry is a build-order default (the local build, the PR
-# build) and carries no claim about which image belongs on a machine
-# nobody has inspected.
+# A *flavor* is a declared image variant. A *target* is something the
+# matrix builds, which is every flavor plus the ungated set. The ungated
+# set is spelled `none`, because a cache tag and a matrix entry both need
+# a name, and it publishes unsuffixed.
 #
-# laptop, not desktop, because the desktop flavor ships VFIO kargs that
-# bind devices to vfio-pci at boot. On unknown hardware that can hand the
-# GPU to a driver nothing is using, which is exactly the situation an
-# installer is in. Do not "fix" this to the default flavor.
-installer=laptop
+# It needs no declaration: it is the layers above ARG FLAVOR, which exist
+# whether or not any flavor does. That is also why it is not a flavor —
+# a flavor whose only property is having no modules would be a
+# hand-maintained alias for something the build already produces.
+none=none
+
+# Published images are <prefix> for the ungated build and <prefix>-<flavor>
+# for a flavor; the buildx registry cache is <prefix>-cache, one tag per
+# target.
+prefix=falcos
 
 die() {
     echo "flavors: $*" >&2
@@ -36,76 +36,74 @@ usage: scripts/flavors.sh <command> [flavor]
 
 All output is one item per line, in declaration order.
 
-  list                every flavor
-  default             the first flavor, which builds use when none is given
-  installer           the flavor a fresh installer ISO lays down
-  check <flavor>      succeeds if <flavor> is declared, fails loudly if not
-  siblings <flavor>   every flavor except <flavor>
-  image [<flavor>]    published image name for a flavor (default: default)
-  images              published image name for every flavor
+  list                every declared flavor
+  targets             every build target: the ungated `none`, then flavors
+  default             the flavor marked default in modules.kdl, which
+                      builds use when none is given
+  pr                  the flavor a pull request builds
+  check <target>      succeeds if <target> is buildable, fails loudly if not
+  siblings <target>   every target except <target>
+  image [<target>]    published image name (default: the default flavor)
+  images              published image name for every target
   cache-image         image name of the shared build cache
 EOF
 }
 
-# ---- read the declared flavors ------------------------------------------
-raw="$(sed -n 's/^ARG FLAVORS="\(.*\)"$/\1/p' "$skeleton")"
-[ -n "$raw" ] || die "ARG FLAVORS not found in ${skeleton}"
+mapfile -t flavors < <(./scripts/manifest.sh flavors)
+mapfile -t targets < <(./scripts/manifest.sh targets)
 
-flavors=()
-declare -A seen=()
-IFS=',' read -ra parts <<< "$raw"
-for name in "${parts[@]}"; do
-    # Flavor names cannot contain whitespace, so stripping it all also
-    # tolerates "desktop, laptop" spacing in the ARG.
-    name="${name//[[:space:]]/}"
-    [ -n "$name" ] || continue
-    # Same shape components.list section headers accept; a name outside it
-    # could never be matched by a [flavor] section.
-    [[ "$name" =~ ^[a-z][a-z0-9-]*$ ]] \
-        || die "invalid flavor name '${name}' in ARG FLAVORS (expected lowercase, digits and dashes)"
-    [ -z "${seen[$name]:-}" ] || die "flavor '${name}' is listed twice in ARG FLAVORS"
-    seen["$name"]=1
-    flavors+=("$name")
+declare -A buildable=()
+for name in "${targets[@]}"; do
+    buildable["$name"]=1
 done
-[ "${#flavors[@]}" -gt 0 ] || die "no flavors found in ARG FLAVORS in ${skeleton}"
 
-require_flavor() {
+require_target() {
     local wanted="${1:-}"
-    [ -n "$wanted" ] || die "expected a flavor name"
-    [ -n "${seen[$wanted]:-}" ] \
-        || die "'${wanted}' is not a flavor in ARG FLAVORS in ${skeleton} (have: ${flavors[*]})"
+    [ -n "$wanted" ] || die "expected a target name"
+    [ -n "${buildable[$wanted]:-}" ] \
+        || die "'${wanted}' is not a build target (have: ${targets[*]})"
 }
 
-# ---- commands ------------------------------------------------------------
+# falcos for the ungated build, falcos-<flavor> for a flavor. Naming is a
+# hierarchy: the project, then device variants suffixed.
+image_name() {
+    if [ "$1" = "$none" ]; then
+        printf '%s\n' "$prefix"
+    else
+        printf '%s-%s\n' "$prefix" "$1"
+    fi
+}
+
 case "${1:-}" in
     list)
-        printf '%s\n' "${flavors[@]}"
+        [ "${#flavors[@]}" -eq 0 ] || printf '%s\n' "${flavors[@]}"
+        ;;
+    targets)
+        printf '%s\n' "${targets[@]}"
         ;;
     default)
-        printf '%s\n' "${flavors[0]}"
+        ./scripts/manifest.sh default-flavor
         ;;
-    installer)
-        [ -n "${seen[$installer]:-}" ] \
-            || die "the installer flavor '${installer}' is not in ARG FLAVORS in ${skeleton} (have: ${flavors[*]})"
-        printf '%s\n' "$installer"
+    pr)
+        ./scripts/manifest.sh pr-flavor
         ;;
     check)
-        require_flavor "${2:-}"
+        require_target "${2:-}"
         ;;
     siblings)
-        require_flavor "${2:-}"
-        for name in "${flavors[@]}"; do
+        require_target "${2:-}"
+        for name in "${targets[@]}"; do
             [ "$name" = "$2" ] || printf '%s\n' "$name"
         done
         ;;
     image)
-        name="${2:-${flavors[0]}}"
-        require_flavor "$name"
-        printf '%s-%s\n' "$prefix" "$name"
+        name="${2:-$(./scripts/manifest.sh default-flavor)}"
+        require_target "$name"
+        image_name "$name"
         ;;
     images)
-        for name in "${flavors[@]}"; do
-            printf '%s-%s\n' "$prefix" "$name"
+        for name in "${targets[@]}"; do
+            image_name "$name"
         done
         ;;
     cache-image)

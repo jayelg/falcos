@@ -1,0 +1,31 @@
+# Containerfile.inc — rename to exactly `Containerfile.inc` to activate.
+#
+# Use this ONLY for something the declared fields cannot express: an extra
+# builder stage, a second layer, or an ARG with a default. A build secret or
+# a build arg is NOT a reason — declare `secret` and `arg` in module.kdl and
+# the generator writes the mounts for you.
+#
+# When present, the generator inlines this file VERBATIM instead of the
+# standard block, so it fully REPLACES the normal flow: you must call
+# run-module.sh yourself and mount everything it needs. Because it replaces
+# rather than adds, declaring `secret` or `arg` alongside one is a lint
+# error: the fragment already spells them out, and a declaration the
+# generator ignored would be worse than none.
+#
+# One module in the repository uses one: kernel/cachyos-kernel, for its
+# `ARG KERNEL=cachyos`, which is graph shape rather than a parameter and is
+# the line the kernel-freshness workflow rewrites.
+#
+# A flavor-gated Containerfile.inc must set FLAVOR_GATE itself; the
+# generator cross-checks it against the flavor block it is listed in and
+# errors on a mismatch.
+#
+# Example skeleton (a module needing a build secret):
+#
+# RUN --mount=type=bind,from=ctx,source=/modules/GROUP/template,target=/ctx/modules/GROUP/template \
+#     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+#     --mount=type=cache,target=/var/cache \
+#     --mount=type=cache,target=/var/log \
+#     --mount=type=tmpfs,target=/tmp \
+#     --mount=type=secret,id=example_secret,target=/run/secrets/example,required=false \
+#     bash /ctx/lib/run-module.sh /ctx/modules/GROUP/template

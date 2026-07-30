@@ -1,0 +1,7 @@
+description "Flatpak client, first-boot install of the default app set, and a daily update timer"
+
+supports "fedora"
+
+collects "flatpaks.list" into="/usr/share/falcos/default-flatpaks"
+
+provides "flatpak"

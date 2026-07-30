@@ -1,0 +1,7 @@
+description "bootc updates panel for KDE System Settings, with its notifier"
+
+supports "fedora"
+
+// A KCM and a Plasma notifier: it installs into a desktop that has to
+// already be there.
+requires "plasma-desktop"

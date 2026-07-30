@@ -1,0 +1,92 @@
+// module.kdl — the manifest. REQUIRED for every module.
+//
+// It holds only facts nothing can discover by looking at this directory.
+// That is why there is no entry here for files/, selinux/, finalize.sh,
+// repo or versions.sh: the runner checks for those, and a declaration
+// sitting beside an existing file could drift both ways.
+//
+// modules/SCHEMA.md is the full reference.
+
+// REQUIRED. One line, present tense, no trailing period. It names this
+// module wherever the resolved build is summarised.
+description "Example module showing every optional piece a module can ship"
+
+// REQUIRED. Base families this module can build on, one or more. A
+// module that cannot build on a family simply does not list it, and lint
+// catches the mismatch before a build finds out the slow way.
+supports "fedora"
+
+// OPTIONAL. Capabilities: depend on what a thing *is*, never on the
+// module that happens to provide it, so a provider can be swapped
+// without touching its consumers.
+//
+//   provides   this module offers it
+//   requires   hard. Lint fails if nothing enabled provides it, and
+//              names the module that would. Implies ordering.
+//   after      soft. Ordering and cache preference only, never fails.
+//
+// Nothing is ever included automatically: an unsatisfied requirement
+// tells you what to add and stops, so modules.kdl stays the complete
+// statement of what is in the image.
+//
+// requires "kernel-devel"
+// after "hardened-malloc"
+
+// OPTIONAL. Contract files: an exact path one module writes and another
+// reads. Unlike a capability, both sides name the same path. Lint fails
+// on a reader whose writer is not in the image.
+//
+// provides-file "/usr/lib/falcos/example-marker"
+// requires-file "/usr/share/falcos/sb_cert.der"
+
+// OPTIONAL. Options: typed, declared here, set by the image author in
+// modules.kdl, and arriving in module.sh as env. This is what turns a
+// hardcoded list inside a module's own script into something an image
+// author can change without forking the module.
+//
+// The env name is the option name uppercased, dashes as underscores,
+// prefixed OPT_: `gpu-accel` arrives as $OPT_GPU_ACCEL. A bool arrives as
+// 1 or 0, a list joins on spaces (so list values may not contain any).
+//
+// A default is required: an option without one is a required argument in
+// disguise, which `requires` already expresses better.
+//
+// option "extras" type="list" {
+//     description "Additional tools to install alongside the main one"
+//     default "example-extra"
+// }
+//
+// option "gpu-accel" type="bool" {
+//     description "Build with GPU acceleration"
+//     default #true
+// }
+
+// OPTIONAL. Variants: a named bundle of option overrides, selected as
+// `module "GROUP/template" variant="minimal"` in modules.kdl. A variant
+// may only set options this same manifest declares.
+//
+// Variants resolve on the host, into the same OPT_* env, so nothing
+// inside the image knows a variant was used.
+//
+// variant "minimal" {
+//     description "Skip the extras and build without GPU acceleration"
+//     set "extras"
+//     set "gpu-accel" #false
+// }
+
+// OPTIONAL. Collecting: declared by the module that wants every copy of
+// a filename in the image, since only it knows where they should go.
+//
+// Contribution stays presence driven, like files/ and selinux/: shipping
+// the named file is the whole contribution, and a contributor declares
+// nothing. What is declared here is the part that cannot be derived from
+// the filename, namely the destination.
+//
+// It says nothing about what this module then does with them. The build
+// collects; interpreting the result is this module's business.
+//
+// Lint fails if a module ships a collected filename while the module
+// that collects it is not in the list, so a contribution cannot go
+// missing silently.
+//
+// collects "example.inc" into="/usr/share/falcos/example.d/all"

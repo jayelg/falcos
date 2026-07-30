@@ -1,0 +1,9 @@
+description "CachyOS kernel and companions, with Secure Boot module signing"
+
+supports "fedora"
+
+// Anything building an out-of-tree kernel module needs the headers this
+// installs, and the Secure Boot key material to sign the result with.
+provides "kernel-devel"
+provides-file "/usr/share/falcos/sb_cert.der"
+provides-file "/usr/lib/falcos/kernel-package"

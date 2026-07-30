@@ -1,0 +1,3 @@
+description "chezmoi and the Bitwarden CLI, with a setup-dotfiles recipe to restore a dotfile repo"
+
+supports "fedora"

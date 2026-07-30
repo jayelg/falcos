@@ -1,6 +1,6 @@
 #!/bin/bash
 # hardened_malloc is preloaded system-wide via
-# components/hardening/hardened-malloc/files/etc/environment.d/30-hardened-malloc.conf.
+# modules/hardening/hardened-malloc/files/etc/environment.d/30-hardened-malloc.conf.
 # Apps that crash under it get wrapped at
 # install time with this helper; runtime exemptions are handled by
 # `falcos hardened-malloc-exempt`. Standalone so RUN layers can mount just

@@ -1,0 +1,11 @@
+description "kvmfr DKMS kernel module, for Looking Glass frame relay from a passed-through GPU"
+
+supports "fedora"
+
+// kvmfr is a DKMS module, built and signed exactly like xone.
+requires "kernel-devel"
+requires-file "/usr/share/falcos/sb_cert.der"
+
+// kvmfr is built and signed exactly like xone.
+arg "KERNEL"
+secret "mok_privkey"

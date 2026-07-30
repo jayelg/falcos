@@ -41,7 +41,9 @@ usage() {
     cat >&2 <<'EOF'
 usage: scripts/build.sh [options]
 
-  --flavor <name>     flavor to build (default: scripts/flavors.sh default)
+  --flavor <name>     target to build: a flavor, or `none` for the
+                      ungated set published unsuffixed (default:
+                      scripts/flavors.sh default)
   --kernel <name>     KERNEL build arg (default: unset, the Containerfile
                       decides, which is how the kernel-freshness fallback
                       switches the whole pipeline to the stock kernel)
@@ -144,11 +146,17 @@ if [ "$reset" = 1 ]; then
 fi
 
 # ---- resolved build inputs -----------------------------------------------
-# scripts/flavors.sh is the only reader of ARG FLAVORS; asking it for the
-# default and validating against it is what keeps a typo out of a 50 minute
-# build.
+# scripts/flavors.sh derives both from the flavor set in modules.kdl;
+# asking it for the default and validating against it is what keeps a typo
+# out of a 50 minute build.
 flavor="${flavor:-$(./scripts/flavors.sh default)}"
 ./scripts/flavors.sh check "$flavor"
+
+# `none` names the ungated build for a cache tag and a matrix entry, but
+# inside the build it is simply no flavor: FLAVOR is empty, so every
+# flavor gate skips and the image is the shared layers.
+flavor_arg="$flavor"
+[ "$flavor" != none ] || flavor_arg=""
 
 image_version="${IMAGE_VERSION:-$(date -u +%Y%m%d)}"
 
@@ -169,10 +177,11 @@ mok_key="${MOK_KEY_PATH:-}"
     || die "MOK_KEY_PATH is set to '${mok_key}' but that file does not exist"
 
 # ---- registry layer cache ------------------------------------------------
-# One cache repo, one tag per flavor (a cache export is a single manifest
-# per ref, so flavors sharing a tag would clobber each other). Each build
+# One cache repo, one tag per target (a cache export is a single manifest
+# per ref, so targets sharing a tag would clobber each other). Each build
 # reads its own tag first, then every sibling: those still serve the
-# flavor-agnostic layers, which are most of the build.
+# flavor-agnostic layers, which are most of the build. The ungated build
+# is the best sibling any flavor has, since it is nothing but those.
 #
 # The namespace comes from scripts/registry.sh, so a fork's local build
 # reads the fork's own CI cache with no configuration. It fails when there
@@ -201,7 +210,7 @@ fi
 ./scripts/gen-containerfile.sh
 
 build_args=(
-    "FLAVOR=${flavor}"
+    "FLAVOR=${flavor_arg}"
     "IMAGE_VERSION=${image_version}"
 )
 [ -z "$kernel" ] || build_args+=("KERNEL=${kernel}")
@@ -339,7 +348,7 @@ build_buildx() {
 
 # No BuildKit, so no --mount cache scoping and no shared cache: buildah
 # keys the RUN cache on the whole ctx stage and rebuilds every layer after
-# any change under components/, lib/ or build-phases/.
+# any change under modules/, lib/ or build-phases/.
 build_buildah() {
     local args=(build --file "$containerfile")
     local arg tag label

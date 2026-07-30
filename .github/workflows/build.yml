@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # shellcheck over every Bash script in the repo, then a generator dry
-      # run that validates components.list without a full image build. The
+      # run that validates modules.kdl without a full image build. The
       # script owns the file set, so `just lint` checks exactly what this
       # gate checks. shellcheck is preinstalled on the runner image.
       - name: Run lint
@@ -61,7 +61,7 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
 
-  # Unit tests for kernel-freshness scripts discovered in component dirs
+  # Unit tests for kernel-freshness scripts discovered in module dirs
   script-tests:
     runs-on: ubuntu-24.04
     permissions:
@@ -72,14 +72,15 @@ jobs:
 
       - name: Discover and run kernel-freshness tests
         run: |
-          mapfile -t dirs < <(find components -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
+          mapfile -t dirs < <(find modules -name test_kernel_freshness.py -type f -exec dirname {} \; | sort -u)
           for d in "${dirs[@]}"; do
             echo "==> Running tests in ${d}..."
             python3 -m unittest discover -s "$d" -v
           done
 
-  # Builds every flavor listed in Containerfile ARG FLAVORS. A separate job
-  # because the matrix context isn't available in a job-level if.
+  # Builds every target: the ungated set published unsuffixed, then one
+  # per flavor declared in modules.kdl. A separate job because the matrix
+  # context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -89,38 +90,39 @@ jobs:
     if: github.event_name != 'push' || github.actor != 'renovate[bot]'
     runs-on: ubuntu-24.04
     outputs:
-      flavors: ${{ steps.set.outputs.flavors }}
+      targets: ${{ steps.set.outputs.targets }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          # Pull requests build the default flavor only, for half the runner
-          # time. It is the better single choice because its flavor-gated
-          # components include a DKMS build, so it covers more build surface
-          # than the others.
-          selection=list
+          # Pull requests build one flavor, for half the runner time.
+          # Which one is declared in modules.kdl as pr-build rather than
+          # inferred from list position, because covering the most build
+          # surface and being the default are unrelated properties that
+          # only happen to coincide.
+          selection="targets"
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            selection=default
+            selection="pr"
           fi
-          flavors="$(./scripts/flavors.sh "$selection" \
+          targets="$(./scripts/flavors.sh "$selection" \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
-          echo "flavors=${flavors}" >> "$GITHUB_OUTPUT"
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
-    name: Build and push image (${{ matrix.flavor }})
+    name: Build and push image (${{ matrix.target }})
     runs-on: ubuntu-24.04
 
     strategy:
       matrix:
-        flavor: ${{ fromJson(needs.compute-matrix.outputs.flavors) }}
+        target: ${{ fromJson(needs.compute-matrix.outputs.targets) }}
       fail-fast: false
 
     concurrency:
       # event_name included so a push doesn't cancel the daily schedule run
       # (same ref) — that run exists specifically to refresh the cache.
-      group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref || github.run_id }}-${{ matrix.flavor }}
+      group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref || github.run_id }}-${{ matrix.target }}
       cancel-in-progress: true
 
     permissions:
@@ -133,14 +135,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # Separate image per flavor so tag history is independent and
-      # bootc switch targets are unambiguous
+      # Separate image per target so tag history is independent and
+      # bootc switch targets are unambiguous. The ungated build publishes
+      # as falcos, device variants as falcos-<flavor>.
       - name: Prepare environment
         env:
-          FLAVOR: ${{ matrix.flavor }}
+          TARGET: ${{ matrix.target }}
         run: |
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
-          echo "IMAGE_NAME=$(./scripts/flavors.sh image "$FLAVOR")" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=$(./scripts/flavors.sh image "$TARGET")" >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
              && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] \
@@ -177,7 +180,7 @@ jobs:
         id: base
         run: |
           set -euo pipefail
-          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.base | head -1)"
+          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.template | head -1)"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
           echo "name=${base}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
@@ -195,9 +198,9 @@ jobs:
           labels: |
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
-            org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.flavor }})
+            org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.target }})
             org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.base
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.template
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
@@ -255,7 +258,7 @@ jobs:
       # chunked repack below is what gets published.
       - name: Build image
         env:
-          FLAVOR: ${{ matrix.flavor }}
+          TARGET: ${{ matrix.target }}
           KERNEL_INPUT: ${{ github.event.inputs.kernel }}
           EVENT: ${{ github.event_name }}
           ON_DEFAULT_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
@@ -264,7 +267,7 @@ jobs:
           LABELS: ${{ steps.metadata.outputs.labels }}
           MOK_KEY_PATH: ${{ env.PUBLISH == 'true' && format('{0}/mok_privkey.pem', runner.temp) || '' }}
         run: |
-          args=(--backend buildx --flavor "$FLAVOR")
+          args=(--backend buildx --flavor "$TARGET")
           if [ -n "$KERNEL_INPUT" ]; then
             args+=(--kernel "$KERNEL_INPUT")
           fi
@@ -282,6 +285,30 @@ jobs:
             args+=(--oci-output "${RUNNER_TEMP}/raw-oci.tar")
           fi
           ./scripts/build.sh "${args[@]}"
+
+      # What this job actually built, from the same parser the generator
+      # reads: the modules this target carries, in layer order, with the
+      # options each was given. Descriptions come from the manifests, so a
+      # published image gets a readable record of its contents without
+      # anyone opening forty RUN lines.
+      - name: Summarize the resolved build
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          {
+            echo "## ${IMAGE_NAME}"
+            echo
+            ./scripts/manifest.sh summary "$TARGET"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The expanded build, kept with the run rather than only with the
+      # commit, so a run stays readable after the branch it ran on moves.
+      - name: Upload the generated Containerfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: containerfile-${{ env.IMAGE_NAME }}
+          path: Containerfile.generated
+          retention-days: 30
 
       - name: Setup Syft
         id: setup-syft

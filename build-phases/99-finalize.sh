@@ -1,9 +1,9 @@
 #!/bin/bash
 # Runs after all install phases: restores systemctl, regenerates the
-# initramfs, applies the falcos systemd presets, runs per-component
+# initramfs, applies the falcos systemd presets, runs per-module
 # finalize.sh hooks, and the remaining global tweaks (bootloader, SELinux
 # workaround). Only genuinely global, run-once operations live here;
-# component-owned finalize logic lives in each component's finalize.sh.
+# module-owned finalize logic lives in each module's finalize.sh.
 
 set -ouex pipefail
 
@@ -15,8 +15,8 @@ mv /usr/bin/systemctl.bak /usr/bin/systemctl
 #   --add ostree   required for atomic updates
 #   --add crypt    LUKS passphrase prompting
 #   --add plymouth boot splash / graphical passphrase prompt (only when
-#                  installed, it comes with the kde-desktop component)
-# Kernel package identity is written by the kernel component at
+#                  installed, it comes with the kde-desktop module)
+# Kernel package identity is written by the kernel module at
 # /usr/lib/falcos/kernel-package so 99-finalize doesn't need to know
 # which kernel variant is installed.
 KERNEL_PKG="$(cat /usr/lib/falcos/kernel-package 2>/dev/null || echo 'kernel-core')"
@@ -66,11 +66,11 @@ source /ctx/lib/selinux-helpers.sh
 install_selinux_module /tmp/composefs_execmem.te
 
 ### Service enablement
-# Components ship *falcos*.preset files in their files/ overlays; only
-# those presets are applied here, so a component removed from
-# components.list takes its service enablement with it. Deliberately not
-# `systemctl preset-all`, which would re-apply Fedora's defaults to every
-# unit in the image.
+# Modules ship *falcos*.preset files in their files/ overlays; only those
+# presets are applied here, so a module removed from modules.kdl takes
+# its service enablement with it. Deliberately not `systemctl
+# preset-all`, which would re-apply Fedora's defaults to every unit in
+# the image.
 apply_falcos_presets() {
     local scope="$1" dir="$2" flag=() f verb unit
     [ "$scope" = "user" ] && flag=(--global)
@@ -88,38 +88,31 @@ apply_falcos_presets() {
 apply_falcos_presets system /usr/lib/systemd/system-preset
 apply_falcos_presets user /usr/lib/systemd/user-preset
 
-### Component finalize hooks
-# Some components need real systemctl or must run after every other
-# component (e.g. service masking, image policy edits). That logic lives in
-# the component's finalize.sh, sourced here in components.list order and
-# flavor-gated exactly like the build layers. COMPDIR points at the
-# component dir, as in run-component.sh.
-run_component_finalize() {
-    local current_flavor="" line entry name d dir
-    while IFS= read -r line; do
-        entry="${line%%#*}"
-        entry="${entry//[[:space:]]/}"
-        [ -z "$entry" ] && continue
-        if [[ "$entry" =~ ^\[([a-z][a-z0-9-]*)\]$ ]]; then
-            section_name="${BASH_REMATCH[1]}"
-            if [ "$section_name" = "common" ]; then
-                current_flavor=""
-            else
-                current_flavor="$section_name"
-            fi
-            continue
-        fi
-        # skip components gated to a different flavor
-        [ -n "$current_flavor" ] && [ "$current_flavor" != "${FLAVOR:?}" ] && continue
-        name="${entry%%@*}"
-        d="/ctx/components/${name}"
-        dir=""
-        [ -d "$d" ] && dir="$d"
-        if [ -n "$dir" ] && [ -f "$dir/finalize.sh" ]; then
-            COMPDIR="$dir"; export COMPDIR
-            # shellcheck source=/dev/null
-            source "$dir/finalize.sh"
-        fi
-    done < /ctx/components.list
+### Module finalize hooks
+# Some modules need real systemctl or must run after every other module
+# (e.g. service masking, image policy edits). That logic lives in the
+# module's finalize.sh, sourced here in module list order and
+# flavor-gated exactly like the build layers. MODDIR points at the module
+# dir, as in run-module.sh.
+#
+# The order arrives resolved, as FINALIZE_ORDER, because the generator
+# already knows it: it is the one thing that reads the module list, and
+# reparsing that list here was a second implementation of the format
+# with nothing to keep the two agreeing. Each token is <path>, or
+# <path>:<flavor> for a gated module, since which hooks run is the one
+# part that stays a per-flavor decision.
+run_module_finalize() {
+    local entry name gate dir entries=()
+    read -ra entries <<< "${FINALIZE_ORDER:-}"
+    for entry in "${entries[@]}"; do
+        name="${entry%%:*}"
+        gate=""
+        [ "$entry" = "$name" ] || gate="${entry#*:}"
+        [ -z "$gate" ] || [ "$gate" = "${FLAVOR:-}" ] || continue
+        dir="/ctx/modules/${name}"
+        MODDIR="$dir"; export MODDIR
+        # shellcheck source=/dev/null
+        source "$dir/finalize.sh"
+    done
 }
-run_component_finalize
+run_module_finalize

@@ -39,19 +39,19 @@
     {
       "customType": "regex",
       // Path segments must start with a lowercase letter, which excludes
-      // components/_template — its annotation names a placeholder upstream
+      // modules/_template — its annotation names a placeholder upstream
       // that would fail every lookup. RE2 has no negative lookahead, so the
       // exclusion is expressed in the character class.
-      "description": "Version-tagged pins in component versions.sh",
-      "managerFilePatterns": ["/^components/([a-z][^/]*/)?[a-z][^/]*/versions\\.sh$/"],
+      "description": "Version-tagged pins in module versions.sh",
+      "managerFilePatterns": ["/^modules/([a-z][^/]*/)?[a-z][^/]*/versions\\.sh$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>github-releases|github-tags) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n\\w+=\"(?<currentValue>[^\"]+)\"",
       ],
     },
     {
       "customType": "regex",
-      "description": "Commit-pinned deps in component versions.sh",
-      "managerFilePatterns": ["/^components/([a-z][^/]*/)?[a-z][^/]*/versions\\.sh$/"],
+      "description": "Commit-pinned deps in module versions.sh",
+      "managerFilePatterns": ["/^modules/([a-z][^/]*/)?[a-z][^/]*/versions\\.sh$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+)\\n\\w+=\"(?<currentDigest>[^\"]+)\"",
       ],

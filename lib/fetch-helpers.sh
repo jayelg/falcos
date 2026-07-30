@@ -1,7 +1,7 @@
 #!/bin/bash
-# Download-and-verify helpers for components that install pinned upstream
+# Download-and-verify helpers for modules that install pinned upstream
 # release assets. Every asset is SHA256-verified against the pin in the
-# component's versions.sh (maintained by Renovate + checksums.yml).
+# module's versions.sh (maintained by Renovate + checksums.yml).
 # Standalone so RUN layers can mount just this file.
 
 # <url> <sha256> <dest> — download with retries, verify, keep at <dest>.

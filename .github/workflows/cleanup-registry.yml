@@ -12,7 +12,7 @@ on:
         default: false
 
 env:
-  KEEP: "3"  # tagged builds retained per image flavor
+  KEEP: "3"  # tagged builds retained per image
 
 jobs:
   cleanup:
@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
           api="users/${OWNER}/packages/container"
 
-          # Every package this prunes is derived from the flavor list, so
+          # Every package this prunes is derived from the target list, so
           # one can legitimately not exist yet: a flavor added today has
           # no package until its first publish, and a fresh fork has
           # neither. Under set -e that 404 would abort the whole prune, so
@@ -63,7 +63,7 @@ jobs:
             fi
           }
 
-          # Image packages, one per flavor and named the same way build.yml
+          # Image packages, one per target and named the same way build.yml
           # names them: keep the newest KEEP tagged builds plus whatever
           # holds `latest`, the cosign signature and SBOM attestation
           # belonging to each kept digest, and nothing else.
@@ -93,12 +93,12 @@ jobs:
             done <<<"${deletions}"
           done
 
-          # Cache package: BuildKit overwrites one tag per flavor, so only
-          # manifests tagged with a live flavor are live; anything else
+          # Cache package: BuildKit overwrites one tag per target, so only
+          # manifests tagged with a live target are live; anything else
           # (untagged leftovers, tags of a removed flavor, content-keyed hex
           # tags from the buildah era) is dead.
           pkg="$(./scripts/flavors.sh cache-image)"
-          live="$(./scripts/flavors.sh list | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          live="$(./scripts/flavors.sh targets | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "== ${pkg}"
           if versions="$(list_versions "${pkg}")"; then
             deletions="$(printf '%s' "${versions}" | jq -s 'add' | jq -r --argjson live "${live}" '

@@ -1,0 +1,6 @@
+description "libvirt, QEMU/KVM and virt-manager, with the group and relabel workarounds they need"
+
+supports "fedora"
+
+// virt-manager is wrapped out of the preloaded allocator, as in vscodium.
+after "hardened-malloc"

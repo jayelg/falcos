@@ -1,8 +1,8 @@
 ---
-# Discovers kernel_freshness.py scripts in component directories and runs
-# each one. A kernel component that wants freshness tracking ships a
+# Discovers kernel_freshness.py scripts in module directories and runs
+# each one. A kernel module that wants freshness tracking ships a
 # kernel_freshness.py in its directory; the script writes a JSON sidecar
-# next to its report with status, kernel_id and component_path.
+# next to its report with status, kernel_id and module_path.
 #
 # The workflow is source-agnostic: each script knows how to check its own
 # upstream (COPR, RPM repo, GitHub releases, etc.). The escalation
@@ -10,8 +10,8 @@
 # is the same for every kernel.
 #
 #   lag > 7 days            open/update a tracking issue
-#   lag > 14 days / EOL /   also open a PR changing the component's
-#   unpatched KEV CVE       Containerfile.part ARG KERNEL to stock
+#   lag > 14 days / EOL /   also open a PR changing the module's
+#   unpatched KEV CVE       Containerfile.inc ARG KERNEL to stock
 #   upstream catches up     close issue; if fallback was merged, open
 #                           restore PR back to custom kernel
 #
@@ -47,7 +47,7 @@ jobs:
         id: fresh
         run: |
           set -euo pipefail
-          mapfile -t scripts < <(find components -name kernel_freshness.py -type f | sort)
+          mapfile -t scripts < <(find modules -name kernel_freshness.py -type f | sort)
           if [ "${#scripts[@]}" -eq 0 ]; then
             echo "No kernel_freshness.py scripts found — nothing to check."
             echo "count=0" >> "$GITHUB_OUTPUT"
@@ -55,8 +55,8 @@ jobs:
           fi
           echo "count=${#scripts[@]}" >> "$GITHUB_OUTPUT"
           for script in "${scripts[@]}"; do
-            comp_dir="$(dirname "$script")"
-            kernel_id="$(basename "$comp_dir")"
+            mod_dir="$(dirname "$script")"
+            kernel_id="$(basename "$mod_dir")"
             echo "==> Running ${script}..."
             python3 "$script" "$RUNNER_TEMP/report-${kernel_id}.md"
           done
@@ -68,20 +68,20 @@ jobs:
           for json in "$RUNNER_TEMP"/report-*.json; do
             [ -f "$json" ] || continue
             kernel_id="$(jq -r .kernel_id "$json")"
-            comp_path="$(jq -r .component_path "$json")"
+            mod_path="$(jq -r .module_path "$json")"
             status="$(jq -r .status "$json")"
             copr_ver="$(jq -r .copr_version "$json")"
             report="${json%.json}.md"
 
             echo "==> ${kernel_id}: status=${status}"
 
-            part_file="${comp_path}/Containerfile.part"
+            part_file="${mod_path}/Containerfile.inc"
             fallback_branch="kernel-${kernel_id}-stock-fallback"
             restore_branch="kernel-${kernel_id}-restore"
             label="kernel-freshness-${kernel_id}"
 
-            # Current default: read the ARG KERNEL line from the component's
-            # Containerfile.part. stock means the fallback is active.
+            # Current default: read the ARG KERNEL line from the module's
+            # Containerfile.inc. stock means the fallback is active.
             default_kernel="custom"
             if grep -qx 'ARG KERNEL=stock' "$part_file"; then
               default_kernel="stock"
@@ -104,7 +104,7 @@ jobs:
               git commit -am "$title"
               git push -f origin "$branch"
               {
-                echo "Automated by the kernel-freshness workflow. Merging switches the ${kernel_id} component to the ${to} kernel."
+                echo "Automated by the kernel-freshness workflow. Merging switches the ${kernel_id} module to the ${to} kernel."
                 echo
                 cat "$report"
               } > "$RUNNER_TEMP/pr-body.md"

@@ -1,0 +1,84 @@
+// module configuration: Defining all of the modules included in the image builds.
+//
+// The schema is documented in modules/SCHEMA.md.
+// scripts/manifest.sh reads from this file.
+//
+// Optional build flavors
+// flavours can have the following boolean properties:
+// - default: what `just build` builds
+// - pr-build: what builds during a pull request
+flavors {
+    desktop default=#true pr-build=#true
+    laptop
+}
+
+// Modules compile into one Containerfile RUN layer each in the build Containerfile
+// (Contaienrfile.generated) in the order below. Therefore:
+// - Place less frequently updated modules earlier in the build to ensure better caching
+// - Ensure that any modules that have dependancies in other modules run first
+// Flavor specific modules are defined with the following syntax:
+// modules {
+//     flavor "flavor-name" {
+//        module "module-name"
+//    }
+// }
+modules {
+    module "base"
+    module "core/auto-updates"
+    module "core/system-just-scripts"
+    module "core/goojust"
+    module "core/flatpak"
+    module "core/brew"
+    module "core/cli-tools"
+
+    module "cli-customizations"
+    module "manage-dotfiles"
+
+    module "kernel/cachyos-kernel"
+
+    module "hardening/hardened-malloc"
+    module "hardening/sudo-hardening"
+
+    module "backup/backup-tools"
+
+    module "hardware/intel-wifi"
+    module "hardware/gaming"
+    module "hardware/hardware-tools"
+    module "hardware/logitech"
+    module "hardware/yubikey"
+
+    module "de/kde-desktop"
+    module "de/falcos-plasma-settings"
+    module "de/plasma-network-audio"
+    module "de/bazaar"
+    module "de/kde-theming"
+
+    module "media-codecs"
+    module "networking"
+
+    module "dev-tools"
+
+    module "virtualization/libvirt"
+    module "virtualization/incus"
+    module "virtualization/podman"
+
+    module "vpn/mullvad-vpn"
+    module "vpn/netbird"
+    module "vpn/tailscale"
+
+    module "apps/affinity"
+    module "apps/trivalent"
+    module "apps/vscodium"
+    module "apps/bitwarden"
+
+    flavor "desktop" {
+        module "virtualization/vfio-passthrough"
+        module "virtualization/looking-glass"
+    }
+
+    flavor "laptop" {
+        module "hardware/laptop-tweaks"
+    }
+
+    module "core/power-just-scripts" // installed after flavors for preferred justfile ordering
+}
