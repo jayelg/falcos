@@ -1,8 +1,8 @@
 //! The generated Containerfile section.
 //!
-//! One RUN layer per list entry, plus the two ARGs the phases below the
-//! section read. Everything here is resolved on the host: nothing inside
-//! the image parses a manifest.
+//! One RUN layer per build phase and one per list entry, plus the ARGs
+//! the layers below the modules read. Everything here is resolved on the
+//! host: nothing inside the image parses a manifest.
 
 use crate::diag::{Issue, Issues};
 use crate::list::{Entry, List, NO_FLAVOR};
@@ -26,6 +26,23 @@ const FLAVOR_ARG: &str = "\
 # nobody asked for. scripts/build.sh always passes one.
 ARG FLAVOR";
 
+/// CI passes the build date, so this changes every day. Declared here
+/// for the same reason as the flavor gate: in scope above the modules it
+/// would rebuild all forty of them once a day on its own, which it did
+/// until it was moved.
+const IMAGE_VERSION_ARG: &str = "\
+# ---- image version ----
+# The YYYYMMDD build date in CI. Below the modules because an ARG in
+# scope is part of the cache key of every RUN under it, whether or not
+# that RUN mentions it.
+ARG IMAGE_VERSION=dev";
+
+/// Where the module layers sit among the build phases. A phase numbered
+/// below this runs before them, one at or above runs after, which is
+/// what the prefixes on build-phases/*.sh have always looked like they
+/// meant.
+const MODULE_SLOT: u32 = 50;
+
 pub fn section(
     list: &List,
     modules: &[Module],
@@ -36,6 +53,11 @@ pub fn section(
     let mut out = String::new();
     let mut flavor_arg_emitted = false;
     let mut finalize: Vec<String> = Vec::new();
+
+    let phases = phases(root, issues);
+    for (_, file) in phases.iter().filter(|(number, _)| *number < MODULE_SLOT) {
+        let _ = write!(out, "{}\n\n", phase(file, false));
+    }
 
     for entry in &list.entries {
         let dir = root.join("modules").join(&entry.path);
@@ -95,8 +117,8 @@ pub fn section(
         }
     }
 
-    // Nothing gated, so nothing above needed it, but the flavor and
-    // finalize phases below the section still do.
+    // Nothing gated, so no module layer needed it, but the phases below
+    // them are still passed a flavor.
     if !flavor_arg_emitted {
         let _ = write!(out, "{FLAVOR_ARG}\n\n");
     }
@@ -107,11 +129,89 @@ pub fn section(
     let _ = write!(
         out,
         "# ---- finalize hook order ----\n\
-         # Modules shipping a finalize.sh, in list order, resolved on the host.\n\
+         # Modules shipping a finalize.sh, in build order, resolved on the host.\n\
          ARG FINALIZE_ORDER=\"{}\"\n\n",
         finalize.join(" ")
     );
 
+    let _ = write!(out, "{IMAGE_VERSION_ARG}\n\n");
+
+    for (_, file) in phases.iter().filter(|(number, _)| *number >= MODULE_SLOT) {
+        let _ = write!(out, "{}\n\n", phase(file, true));
+    }
+
+    out
+}
+
+/// Every build-phases/*.sh, as its number and filename, in build order.
+/// A drop-in directory: the prefix is the whole declaration, so adding a
+/// phase is adding a file.
+fn phases(root: &Path, issues: &mut Issues) -> Vec<(u32, String)> {
+    let dir = root.join("build-phases");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+
+    let mut out: Vec<(u32, String)> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".sh") || !entry.path().is_file() {
+            continue;
+        }
+        // The number is what orders the phase against the modules, so a
+        // file without one has no place to go rather than a default.
+        let number = name
+            .split_once('-')
+            .and_then(|(prefix, _)| prefix.parse::<u32>().ok());
+        match number {
+            Some(number) => out.push((number, name)),
+            None => {
+                let file = dir.join(&name).display().to_string();
+                issues.push(
+                    Issue::new(format!("`{name}` has no phase number"), &file, "")
+                        .help(format!(
+                            "name it <number>-{name}: below {MODULE_SLOT} to run before the module layers, {MODULE_SLOT} or above to run after"
+                        )),
+                );
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// One phase layer.
+///
+/// What a phase gets is decided by which side of the module layers it is
+/// on, not by the script, because the difference is a property of the
+/// build rather than of what the file happens to read.
+///
+/// A phase below the modules sees the resolved build: the flavor, the
+/// image version and the finalize hook order, plus lib and the module
+/// directories. One above them sees none of that and mounts only its own
+/// script: FLAVOR and IMAGE_VERSION are not declared yet, and binding
+/// the module tree into the first layer of the build would put every
+/// module's content in its cache key.
+fn phase(file: &str, below_modules: bool) -> String {
+    let mut out = format!(
+        "# ---- phase {file} ----\n\
+         RUN --mount=type=bind,from=ctx,source=/{file},target=/ctx/{file} \\\n    "
+    );
+    if below_modules {
+        out.push_str("--mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \\\n    ");
+        out.push_str("--mount=type=bind,from=ctx,source=/modules,target=/ctx/modules \\\n    ");
+    }
+    out.push_str(
+        "--mount=type=cache,target=/var/cache \\\n    \
+         --mount=type=cache,target=/var/log \\\n    \
+         --mount=type=tmpfs,target=/tmp \\\n    ",
+    );
+    if below_modules {
+        out.push_str(
+            "FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} FINALIZE_ORDER=\"${FINALIZE_ORDER}\" ",
+        );
+    }
+    let _ = write!(out, "/ctx/{file}");
     out
 }
 

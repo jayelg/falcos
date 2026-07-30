@@ -20,7 +20,7 @@ Anything that you want to include in an image can be packaged into a module. A m
 Modules are then explicity defined for inclusion in the image through the `modules.kdl` file.
 
 ### The build Containerfile is generated
-`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in each module as a single RUN layer in `modules.kdl` order, writing `Containerfile.generated`, which is the file builds use.
+`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in one RUN layer per module and one per build phase, writing `Containerfile.generated`, which is the file builds use. [build-phases/](build-phases) is a drop-in directory: a `*.sh` there becomes a layer, ordered by its number around the module layers, which build at 50.
 
 `Containerfile.generated` is committed, so adding a module or reordering the list shows up as the expanded build in the same diff. Every build regenerates it first and lint fails if the committed copy is stale, so it cannot drift from `modules.kdl`.
 
