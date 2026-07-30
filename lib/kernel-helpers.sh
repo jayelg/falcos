@@ -1,7 +1,8 @@
 #!/bin/bash
 # Kernel-agnostic helper, sourced wherever the running kernel version is
 # needed. The kernel variant, its COPR and its package names live in the
-# kernel module, at /usr/lib/falcos/kernel-devel-helpers.sh.
+# kernel module, which ships them to /usr/libexec/kernel-devel-helpers.sh
+# for as long as the build needs them.
 
 # Prints the running kernel version by asking rpm about the package
 # recorded in the contract file the kernel module writes. Falls back to
