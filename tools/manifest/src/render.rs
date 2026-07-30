@@ -461,7 +461,10 @@ fn standard(
     }
 
     // Declared packages, one dnf5 install per unique (family, enablerepo)
-    // group, chained with && before the module runner.
+    // group, chained with && before the module runner. Above the env
+    // prefix, not below it: a `VAR=x cmd1 && cmd2` prefix binds to cmd1
+    // alone, so an env written before the install would never reach the
+    // runner.
     let packages_cmd = packages_install(module);
 
     let path = &entry.path;
@@ -473,15 +476,16 @@ fn standard(
          --mount=type=cache,target=/var/cache \\\n    \
          --mount=type=cache,target=/var/log \\\n    \
          --mount=type=tmpfs,target=/tmp \\\n    \
-         {secrets}{assets}{env}{packages_cmd}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
+         {secrets}{packages_cmd}{assets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
     );
     out
 }
 
 /// The dnf5 install commands for declared packages, if any. One command
-/// per unique (family, enablerepo) group, each ending with ` && ` so the
-/// runner still executes when there are none. On Fedora the verb is
-/// always dnf5; a second family would pick its own.
+/// per unique (family, enablerepo) group, each ending with ` && ` and a
+/// continuation, so what follows is the runner with its own env prefix on
+/// a line of its own. On Fedora the verb is always dnf5; a second family
+/// would pick its own.
 fn packages_install(module: Option<&Module>) -> String {
     let groups = match module {
         Some(m) if !m.packages.is_empty() => m.packages.as_slice(),
@@ -492,10 +496,13 @@ fn packages_install(module: Option<&Module>) -> String {
         let pkgs = group.packages.join(" ");
         match &group.enablerepo {
             Some(repo) => {
-                let _ = write!(out, "dnf5 install -y --enablerepo='{repo}' {pkgs} && ");
+                let _ = write!(
+                    out,
+                    "dnf5 install -y --enablerepo='{repo}' {pkgs} && \\\n    "
+                );
             }
             None => {
-                let _ = write!(out, "dnf5 install -y {pkgs} && ");
+                let _ = write!(out, "dnf5 install -y {pkgs} && \\\n    ");
             }
         }
     }
