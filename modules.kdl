@@ -48,6 +48,16 @@ flavors {
 //        module "module-name"
 //    }
 // }
+// A module from another repository is pinned on its entry, and fetched
+// into modules/.remote/ at generate time:
+// module "module-name" {
+//     source "https://host/owner/repo/archive/refs/tags/{ref}.tar.gz" {
+//         renovate datasource="github-tags" depName="owner/repo"
+//         ref "module-name/v1.0.0"
+//         sha256 "..."
+//         path "modules/module-name"
+//     }
+// }
 modules {
     module "base"
     module "core/signature-policy"

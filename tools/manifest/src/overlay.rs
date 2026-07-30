@@ -20,7 +20,7 @@ pub fn check(modules: &[Module], root: &Path, issues: &mut Issues) {
     // Image path to the modules shipping it, in build order.
     let mut shipped: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (index, module) in modules.iter().enumerate() {
-        let overlay = root.join("modules").join(&module.path).join("files");
+        let overlay = root.join("modules").join(&module.dir).join("files");
         for path in overlay_paths(&overlay) {
             shipped.entry(path).or_default().push(index);
         }

@@ -353,7 +353,10 @@ pub fn parse(node: &KdlNode, file: &str, text: &str, issues: &mut Issues) -> Opt
 /// annotations these replace silently stopped matching the last two times
 /// a path moved. Nothing here reaches the build, which is why the fields
 /// are validated and then dropped.
-fn check_renovate(node: &KdlNode, file: &str, text: &str, issues: &mut Issues) {
+///
+/// Shared with the out-of-tree module pins, which are tracked the same
+/// way and by the same three datasources.
+pub fn check_renovate(node: &KdlNode, file: &str, text: &str, issues: &mut Issues) {
     let span = node.name().span();
     let mut datasource = None;
     let mut dep_name = None;

@@ -4,6 +4,7 @@
 //! with which options set. Everything a module must not decide for itself.
 
 use crate::diag::{Issue, Issues};
+use crate::remote::{self, Remote, REMOTE_DIR};
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use miette::SourceSpan;
 
@@ -58,7 +59,24 @@ pub struct Entry {
     /// module declares, not here: what a module accepts is not something
     /// this file can know.
     pub options: Vec<(String, Vec<KdlValue>, SourceSpan)>,
+    /// The pin, for a module that lives outside this repository. Absent
+    /// means in tree, which is why nothing about an existing entry
+    /// changes.
+    pub remote: Option<Remote>,
     pub span: SourceSpan,
+}
+
+impl Entry {
+    /// Where the module's directory is, relative to `modules/`. The same
+    /// as its list path in tree; under the fetch directory when it is
+    /// pinned from elsewhere, so the mount in the generated Containerfile
+    /// says which one a layer is built from.
+    pub fn dir(&self) -> String {
+        match self.remote {
+            Some(_) => format!("{REMOTE_DIR}/{}", self.path),
+            None => self.path.clone(),
+        }
+    }
 }
 
 pub struct List {
@@ -70,11 +88,6 @@ pub struct List {
     pub flavors: Vec<Flavor>,
     pub entries: Vec<Entry>,
 }
-
-/// Reserved for out-of-tree modules. Claimed now so that adding fetching
-/// later is not a format change, and rejected until then so nobody writes
-/// one expecting it to work.
-const RESERVED: [&str; 3] = ["source", "ref", "sha256"];
 
 fn is_flavor_name(name: &str) -> bool {
     let mut chars = name.chars();
@@ -437,14 +450,6 @@ impl List {
             let Some(key) = entry.name().map(|n| n.value()) else {
                 continue; // the path itself
             };
-            if RESERVED.contains(&key) {
-                issues.push(
-                    Issue::new(format!("`{key}` is reserved and not implemented"), file, text)
-                        .at(entry.span(), "cannot be used yet")
-                        .help("source, ref and sha256 are claimed for out-of-tree modules so that adding them later is not a format change"),
-                );
-                continue;
-            }
             match key {
                 "variant" => match entry.value().as_string() {
                     Some(v) => variant = Some(v.to_string()),
@@ -461,31 +466,54 @@ impl List {
             }
         }
 
-        // Carried unvalidated: what a module accepts is declared in its own
+        // Every child is an option except the pin. Options are carried
+        // unvalidated: what a module accepts is declared in its own
         // manifest, which is checked against these once both are loaded.
-        let options = node
-            .children()
-            .map(|c| c.nodes())
-            .unwrap_or_default()
-            .iter()
-            .map(|opt| {
-                (
-                    opt.name().value().to_string(),
-                    opt.entries()
-                        .iter()
-                        .filter(|e| e.name().is_none())
-                        .map(|e| e.value().clone())
-                        .collect(),
-                    opt.name().span(),
-                )
-            })
-            .collect();
+        let mut options = Vec::new();
+        let mut pin: Option<Remote> = None;
+        for child in node.children().map(|c| c.nodes()).unwrap_or_default() {
+            if child.name().value() == "source" {
+                if let Some(first) = pin.as_ref().map(|p| p.span) {
+                    issues.push(
+                        Issue::new(format!("`{path}` is pinned twice"), file, text)
+                            .at(first, "first here")
+                            .at(child.name().span(), "and again here"),
+                    );
+                    continue;
+                }
+                pin = remote::parse(child, file, text, issues);
+                continue;
+            }
+            options.push((
+                child.name().value().to_string(),
+                child
+                    .entries()
+                    .iter()
+                    .filter(|e| e.name().is_none())
+                    .map(|e| e.value().clone())
+                    .collect(),
+                child.name().span(),
+            ));
+        }
+
+        // A fetched module is one directory under the fetch root, so its
+        // name is a single path segment. It is also the module's identity
+        // in the summary, the finalize order and every diagnostic, which
+        // is the other reason it is not free-form.
+        if pin.is_some() && !is_flavor_name(&path) {
+            issues.push(
+                Issue::new(format!("invalid module name `{path}`"), file, text)
+                    .at(node.name().span(), "must be lowercase letters, digits and dashes, starting with a letter")
+                    .help(format!("a pinned module is fetched into modules/{REMOTE_DIR}/<name>, so its name is one path segment rather than a path")),
+            );
+        }
 
         Some(Entry {
             path,
             flavor,
             variant,
             options,
+            remote: pin,
             span: node.name().span(),
         })
     }
