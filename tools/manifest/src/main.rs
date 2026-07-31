@@ -65,15 +65,17 @@ fn main() -> ExitCode {
         }
     };
     // Commands whose answer differs per target, and those that take one
-    // argument (a path or a target).
+    // argument (a path or a target). `check` is in neither: it validates
+    // every target at once, so an argument to it is a mistake rather than
+    // a filter, and accepting one silently answered a question nobody
+    // asked.
     const PER_TARGET: [&str; 4] = ["summary", "assets", "secrets", "contract-files"];
-    const ONE_ARG: [&str; 6] = [
+    const ONE_ARG: [&str; 5] = [
         "summary",
         "assets",
         "secrets",
         "contract-files",
         "find-provider",
-        "check",
     ];
     let target = args.get(1).map(String::as_str);
     if target.is_some() && !ONE_ARG.contains(&command) {
@@ -122,6 +124,23 @@ fn main() -> ExitCode {
     overlay::check(&modules, &root, &mut issues);
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
+    // An unknown target is the same mistake whichever command was asked,
+    // so it is reported once here rather than in an arm apiece. Gated on
+    // PER_TARGET rather than on `target` being set, because find-provider
+    // takes a path and would otherwise be told its path is not a flavor.
+    if PER_TARGET.contains(&command) {
+        if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
+            issues.push(
+                diag::Issue::new(
+                    format!("`{unknown}` is not a build target"),
+                    &list_display,
+                    &list.text,
+                )
+                .help(format!("targets: {}", list.targets().join(", "))),
+            );
+        }
+    }
+
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
@@ -145,49 +164,10 @@ fn main() -> ExitCode {
             };
             render::find_provider(&list, &modules, path)
         }
-        "secrets" => {
-            if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-                issues.push(
-                    diag::Issue::new(
-                        format!("`{unknown}` is not a build target"),
-                        &list_display,
-                        &list.text,
-                    )
-                    .help(format!("targets: {}", list.targets().join(", "))),
-                );
-            }
-            render::secrets(&list, &modules, target)
-        }
-        "contract-files" => {
-            if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-                issues.push(
-                    diag::Issue::new(
-                        format!("`{unknown}` is not a build target"),
-                        &list_display,
-                        &list.text,
-                    )
-                    .help(format!("targets: {}", list.targets().join(", "))),
-                );
-            }
-            render::contract_files(&list, &modules, target)
-        }
-        "summary" | "assets" => {
-            if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-                issues.push(
-                    diag::Issue::new(
-                        format!("`{unknown}` is not a build target"),
-                        &list_display,
-                        &list.text,
-                    )
-                    .help(format!("targets: {}", list.targets().join(", "))),
-                );
-            }
-            if command == "summary" {
-                render::summary(&list, &modules, target)
-            } else {
-                render::assets(&list, &modules, target)
-            }
-        }
+        "secrets" => render::secrets(&list, &modules, target),
+        "contract-files" => render::contract_files(&list, &modules, target),
+        "summary" => render::summary(&list, &modules, target),
+        "assets" => render::assets(&list, &modules, target),
         other => {
             eprintln!("manifest: unknown command `{other}`");
             eprint!("{USAGE}");
