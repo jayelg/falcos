@@ -477,6 +477,8 @@ COPY cosign.pub /etc/pki/containers/cosign.pub
 ## Verify final image and contents are correct. Every check here is a
 ## pre-publish gate: a failure stops the image before it is signed and
 ## pushed to the tag users track.
-COPY --from=ctx /lib/validate-image.sh /usr/libexec/validate-image.sh
+## Bind mounted and run through bash, the way every module layer runs, so
+## the validator needs no execute bit and leaves nothing in the image.
 RUN bootc container lint
-RUN /usr/libexec/validate-image.sh
+RUN --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    bash /ctx/lib/validate-image.sh
