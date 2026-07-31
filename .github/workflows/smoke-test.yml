@@ -71,6 +71,12 @@ jobs:
 
       # Headless qemu boot with port 2222 forwarded to guest SSH. An
       # overlay keeps the base qcow2 unchanged across runs.
+      #
+      # The serial console goes to a file rather than to stdout: qemu is
+      # backgrounded, so anything it writes after this step returns is
+      # lost, and a VM that never reaches sshd is exactly the case where
+      # the console is the only evidence of why. -display none rather
+      # than -nographic, which would claim the serial port for stdio.
       - name: Boot VM under qemu
         run: |
           qemu-img create -f qcow2 \
@@ -83,16 +89,20 @@ jobs:
             -smp 2 \
             -cpu host \
             -enable-kvm \
-            -nographic \
+            -display none \
+            -serial "file:${RUNNER_TEMP}/console.log" \
             -drive file="${RUNNER_TEMP}/overlay.qcow2",if=virtio,format=qcow2 \
             -nic user,hostfwd=tcp::2222-:22 \
             &
           QEMU_PID=$!
           echo "qemu_pid=${QEMU_PID}" >> "$GITHUB_ENV"
 
-      # The VM needs time for the kernel and sshd to start.
+      # The VM needs time for the kernel and sshd to start. 30 attempts of
+      # a 5 second connect plus a 10 second sleep is 450 seconds at worst,
+      # so the step timeout has to be above that or the runner kills the
+      # loop before it has taken all the attempts it says it will.
       - name: Wait for SSH
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           for i in $(seq 30); do
             if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
@@ -117,14 +127,17 @@ jobs:
           echo "==> bootc status"
           s bootc status || { echo "FAIL: bootc status"; exit 1; }
 
+          # Only `running`. `degraded` means at least one unit failed,
+          # which the next assertion refuses anyway, so accepting it here
+          # was tolerance that could never be exercised.
           echo "==> systemctl is-system-running"
           state="$(s systemctl is-system-running)" || true
           case "$state" in
-            running | degraded)
+            running)
               echo "system state: ${state}"
               ;;
             *)
-              echo "FAIL: system state is '${state}', expected running or degraded" >&2
+              echo "FAIL: system state is '${state}', expected running" >&2
               exit 1
               ;;
           esac
@@ -137,6 +150,18 @@ jobs:
             exit 1
           fi
           echo "No failed units"
+
+      # The point of capturing the console: on a VM that never reached
+      # sshd there is nothing else to read, and the run is weekly, so
+      # there is no cheap way to reproduce it by hand.
+      - name: Serial console
+        if: failure()
+        run: |
+          if [ -s "${RUNNER_TEMP}/console.log" ]; then
+            cat "${RUNNER_TEMP}/console.log"
+          else
+            echo "the VM wrote nothing to the serial console"
+          fi
 
       - name: Stop qemu
         if: always()
