@@ -66,9 +66,28 @@ for bin in bootc systemctl rpm-ostree; do
     fi
 done
 
+# Enablement symlinks for a unit under a config root. WantedBy and
+# RequiredBy land in <target>.wants/ and <target>.requires/ one level
+# down, an [Install] Alias lands beside them at the root, and a mask is a
+# link to /dev/null rather than enablement.
+enablement_links() {
+    local root="$1" unit="$2" link
+    [ -d "$root" ] || return 0
+    while IFS= read -r link; do
+        [ -n "$link" ] || continue
+        [ "$(readlink "$link")" = /dev/null ] && continue
+        printf '%s\n' "$link"
+    done < <(find "$root" -maxdepth 2 -name "$unit" -type l 2>/dev/null || true)
+}
+
 # systemd unit verification
-# Every unit referenced by a preset must exist as a file. System
-# units also pass through systemd-analyze verify, but its dependency
+# Every unit referenced by a preset must exist as a file, and the preset
+# must actually have been applied: 99-finalize.sh runs systemctl enable
+# and disable, which write and remove symlinks under /etc/systemd/<scope>,
+# so those symlinks are the evidence. Reading them off disk is what makes
+# this an assertion about enablement rather than about a unit merely
+# existing, and it needs no PID 1, which a container build has not got.
+# System units also pass through systemd-analyze verify, but its dependency
 # warnings are not fatal: device and mount units don't exist in a
 # container build. User units skip verify because --user needs a
 # running user manager. Unit files are found with find because
@@ -99,16 +118,27 @@ for scope in system user; do
                 continue
             fi
 
+            # systemctl enable and --global enable write here, and
+            # systemctl disable removes what it wrote.
+            config_root="/etc/systemd/${scope}"
+            links="$(enablement_links "$config_root" "$unit")"
+            if [ "$verb" = "enable" ] && [ -z "$links" ]; then
+                fail "${unit}: preset enables it, but nothing under ${config_root} does"
+            elif [ "$verb" = "disable" ] && [ -n "$links" ]; then
+                fail "${unit}: preset disables it, but ${config_root} still enables it:" \
+                    "$(echo "$links" | tr '\n' ' ')"
+            fi
+
             if [ "$scope" = "system" ] && [ "$verb" = "enable" ]; then
                 if out="$(systemd-analyze verify --no-pager "$unit" 2>&1)"; then
-                    echo "        ${unit} ok"
+                    echo "        ${unit} enabled"
                 else
-                    echo "        ${unit} verify notes:"
+                    echo "        ${unit} enabled, verify notes:"
                     # shellcheck disable=SC2001
                     echo "$out" | sed 's/^/          /' >&2 || true
                 fi
             else
-                echo "        ${unit} ok (exists)"
+                echo "        ${unit} ${verb}d"
             fi
         done < "$preset"
     done
