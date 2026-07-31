@@ -64,17 +64,6 @@ jobs:
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
 
-  # Confirms the runner has KVM, which the VM smoke test depends on.
-  # A runner losing /dev/kvm silently breaks the boot test rather than
-  # failing the build, so this surfaces it directly.
-  kvm-probe:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Check /dev/kvm
-        run: test -e /dev/kvm
-
   # Unit tests for kernel-freshness scripts discovered in module dirs
   script-tests:
     runs-on: ubuntu-24.04

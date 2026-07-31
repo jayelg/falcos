@@ -18,6 +18,13 @@ jobs:
       contents: read
       packages: read
     steps:
+      # This workflow is the only thing in the repo that needs KVM: the
+      # boot below is qemu with -enable-kvm and -cpu host. Checked first,
+      # so a runner without it fails in a second with a clear reason
+      # rather than after the pull and the disk image build.
+      - name: Check /dev/kvm
+        run: test -e /dev/kvm
+
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
