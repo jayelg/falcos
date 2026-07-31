@@ -9,6 +9,22 @@
 # reads modules.kdl and build-phases/. What stays here is the part that is
 # about this file rather than about the manifest: finding the markers, and
 # keeping the parser directive on line one.
+#
+# The skeleton lives beside this script rather than at the repository
+# root. It holds no decisions about the image and is not a file anyone
+# edits to change one — the base image, the modules and the build phases
+# are all declared elsewhere and spliced in — so at the root it was a
+# second Containerfile that looked editable and was not. What is left in
+# it is the frame around the build: the parser directive, the context
+# stage and the pre-publish lint gate. The root keeps one Containerfile,
+# Containerfile.generated, which is the one that actually builds.
+#
+# The lint gate stayed in the skeleton rather than becoming a build phase.
+# A phase layer is handed cache mounts over /var/cache and /var/log, a
+# tmpfs over /tmp and the whole module tree, and `bootc container lint`
+# should see the image as it will ship rather than with four mounts over
+# it. It is also a gate: unconditional and last, which a listed, numbered,
+# reorderable phase would stop being.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,7 +32,7 @@ cd "$(dirname "$0")/.."
 begin='# ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----'
 end='# ---- END GENERATED ----'
 
-skeleton=Containerfile.template
+skeleton=scripts/Containerfile.skeleton
 out=Containerfile.generated
 
 if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then

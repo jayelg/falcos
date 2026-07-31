@@ -94,6 +94,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.set.outputs.targets }}
+      base_provides: ${{ steps.set.outputs.base_provides }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -111,6 +112,13 @@ jobs:
           targets="$(./scripts/flavors.sh "$selection" \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+
+          # What the base image itself brings, declared in modules.kdl.
+          # Resolved once here rather than per matrix leg, since it is a
+          # property of the base and not of the target being built.
+          provides="$(./scripts/manifest.sh base-provides \
+            | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          echo "base_provides=${provides}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
@@ -215,14 +223,15 @@ jobs:
       # the tag and stamp the digest onto the image as the OCI base
       # annotations: no gate, but every published falcos image then carries
       # an auditable record of exactly which fedora-bootc digest produced it.
-      # Base ref is read from the Containerfile FROM so the two can't drift.
-      # Resolved seconds before the build; quay only moves the tag on a new
-      # compose, so the window doesn't realistically race.
+      # Base ref comes from the manifest, which is also what the generated
+      # FROM is emitted from, so the two can't drift. Resolved seconds
+      # before the build; quay only moves the tag on a new compose, so the
+      # window doesn't realistically race.
       - name: Resolve base image digest
         id: base
         run: |
           set -euo pipefail
-          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.template | head -1)"
+          base="$(./scripts/manifest.sh base-image)"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
           echo "name=${base}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
@@ -242,7 +251,7 @@ jobs:
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.target }})
             org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.template
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.generated
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
@@ -543,8 +552,15 @@ jobs:
       # bootc upgrade only downloads what changed. rpm-ostree runs from the
       # image itself so the chunker matches the ostree stack it operates
       # on; rootless is blocked upstream (coreos/rpm-ostree#5346).
+      #
+      # `rpm-ostree compose build-chunked-oci` is the rpm-ostree way of
+      # doing this, so the step asks the manifest whether the base provides
+      # `rechunking` rather than assuming every base ships rpm-ostree. A
+      # base that does not declare it is published unchunked: a larger
+      # first pull, not a failed build.
       - name: Rechunk image
-        if: env.PUBLISH == 'true'
+        id: rechunk
+        if: env.PUBLISH == 'true' && contains(fromJSON(needs.compute-matrix.outputs.base_provides), 'rechunking')
         run: |
           sudo podman run --rm --privileged ${{ steps.runtime.outputs.flag }} \
             --volume /var/lib/containers:/var/lib/containers \
@@ -559,6 +575,9 @@ jobs:
           echo "==> Disk at peak (raw + chunked both present)"
           df -h /
           sudo podman rmi "localhost/${IMAGE_NAME}:raw"
+          # What the push step copies from. Set here rather than assumed,
+          # because :chunked only exists if this step ran.
+          echo "tag=chunked" >> "$GITHUB_OUTPUT"
 
       # The docker login above only covers the runner user; the sudo
       # skopeo push needs root credentials.
@@ -576,16 +595,21 @@ jobs:
       # upload throws away a 45 minute build and a rechunk. Deliberately
       # no --retry-delay, which would swap skopeo's exponential backoff
       # for a fixed one, and backoff is what rides out a registry blip.
-      - name: Push chunked image
+      - name: Push image
         id: push
         if: env.PUBLISH == 'true'
+        env:
+          # :chunked when the rechunk step ran, :raw when the base does not
+          # declare `rechunking` and it was skipped. The rest of the push
+          # is the same either way.
+          SOURCE_TAG: ${{ steps.rechunk.outputs.tag || 'raw' }}
         run: |
           digest=""
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
             if [ -z "$digest" ]; then
               sudo skopeo copy --retry-times 5 \
-                "containers-storage:localhost/${IMAGE_NAME}:chunked" \
+                "containers-storage:localhost/${IMAGE_NAME}:${SOURCE_TAG}" \
                 "docker://${tag}" --digestfile "${RUNNER_TEMP}/digestfile"
               digest="$(cat "${RUNNER_TEMP}/digestfile")"
             else
@@ -645,6 +669,11 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           IMAGE_DIGEST="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+          # The key moved into the module that owns the signing policy, so
+          # its repo path is asked for rather than written down here, the
+          # way the Justfile resolves the Secure Boot cert.
+          key="modules/$(./scripts/manifest.sh find-provider /etc/pki/containers/cosign.pub)/files/etc/pki/containers/cosign.pub"
+          [ -f "$key" ] || { echo "no module provides the cosign key" >&2; exit 1; }
           # stdout discarded on both: what verification says is on stderr
           # and in the exit code, while stdout is the payload echoed back.
           # For the attestation that payload is the whole decoded SBOM

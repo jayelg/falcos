@@ -35,9 +35,16 @@ A manifest declares *facts*, not *file layout*.
 
 ## modules.kdl
 
-Two top-level nodes. `flavors` is optional; `modules` is required.
+Three top-level nodes. `flavors` is optional; `base` and `modules` are
+required.
 
 ```kdl
+base "quay.io/fedora/fedora-bootc:44" {
+    family "fedora"
+    provides "rechunking" "initramfs-generation" "mac-policy"
+    provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
+}
+
 flavors {
     // default marks the flavor `just build` and a bare scripts/build.sh
     // produce. A build-order convenience and nothing more: it makes no
@@ -82,6 +89,32 @@ One RUN layer per entry, in the order [Build order](#build-order)
 resolves, which is document order wherever the graph says nothing.
 Nesting rather than INI-style section headers makes "outside a flavor
 block means ungated" structural instead of positional.
+
+### `base`
+
+The image every layer builds on, and what building on it may assume. The
+argument is the full reference, emitted verbatim as the `FROM` in
+`Containerfile.generated`: this file is the only place the image is
+named, so the declaration and the build cannot drift.
+
+| Child | Meaning |
+| --- | --- |
+| `family` | which distro's packaging and tooling modules may assume. Checked against every enabled module's `supports`. Required. |
+| `provides` | capabilities the base satisfies that no module could implement portably. A module may `require` one; nothing has to provide it. |
+| `provides-file` | absolute paths to binaries the base guarantees. Checked on the finished image alongside the modules' own [contract files](#contract-files). |
+
+Declared rather than derived. The family used to be recovered by looking
+for the string `fedora` in the `FROM` line, which meant it could only
+ever answer `fedora` and quietly did so even for an image that was not
+Fedora at all. The capabilities used to be a constant in the checker,
+populated after the modules were read, so a module declaring one of those
+names shadowed the base with no duplicate-provider warning. Both are
+decisions about the image, so both are made in the image author's file.
+
+Renovate tracks the reference here through a custom manager, and the
+`FROM` it produces in `Containerfile.generated` through the built-in
+Dockerfile one; the two carry the same name and version, so a bump
+updates both in a single PR.
 
 ### `flavors`
 
@@ -225,6 +258,12 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
+
+The [`base`](#base) node declares them too, for the binaries the base
+image guarantees. They join the same union `manifest contract-files`
+answers with, so the in-image check has one list to walk and no paths of
+its own. They are not filtered by target: they are true of every image
+built on that base.
 
 `build-only` says how long the path lives, not whether it is a contract.
 `/usr/libexec/kernel-devel-helpers.sh` is the one today: the kernel module
@@ -666,6 +705,9 @@ Lint fails on all of these, in seconds, before anything builds.
 - a `modules.kdl` entry that does not resolve to a module directory
 - a module directory without a `module.kdl`, or one missing
   `description` or `supports`
+- no `base` node, a `base` declared twice, one with no image reference or
+  no `family`, or a `provides-file` on it that is not an absolute path
+- an enabled module whose `supports` does not include the base `family`
 
 **Flavors**
 
@@ -680,6 +722,8 @@ Lint fails on all of these, in seconds, before anything builds.
   would satisfy it
 - a `requires-file` no enabled module provides
 - two enabled modules providing the same capability or contract file
+- a module providing something the `base` node already provides
+- a module shipping `selinux/*.te` without `requires "mac-policy"`
 - a requirement satisfied only by a module gated to another flavor
 - a cycle, naming the edges that close it
 

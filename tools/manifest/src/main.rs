@@ -18,7 +18,7 @@ mod overlay;
 mod render;
 
 use list::List;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -27,6 +27,10 @@ usage: manifest <command>
 Output is one item per line, in declaration order, except where a command
 says otherwise.
 
+  base-image        the base image reference, which the generated FROM uses
+  base-family       the base family every module's `supports` is checked
+                    against
+  base-provides     every capability the base image itself provides
   flavors           every declared flavor
   default-flavor    the flavor marked default, which builds use when none
                     is given; nothing when no flavors are declared
@@ -37,9 +41,11 @@ says otherwise.
                     when no target is given
   assets [target]   every pinned asset, pipe separated: module, name,
                     manifest, version, sha256, hash source, resolved URL
-  find-provider <abs-path>
+  find-provider <abs-path> [target]
                     the module that provides a contract file path; nothing
-                    when none does
+                    when none does. Per target when one is given, because
+                    a path provided only by a gated module is not provided
+                    on every target
   secrets [target]  every secret ID an enabled module declares, unique;
                     per target when one is given
   contract-files [target]
@@ -64,28 +70,31 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // Commands whose answer differs per target, and those that take one
-    // argument (a path or a target). `check` is in neither: it validates
-    // every target at once, so an argument to it is a mistake rather than
-    // a filter, and accepting one silently answered a question nobody
-    // asked.
+    // Commands taking an optional target to answer for. `check` is not
+    // among them: it validates every target at once, so an argument to it
+    // is a mistake rather than a filter, and accepting one silently
+    // answered a question nobody asked.
+    //
+    // `find-provider` takes a path first and the optional target after
+    // it, because which module provides a path is a per-target question
+    // in the same way the rest of these are.
     const PER_TARGET: [&str; 4] = ["summary", "assets", "secrets", "contract-files"];
-    const ONE_ARG: [&str; 5] = [
-        "summary",
-        "assets",
-        "secrets",
-        "contract-files",
-        "find-provider",
-    ];
-    let target = args.get(1).map(String::as_str);
-    if target.is_some() && !ONE_ARG.contains(&command) {
-        eprintln!("manifest: `{command}` takes no arguments");
+    let path_first = command == "find-provider";
+    let max_args = usize::from(path_first) + usize::from(path_first || PER_TARGET.contains(&command));
+    if args.len() - 1 > max_args {
+        eprintln!(
+            "manifest: `{command}` takes {}",
+            match max_args {
+                0 => "no arguments".to_string(),
+                1 => "at most one argument".to_string(),
+                n => format!("at most {n} arguments"),
+            }
+        );
         return ExitCode::FAILURE;
     }
-    if args.len() > 2 {
-        eprintln!("manifest: `{command}` takes at most one argument");
-        return ExitCode::FAILURE;
-    }
+    // Always a build target, whichever position it arrived in, so one
+    // check below covers every command that accepts one.
+    let target = args.get(1 + usize::from(path_first)).map(String::as_str);
 
     let root = PathBuf::from(std::env::var("FALCOS_ROOT").unwrap_or_else(|_| ".".into()));
     let list_path = root.join("modules.kdl");
@@ -110,47 +119,44 @@ fn main() -> ExitCode {
         .filter_map(|entry| module::Module::load(entry, &list, &root, &mut issues))
         .collect();
 
-    // The base family this build targets, derived from the Containerfile
-    // skeleton or set explicitly. Validated against each module's
-    // `supports` so a portability gap surfaces at lint rather than
-    // mid-build.
-    let base_family = base_family(&root);
-
     // From here down, list order is build order: the graph has already
     // had its say, so nothing else needs to know the two ever differed.
     let order = order::sort(&list, &modules, &mut issues);
     order::apply(&mut list, &mut modules, &order);
-    module::check_graph(&modules, &root, &base_family, &mut issues);
+    module::check_graph(&modules, &list, &root, &mut issues);
     overlay::check(&modules, &root, &mut issues);
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
     // An unknown target is the same mistake whichever command was asked,
-    // so it is reported once here rather than in an arm apiece. Gated on
-    // PER_TARGET rather than on `target` being set, because find-provider
-    // takes a path and would otherwise be told its path is not a flavor.
-    if PER_TARGET.contains(&command) {
-        if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-            issues.push(
-                diag::Issue::new(
-                    format!("`{unknown}` is not a build target"),
-                    &list_display,
-                    &list.text,
-                )
-                .help(format!("targets: {}", list.targets().join(", "))),
-            );
-        }
+    // so it is reported once here rather than in an arm apiece.
+    if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
+        issues.push(
+            diag::Issue::new(
+                format!("`{unknown}` is not a build target"),
+                &list_display,
+                &list.text,
+            )
+            .help(format!("targets: {}", list.targets().join(", "))),
+        );
     }
 
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
+        "base-image" => lines(list.base.as_ref().map(|b| b.image.clone())),
+        "base-family" => lines(list.base.as_ref().map(|b| b.family.clone())),
+        "base-provides" => lines(
+            list.base
+                .iter()
+                .flat_map(|b| b.provides.iter())
+                .map(|d| d.name.clone()),
+        ),
         "flavors" => lines(list.flavors.iter().map(|f| f.name.clone())),
         "default-flavor" => lines(list.default_flavor().map(str::to_string)),
         "pr-flavor" => lines(list.pr_flavor().map(str::to_string)),
         "targets" => lines(list.targets()),
         "section" | "check" => {
-            let section =
-                render::section(&list, &modules, &collected, &root, &base_family, &mut issues);
+            let section = render::section(&list, &modules, &collected, &root, &mut issues);
             if command == "check" {
                 String::new()
             } else {
@@ -158,11 +164,11 @@ fn main() -> ExitCode {
             }
         }
         "find-provider" => {
-            let Some(path) = target else {
+            let Some(path) = args.get(1) else {
                 eprintln!("manifest: find-provider needs an absolute path");
                 return ExitCode::FAILURE;
             };
-            render::find_provider(&list, &modules, path)
+            render::find_provider(&list, &modules, path, target)
         }
         "secrets" => render::secrets(&list, &modules, target),
         "contract-files" => render::contract_files(&list, &modules, target),
@@ -195,39 +201,4 @@ fn lines(items: impl IntoIterator<Item = String>) -> String {
         .map(|s| s + "\n")
         .collect::<Vec<_>>()
         .concat()
-}
-
-/// The base family this build targets. Derived from the `FROM` line in
-/// Containerfile.template, or overridden with `BASE_FAMILY`.
-/// "fedora" is the only one today; a second would be a porting effort.
-fn base_family(root: &Path) -> String {
-    if let Ok(family) = std::env::var("BASE_FAMILY") {
-        if !family.is_empty() {
-            return family;
-        }
-    }
-    let template = root.join("Containerfile.template");
-    if let Ok(text) = std::fs::read_to_string(&template) {
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("FROM ") {
-                let image = trimmed
-                    .strip_prefix("FROM ")
-                    .unwrap_or(trimmed)
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("");
-                // quay.io/fedora/fedora-bootc:44 -> fedora
-                if let Some(family) = image
-                    .split('/')
-                    .find(|seg| *seg == "fedora")
-                    .map(|s| s.to_string())
-                {
-                    return family;
-                }
-            }
-        }
-    }
-    // The only base today; a second one would be explicit.
-    "fedora".to_string()
 }

@@ -1,3 +1,8 @@
 description "Trivalent, secureblue's hardened Chromium fork"
 
 supports "fedora"
+
+// selinux/trivalent_local_fixes.te is compiled and installed by
+// lib/run-module.sh, which needs the base image's SELinux toolchain and a
+// policy store to install into. Neither is something a module can provide.
+requires "mac-policy"

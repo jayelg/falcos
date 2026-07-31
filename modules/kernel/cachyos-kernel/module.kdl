@@ -17,6 +17,12 @@ provides-file "/usr/libexec/kernel-devel-helpers.sh" build-only=#true
 // The initramfs is built here, once, in this module's finalize hook. A
 // module that needs a dracut module in it ships a dracut.modules naming
 // it rather than rebuilding the initramfs itself.
+//
+// Building it at all needs the base image's dracut and its ostree
+// integration, which is what `initramfs-generation` names. No module can
+// provide that, so swapping the kernel is only possible on a base that
+// declares it.
+requires "initramfs-generation"
 collects "dracut.modules" into="/usr/lib/falcos/dracut.modules"
 
 // The kernel variant the fragment declares, and the optional MOK key the

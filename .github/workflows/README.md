@@ -14,7 +14,7 @@ Each build job writes the resolved module set for its target to the run summary,
 
 Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
 
-Each published digest also carries a syft SPDX SBOM as a cosign in-toto attestation, verifiable with `cosign verify-attestation --key cosign.pub --type spdxjson --insecure-ignore-tlog=true <image>` (the flag skips the Rekor transparency-log check, which this key-based flow doesn't use — trust comes from the key).
+Each published digest also carries a syft SPDX SBOM as a cosign in-toto attestation, verifiable with `cosign verify-attestation --key modules/core/signature-policy/files/etc/pki/containers/cosign.pub --type spdxjson --insecure-ignore-tlog=true <image>` (the flag skips the Rekor transparency-log check, which this key-based flow doesn't use — trust comes from the key). The key lives in the module that owns the signing policy rather than at the repo root; on an installed machine the same file is at `/etc/pki/containers/cosign.pub`.
 
 The attested document is the package inventory. The full file-level SBOM, which also records which package owns each path, is 148MB and cannot be attested: cosign refuses an attestation layer over 128MiB, and raising `COSIGN_MAX_ATTACHMENT_SIZE` would only move the problem to every consumer. It is uploaded as the `sbom-falcos-<flavor>` build artifact instead.
 
@@ -40,7 +40,7 @@ Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV 
 
 Daily watch for the day `quay.io/fedora/fedora-bootc` starts publishing cosign signatures, which is the precondition for gating the `FROM` pull with a `policy.json` and a `registries.d` entry on the builder. Until then the build pulls its base unverified, and the point of a probe is that nobody has to keep checking by hand. Opens one tracking issue when the answer changes, and does nothing on every other run.
 
-The base image reference is read out of [Containerfile.template](../../Containerfile.template) rather than written down here, so the probe cannot drift from what the build actually pulls.
+The base image reference is read out of the [`base` node in modules.kdl](../../modules.kdl) via `manifest base-image` rather than written down here, so the probe cannot drift from what the build actually pulls.
 
 It asks about existence, not trust: `cosign triangulate` names where a signature would live and `cosign download signature` says whether one is there. Verifying properly would need a key or a certificate identity, and fedora publishes neither for this image, which is the very fact being waited on. Nothing is verified against the result, an issue is opened for a human to act on. This finds a signature published the way `cosign sign` publishes one by default, as a `.sig` tag beside the image; a referrers-only signature would go unnoticed, which is the trade for not depending on the referrers API.
 

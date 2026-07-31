@@ -48,12 +48,39 @@ pub fn section(
     modules: &[Module],
     collected: &BTreeMap<String, Vec<(String, String)>>,
     root: &Path,
-    base_family: &str,
     issues: &mut Issues,
 ) -> String {
     let mut out = String::new();
     let mut flavor_arg_emitted = false;
     let mut finalize: Vec<String> = Vec::new();
+
+    // An absent base is already reported; the family it would have named
+    // matches nothing, which is what an unresolved base should select.
+    let base_family = list.base.as_ref().map_or("", |b| b.family.as_str());
+
+    // The base image opens the section, because it is the first thing the
+    // build does and because emitting it here is what stops the FROM and
+    // modules.kdl from naming two different images.
+    if let Some(base) = &list.base {
+        let _ = write!(
+            out,
+            "### Base Image\n\
+             # Declared in modules.kdl, along with the family the modules build\n\
+             # against and the guarantees the base carries. Emitted from there, so\n\
+             # nothing has to read a FROM line back out of a Containerfile.\n\
+             FROM {}\n\n",
+            base.image
+        );
+    }
+
+    let _ = write!(
+        out,
+        "## Build phases and modules: one RUN layer each for independent BuildKit\n\
+         ## caching. A phase is a build-phases/*.sh, ordered by its number around\n\
+         ## the module layers, which build at 50. A module runs through\n\
+         ## lib/run-module.sh (repo file, module.sh, SELinux policy, files overlay),\n\
+         ## with its asset pins and options already resolved into env.\n\n"
+    );
 
     let phases = phases(root, issues);
     for (_, file) in phases.iter().filter(|(number, _)| *number < MODULE_SLOT) {
@@ -339,12 +366,34 @@ pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
 
 /// The module that provides a contract file path. One line, the module
 /// path, or nothing if no enabled module provides it.
-pub fn find_provider(list: &List, modules: &[Module], file_path: &str) -> String {
-    for module in modules {
-        for decl in &module.provides_files {
-            if decl.name == file_path {
-                return format!("{}\n", module.path);
-            }
+///
+/// Filtered through the list the same way `contract-files` is, because
+/// "provided" is a per-target question: a path provided only by a module
+/// gated to `desktop` is not provided on `laptop` or on the ungated
+/// build. This walked `modules` directly and returned the first match
+/// whichever flavor it was gated to, so a gated provider read as provided
+/// everywhere, and the `list` it was handed to prevent exactly that went
+/// unread. No target means every entry, which is the whole list rather
+/// than any image that gets built.
+///
+/// Answers about modules only. A path the base image guarantees has no
+/// module to name, and the callers of this want a module directory to put
+/// a file in.
+pub fn find_provider(
+    list: &List,
+    modules: &[Module],
+    file_path: &str,
+    target: Option<&str>,
+) -> String {
+    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+        let Some(module) = modules
+            .iter()
+            .find(|m| m.path == entry.path && m.flavor == entry.flavor)
+        else {
+            continue;
+        };
+        if module.provides_files.iter().any(|d| d.name == file_path) {
+            return format!("{}\n", module.path);
         }
     }
     String::new()
@@ -374,14 +423,27 @@ pub fn secrets(list: &List, modules: &[Module], target: Option<&str>) -> String 
     out
 }
 
-/// Contract file paths the enabled modules declare and the finished image
-/// still carries, one per line. A `build-only` path is left out: the
-/// module that writes it removes it again in its finalize hook, so
-/// asserting it exists would fail on a correct image. When a target is
-/// given, only modules that land in that target's image are included.
+/// Contract file paths the finished image still carries, one per line:
+/// what the base image guarantees, then what the enabled modules declare.
+/// A `build-only` path is left out: the module that writes it removes it
+/// again in its finalize hook, so asserting it exists would fail on a
+/// correct image. When a target is given, only modules that land in that
+/// target's image are included.
+///
+/// The base's paths come first and are never filtered by target, because
+/// they are true of every image built on it. They used to be a hardcoded
+/// list of three binaries inside lib/validate-image.sh, which meant the
+/// checker knew paths of its own.
 pub fn contract_files(list: &List, modules: &[Module], target: Option<&str>) -> String {
     let mut seen: Vec<&str> = Vec::new();
     let mut out = String::new();
+    for decl in list.base.iter().flat_map(|b| b.provides_files.iter()) {
+        if seen.contains(&decl.name.as_str()) {
+            continue;
+        }
+        seen.push(&decl.name);
+        let _ = writeln!(out, "{}", decl.name);
+    }
     for entry in list.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()

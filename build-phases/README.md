@@ -1,6 +1,6 @@
 [root](../README.md) / **build-phases**
 
-Everything that runs at image build time. These scripts are bind mounted into the build by the [Containerfile.template](../Containerfile.template), they are not copied into the final image (apart from the module `files/` overlays).
+Everything that runs at image build time. These scripts are bind mounted into the build by the [Containerfile skeleton](../scripts/Containerfile.skeleton), they are not copied into the final image (apart from the module `files/` overlays).
 
 ### [Modules](../modules)
 
