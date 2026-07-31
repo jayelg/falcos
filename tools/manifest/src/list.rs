@@ -14,6 +14,33 @@ use miette::SourceSpan;
 /// declaring it this way exists to avoid.
 pub const NO_FLAVOR: &str = "none";
 
+/// The base image, and what building on it may assume.
+///
+/// Declared rather than derived. The family used to be recovered by
+/// looking for the string "fedora" in the `FROM` line, which could only
+/// ever answer "fedora", and the capabilities the base provides were a
+/// constant in the checker. Both are decisions about the image, so both
+/// are made in the image author's file.
+pub struct Base {
+    /// The full image reference, emitted verbatim as the generated `FROM`.
+    pub image: String,
+    pub family: String,
+    /// Capabilities the base satisfies that no module could implement
+    /// portably: rechunking, initramfs generation, MAC policy.
+    pub provides: Vec<Decl>,
+    /// Binaries the base guarantees. They join the contract file paths the
+    /// modules declare, and are checked the same way on the built image.
+    pub provides_files: Vec<Decl>,
+    pub span: SourceSpan,
+}
+
+/// A name the base declares, with the span to point at when something
+/// about it is wrong.
+pub struct Decl {
+    pub name: String,
+    pub span: SourceSpan,
+}
+
 pub struct Flavor {
     pub name: String,
     pub default: bool,
@@ -37,6 +64,9 @@ pub struct Entry {
 pub struct List {
     pub file: String,
     pub text: String,
+    /// None only when the `base` node is missing or malformed, which is
+    /// already an issue: nothing downstream invents a default for it.
+    pub base: Option<Base>,
     pub flavors: Vec<Flavor>,
     pub entries: Vec<Entry>,
 }
@@ -63,6 +93,16 @@ fn string_arg(node: &KdlNode) -> Option<&str> {
         .and_then(|e| e.value().as_string())
 }
 
+/// Every unnamed entry of a node, as strings, so `provides "a" "b"` reads
+/// as the list it looks like.
+fn string_args(node: &KdlNode) -> Vec<&str> {
+    node.entries()
+        .iter()
+        .filter(|e| e.name().is_none())
+        .filter_map(|e| e.value().as_string())
+        .collect()
+}
+
 impl List {
     pub fn load(path: &str) -> Result<(Self, Issues), Box<Issue>> {
         let text = std::fs::read_to_string(path)
@@ -75,6 +115,7 @@ impl List {
         let mut list = List {
             file: file.to_string(),
             text: text.clone(),
+            base: None,
             flavors: Vec::new(),
             entries: Vec::new(),
         };
@@ -93,13 +134,14 @@ impl List {
 
         for node in doc.nodes() {
             match node.name().value() {
+                "base" => list.parse_base(node, &mut issues),
                 "flavors" => list.parse_flavors(node, &mut issues),
                 "modules" => list.parse_modules(node, &mut issues),
                 other => issues.push(
                     Issue::new(format!("unknown top-level node `{other}`"), file, &text)
                         .at(node.name().span(), "not part of the schema")
                         .help(
-                            "modules.kdl holds an optional `flavors` block and a `modules` block",
+                            "modules.kdl holds a `base` node, an optional `flavors` block and a `modules` block",
                         ),
                 ),
             }
@@ -112,8 +154,108 @@ impl List {
             );
         }
 
+        // Required, with no default: the generated `FROM` comes from it,
+        // and so does the family every module's `supports` is checked
+        // against. Inferring either was how a build could target something
+        // nobody had declared.
+        if list.base.is_none() && !doc.nodes().iter().any(|n| n.name().value() == "base") {
+            issues.push(
+                Issue::new(format!("{file} has no `base` node"), file, &text).help(
+                    "`base \"quay.io/fedora/fedora-bootc:44\" { family \"fedora\" }`, \
+                     naming the image every layer builds on",
+                ),
+            );
+        }
+
         list.check_flavors(&mut issues);
         (list, issues)
+    }
+
+    fn parse_base(&mut self, node: &KdlNode, issues: &mut Issues) {
+        let (file, text) = (self.file.clone(), self.text.clone());
+
+        if let Some(first) = &self.base {
+            issues.push(
+                Issue::new("`base` is declared twice", &file, &text)
+                    .at(first.span, "first here")
+                    .at(node.name().span(), "and again here")
+                    .help("an image builds on one base; a second family is a second image"),
+            );
+            return;
+        }
+
+        let Some(image) = string_arg(node) else {
+            issues.push(
+                Issue::new("`base` needs an image reference", &file, &text)
+                    .at(node.name().span(), "no image given")
+                    .help("`base \"quay.io/fedora/fedora-bootc:44\"`, emitted verbatim as the generated FROM"),
+            );
+            return;
+        };
+
+        let mut base = Base {
+            image: image.to_string(),
+            family: String::new(),
+            provides: Vec::new(),
+            provides_files: Vec::new(),
+            span: node.name().span(),
+        };
+
+        for child in node.children().map(|c| c.nodes()).unwrap_or_default() {
+            let names = || {
+                string_args(child)
+                    .iter()
+                    .map(|name| Decl {
+                        name: name.to_string(),
+                        span: child.name().span(),
+                    })
+                    .collect::<Vec<_>>()
+            };
+            match child.name().value() {
+                "family" => match string_arg(child) {
+                    Some(f) => base.family = f.to_string(),
+                    None => issues.push(
+                        Issue::new("`family` needs a name", &file, &text)
+                            .at(child.name().span(), "no family given")
+                            .help("`family \"fedora\"`, matched against each module's `supports`"),
+                    ),
+                },
+                "provides" => base.provides.extend(names()),
+                "provides-file" => base.provides_files.extend(names()),
+                other => issues.push(
+                    Issue::new(format!("unknown base property `{other}`"), &file, &text)
+                        .at(child.name().span(), "not part of the schema")
+                        .help("a base accepts `family`, `provides` and `provides-file`"),
+                ),
+            }
+        }
+
+        if base.family.is_empty() {
+            issues.push(
+                Issue::new("`base` declares no `family`", &file, &text)
+                    .at(base.span, "no family")
+                    .help("every module declares which families it `supports`, and the two are checked against each other"),
+            );
+        }
+
+        // A relative path is not a contract file the built image can be
+        // checked for, and it would silently pass the existence test from
+        // whatever directory the check happened to run in.
+        for decl in &base.provides_files {
+            if !decl.name.starts_with('/') {
+                issues.push(
+                    Issue::new(
+                        format!("`{}` is not an absolute path", decl.name),
+                        &file,
+                        &text,
+                    )
+                    .at(decl.span, "`provides-file` takes absolute paths")
+                    .help("the path is checked on the finished image, where nothing has a working directory"),
+                );
+            }
+        }
+
+        self.base = Some(base);
     }
 
     fn parse_flavors(&mut self, block: &KdlNode, issues: &mut Issues) {

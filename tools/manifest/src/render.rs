@@ -48,12 +48,39 @@ pub fn section(
     modules: &[Module],
     collected: &BTreeMap<String, Vec<(String, String)>>,
     root: &Path,
-    base_family: &str,
     issues: &mut Issues,
 ) -> String {
     let mut out = String::new();
     let mut flavor_arg_emitted = false;
     let mut finalize: Vec<String> = Vec::new();
+
+    // An absent base is already reported; the family it would have named
+    // matches nothing, which is what an unresolved base should select.
+    let base_family = list.base.as_ref().map_or("", |b| b.family.as_str());
+
+    // The base image opens the section, because it is the first thing the
+    // build does and because emitting it here is what stops the FROM and
+    // modules.kdl from naming two different images.
+    if let Some(base) = &list.base {
+        let _ = write!(
+            out,
+            "### Base Image\n\
+             # Declared in modules.kdl, along with the family the modules build\n\
+             # against and the guarantees the base carries. Emitted from there, so\n\
+             # nothing has to read a FROM line back out of a Containerfile.\n\
+             FROM {}\n\n",
+            base.image
+        );
+    }
+
+    let _ = write!(
+        out,
+        "## Build phases and modules: one RUN layer each for independent BuildKit\n\
+         ## caching. A phase is a build-phases/*.sh, ordered by its number around\n\
+         ## the module layers, which build at 50. A module runs through\n\
+         ## lib/run-module.sh (repo file, module.sh, SELinux policy, files overlay),\n\
+         ## with its asset pins and options already resolved into env.\n\n"
+    );
 
     let phases = phases(root, issues);
     for (_, file) in phases.iter().filter(|(number, _)| *number < MODULE_SLOT) {

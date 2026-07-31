@@ -761,7 +761,7 @@ const BASE_CAPABILITIES: [&str; 3] = ["rechunking", "initramfs-generation", "mac
 /// priorities, and nothing is ever auto-included: an unsatisfied
 /// requirement names what would fix it and stops, so the list stays the
 /// complete statement of what is in the image.
-pub fn check_graph(modules: &[Module], root: &Path, base_family: &str, issues: &mut Issues) {
+pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Issues) {
     // What each capability is offered by. Position no longer matters
     // here: a requirement is an edge in the sort, so a provider is
     // already above everything that needs it.
@@ -781,7 +781,16 @@ pub fn check_graph(modules: &[Module], root: &Path, base_family: &str, issues: &
 
     // Every enabled module must support the base family it is building
     // against, so a portability gap surfaces at lint rather than mid-build.
+    // Skipped entirely when the base names no family: that is already
+    // reported on the node itself, and checking against an empty name
+    // would blame forty modules for one missing line.
+    let base_family = list
+        .base
+        .as_ref()
+        .map(|b| b.family.as_str())
+        .filter(|f| !f.is_empty());
     for module in modules {
+        let Some(base_family) = base_family else { break };
         if !module.supports.iter().any(|f| f == base_family) {
             let supported = module.supports.join(", ");
             issues.push(

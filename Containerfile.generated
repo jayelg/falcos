@@ -14,9 +14,12 @@ COPY build-phases/ /
 COPY lib/ /lib/
 COPY modules/ /modules/
 
+# ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----
+
 ### Base Image
-# Use major version tags with quay.io/fedora as old untagged manifests are pruned within days.
-# Pinned fedora-bootc digest tags break Renovate.
+# Declared in modules.kdl, along with the family the modules build
+# against and the guarantees the base carries. Emitted from there, so
+# nothing has to read a FROM line back out of a Containerfile.
 FROM quay.io/fedora/fedora-bootc:44
 
 ## Build phases and modules: one RUN layer each for independent BuildKit
@@ -24,8 +27,6 @@ FROM quay.io/fedora/fedora-bootc:44
 ## the module layers, which build at 50. A module runs through
 ## lib/run-module.sh (repo file, module.sh, SELinux policy, files overlay),
 ## with its asset pins and options already resolved into env.
-
-# ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----
 
 # ---- phase 00-setup.sh ----
 RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \

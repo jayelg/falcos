@@ -215,14 +215,15 @@ jobs:
       # the tag and stamp the digest onto the image as the OCI base
       # annotations: no gate, but every published falcos image then carries
       # an auditable record of exactly which fedora-bootc digest produced it.
-      # Base ref is read from the Containerfile FROM so the two can't drift.
-      # Resolved seconds before the build; quay only moves the tag on a new
-      # compose, so the window doesn't realistically race.
+      # Base ref comes from the manifest, which is also what the generated
+      # FROM is emitted from, so the two can't drift. Resolved seconds
+      # before the build; quay only moves the tag on a new compose, so the
+      # window doesn't realistically race.
       - name: Resolve base image digest
         id: base
         run: |
           set -euo pipefail
-          base="$(grep -oP '^FROM \Kquay\.io/fedora/fedora-bootc:\S+' Containerfile.template | head -1)"
+          base="$(./scripts/manifest.sh base-image)"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${base}")"
           echo "name=${base}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"

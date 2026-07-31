@@ -3,6 +3,25 @@
 // The schema is documented in modules/SCHEMA.md.
 // scripts/manifest.sh reads from this file.
 //
+// The base image every layer builds on top of, and what it brings with
+// it. This is the only place the image is named: the FROM in
+// Containerfile.generated is emitted from here, so the two cannot drift.
+//
+// Use major version tags with quay.io/fedora as old untagged manifests are
+// pruned within days. Pinned fedora-bootc digest tags break Renovate.
+//
+// - family        which distro's packaging and tooling the modules can
+//                 assume; checked against every module's `supports`
+// - provides      capabilities the base itself satisfies, which a module
+//                 may `require` but no module can implement portably
+// - provides-file binaries the base guarantees, checked on the finished
+//                 image alongside the modules' own contract files
+base "quay.io/fedora/fedora-bootc:44" {
+    family "fedora"
+    provides "rechunking" "initramfs-generation" "mac-policy"
+    provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
+}
+
 // Optional build flavors
 // flavours can have the following boolean properties:
 // - default: what `just build` builds
