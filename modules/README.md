@@ -31,6 +31,23 @@ The directory name is the module name in modules.kdl. Modules are organized into
 
 To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (manifest, helpers, preset, finalize.sh, options, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.kdl, so it never builds.
 
+### Out-of-tree modules
+
+A module does not have to live here. An entry in [modules.kdl](../modules.kdl) carrying a `source` block pins one from another repository by archive URL, ref and SHA256; it is fetched and verified on the host before the build, into a gitignored `modules/.remote/<name>/`, and the generator emits the same layer it would for a module in this tree. The pin format is in [SCHEMA.md](SCHEMA.md#out-of-tree-modules).
+
+Three things keep that reviewable rather than a hole. The content hash is mandatory, so what runs as root in the build is what was reviewed. The module ships the same required `module.kdl`, so its requirements, secrets, packages and options are data you can read before it executes. And its expanded layer lands in the committed `Containerfile.generated`, so a third party module shows up in an ordinary diff. Nothing is fetched transitively: a remote module may `requires` a capability like any other, and whatever provides it is added to the list by hand.
+
+### Publishing modules
+
+For a repository that publishes modules for others to pin:
+
+- **One git tag per module**, `<module-name>/vX.Y.Z`, the Go multi module convention. A bump to one module leaves every other consumer's pin untouched, and Renovate watches a single tag prefix through `extractVersion`.
+- **Not version directories** (`modules/<name>/v1/`, `v2/`). They duplicate code, make a bugfix ambiguous across versions, grow without bound and restate what git history already holds. Simultaneous versions are all they buy, and an image installs a module once.
+- Tags are a convenience for humans and Renovate, not a correctness requirement. The pin already carries a ref and a content hash, so an untagged commit is exactly as precise.
+- A module needs no version field of its own, and must not grow one. The version lives at the consumption site, as the pin, and in the publishing repository's tags.
+- Prefer a release asset attached to the tag over a forge generated `/archive/` tarball where a repository publishes one. A generated archive is not guaranteed byte stable, and a forge that regenerates one fails every consumer's fetch until each recomputes the hash.
+- OCI artifacts per module are the upgrade path if module distribution becomes a product: version is a tag, integrity is a digest, signing is cosign, all of which this stack already runs.
+
 ### Base (`base/`) -- do not disable
 - `base` -- pure-file base-system layer: sshd-off preset, coredump lockdown, PAM policy (faillock/pwquality), sulogin generator, os-release logo + plymouth branding
 

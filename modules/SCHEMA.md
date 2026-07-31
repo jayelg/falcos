@@ -161,15 +161,87 @@ module "cli-customizations" {
 }
 ```
 
-**Reserved, and an error if used.** Out-of-tree modules are planned, and
-these are the fields they need, claimed now so adding them later is not a
-format change:
+A `source` child is not an option but a pin, and makes the entry an
+[out-of-tree module](#out-of-tree-modules). An option by that name cannot
+be set from the list, which is the one cost of spelling the pin here
+rather than in a file of its own.
 
-| Property | Will mean |
-| --- | --- |
-| `source=` | repository to fetch the module from |
-| `ref=` | exact commit or tag |
-| `sha256=` | hash of the fetched archive |
+### Out-of-tree modules
+
+A module that lives in another repository is pinned exactly, on its own
+list entry. Absence of a `source` block means in tree, so nothing about
+an existing entry changes.
+
+```kdl
+module "steam-tweaks" {
+    source "https://github.com/owner/falcos-modules/archive/refs/tags/{ref}.tar.gz" {
+        renovate datasource="github-tags" depName="owner/falcos-modules"
+        ref "steam-tweaks/v1.2.0"
+        sha256 "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3"
+        path "modules/steam-tweaks"
+    }
+}
+```
+
+The entry's name is the module's identity everywhere: in the build
+summary, in the finalize order and in every diagnostic. It is one path
+segment, matching `^[a-z][a-z0-9-]*$`, and may not be the name of a
+module in this repository.
+
+| Node | Arity | Meaning |
+| --- | --- | --- |
+| `source "<template>"` | 0 or 1 | the archive to fetch. `{ref}` is the only expansion. |
+| `renovate` | 0 or 1 | Renovate tracks this pin. Mutually exclusive with `manual`. |
+| `manual "<why>"` | 0 or 1 | nothing tracks it, and this is why. Mutually exclusive with `renovate`. |
+| `ref "<pin>"` | exactly 1 | the exact tag or commit the URL resolves against |
+| `sha256 "<hex>"` | exactly 1 | what the fetched archive must hash to |
+| `path "<subtree>"` | 0 or 1 | the module's directory inside the archive. Absent means the archive root is the module. |
+
+**The hash is mandatory**, unlike an [asset pin](#asset-pins) where a
+git ref stands in for one. A remote module is arbitrary shell running as
+root in the build, so the guarantee worth having is that what runs is
+what was reviewed. A changed `ref` whose archive does not hash to this
+value fails at generate time, before anything is extracted.
+
+`renovate` and `ref` follow the asset rules exactly: exactly one of
+`renovate` and `manual`, and `ref` on the line directly below
+`renovate`, because one regex in [renovate.json5](../.github/renovate.json5)
+matches the two together. Only `github-tags` and `github-releases` are
+accepted here. `git-refs` tracks a branch head, which needs the branch
+name as well as the commit, and a module is published as a tag; a
+repository with no tags is pinned `manual`.
+
+The archive is a tar (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.zst`,
+`.tar.bz2`). One leading directory is stripped, since a forge names it
+for the ref, so `path` is relative to the repository root.
+
+**Fetching happens at generate time**, on the host, into
+`modules/.remote/<name>/`, which is gitignored.
+[scripts/fetch-modules.sh](../scripts/fetch-modules.sh) does it and both
+`just generate` and `just lint` call it; nothing about a build knows a
+module came from elsewhere. The fetched tree lives under `modules/`
+rather than beside the other generated output in `build/` because the
+`ctx` stage copies `modules/`, and a `COPY` cannot be made conditional on
+a directory that exists only once something is pinned.
+
+What that buys, in order:
+
+- the generator emits the same RUN block as for an in-tree module, so
+  layer shape and cache behaviour are identical. The mount names
+  `modules/.remote/<name>`, so which layers are third-party is visible in
+  the committed `Containerfile.generated`.
+- a remote module ships the same required `module.kdl` and is validated
+  against the same schema before anything executes. Its `requires`,
+  `secrets`, `packages`, options and collectors are data, reviewable
+  before it runs.
+- **no transitive fetching.** A remote module may `requires` a
+  capability, and an unsatisfied one is the usual lint failure naming
+  what would provide it. Providers are added by the image author, as
+  everywhere else.
+
+Nothing recurses and nothing resolves: there are no version ranges, no
+lock file and no solver, so the pins in this file are the complete
+statement of what is fetched.
 
 ### `flavor`
 
@@ -777,9 +849,20 @@ Lint fails on all of these, in seconds, before anything builds.
 - a gated module whose fragment runs a command without carrying the
   matching `FLAVOR_GATE`
 
-**Reserved**
+**Out-of-tree pins**
 
-- `source`, `ref` or `sha256` on a list entry
+- a pin declaring neither `renovate` nor `manual`, or both
+- a `renovate` with something between it and the `ref` below it, or
+  naming `git-refs`
+- a pin with no `ref`, or no `sha256`
+- a `sha256` that is not 64 lowercase hex digits
+- a source URL that is not https or file, is not a tar archive, holds a
+  placeholder other than `{ref}`, or omits `{ref}` while tracked
+- a subtree `path` that is absolute or holds a `..` segment
+- a pinned name that is not one lowercase path segment, or that is also
+  a module in this repository
+- a URL, ref or path holding a character the fetch could not carry
+- an option named `source`, which a list entry's pin already claims
 
 ## Not implemented yet
 
@@ -787,5 +870,5 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **`source`, `ref` and `sha256`** on list entries, for out-of-tree
-  modules.
+- **A variant overriding an asset pin.** A pin is not an option, and no
+  module needs a variant to move one.

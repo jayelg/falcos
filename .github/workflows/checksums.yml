@@ -10,11 +10,18 @@
 # commit to the PR branch. One workflow rather than one per asset so
 # concurrent fixup pushes to the same branch cannot race each other.
 #
+# The `source` block on an out-of-tree module entry in modules.kdl is the
+# same problem one level up: Renovate bumps the ref, and the archive that
+# ref resolves to has a different hash. Those are recomputed first, since
+# the fetch that puts a pinned module on disk verifies against them.
+#
 # There is no table of assets here. `manifest.sh assets` reports every pin
 # in the repository with its resolved URL, which is the same resolution the
 # build uses, so the URL this hashes and the URL the build fetches cannot
 # disagree. That was a real gap: the URL used to exist here and again in
-# each module.sh, with nothing comparing them.
+# each module.sh, with nothing comparing them. A pinned module's own asset
+# blocks are reported too, and skipped: the manifest they live in is
+# fetched rather than committed, so it is never part of a diff.
 #
 # The fixup push uses GITHUB_TOKEN, which never triggers the pull_request
 # workflows on the new commit, so validation runs are dispatched explicitly
@@ -25,6 +32,7 @@ on:
   pull_request:
     paths:
       - 'modules/**/module.kdl'
+      - 'modules.kdl'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -61,15 +69,43 @@ jobs:
           # megabytes to confirm that nothing moved.
           base="$(git merge-base "origin/${BASE_REF}" HEAD)"
           changed="$(git diff --name-only "$base" HEAD \
-            | grep -E '^modules/.*/module\.kdl$' || true)"
+            | grep -E '^(modules/.*/module\.kdl|modules\.kdl)$' || true)"
           if [ -z "$changed" ]; then
-            echo "No module manifest changed against ${BASE_REF}, nothing to do."
+            echo "No manifest changed against ${BASE_REF}, nothing to do."
             exit 0
           fi
           echo "Changed manifests:"
           echo "$changed"
 
           fixed=()
+
+          # Out-of-tree module pins, first: the asset loop below reads
+          # every enabled module's manifest, including a pinned module's,
+          # and the fetch that puts one on disk verifies the archive
+          # against the hash this rewrites.
+          if grep -qxF modules.kdl <<< "$changed"; then
+            # name, directory, ref, sha256, resolved URL, subtree path
+            while IFS='|' read -r name _ ref pinned url _; do
+              if ! curl -fsSL --retry 3 "$url" -o "${RUNNER_TEMP}/module"; then
+                echo "::error file=modules.kdl::${name} ${ref}: ${url} did not download. A ref whose archive URL does not follow from it needs the source template in modules.kdl updated by hand."
+                exit 1
+              fi
+              actual="$(sha256sum "${RUNNER_TEMP}/module" | cut -d' ' -f1)"
+              rm -f "${RUNNER_TEMP}/module"
+
+              if [ "$actual" = "$pinned" ]; then
+                echo "${name} ${ref}: hash already matches."
+                continue
+              fi
+              sed -i "s/sha256 \"${pinned}\"/sha256 \"${actual}\"/" modules.kdl
+              fixed+=("${name} ${ref}")
+              echo "${name} ${ref}: hash updated."
+            done < <(./scripts/manifest.sh remotes)
+          fi
+
+          # What the pins above resolve to, on disk, so a pinned module's
+          # own asset blocks are read from the tree this ref points at.
+          ./scripts/fetch-modules.sh
           # module, name, manifest, version, sha256, hash source, URL
           while IFS='|' read -r module name file version pinned from url; do
             grep -qxF "$file" <<< "$changed" || continue
