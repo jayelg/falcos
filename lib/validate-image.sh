@@ -87,11 +87,18 @@ enablement_links() {
 # so those symlinks are the evidence. Reading them off disk is what makes
 # this an assertion about enablement rather than about a unit merely
 # existing, and it needs no PID 1, which a container build has not got.
-# System units also pass through systemd-analyze verify, but its dependency
-# warnings are not fatal: device and mount units don't exist in a
-# container build. User units skip verify because --user needs a
-# running user manager. Unit files are found with find because
-# systemctl show requires a running PID 1.
+# System units also pass through systemd-analyze verify, and a failure
+# there is fatal unless every line it printed is on the allowlist below.
+# User units skip verify because --user needs a running user manager.
+# Unit files are found with find because systemctl show requires a
+# running PID 1.
+#
+# The one thing a container build genuinely cannot resolve is a mount or
+# swap dependency, so those lines are facts about where this runs. A
+# missing .service or .target, or a command that is not executable, is a
+# defect in the unit and still fails. Devices need no entry: verify
+# synthesises them and says nothing.
+verify_allowed='Failed to create .*: Unit [^ ]+\.(mount|swap) not found\.$'
 echo "==> systemd unit verification"
 checked=0
 for scope in system user; do
@@ -132,10 +139,19 @@ for scope in system user; do
             if [ "$scope" = "system" ] && [ "$verb" = "enable" ]; then
                 if out="$(systemd-analyze verify --no-pager "$unit" 2>&1)"; then
                     echo "        ${unit} enabled"
+                elif [ -z "${out//[[:space:]]/}" ]; then
+                    fail "${unit}: systemd-analyze verify failed without saying why"
                 else
-                    echo "        ${unit} enabled, verify notes:"
-                    # shellcheck disable=SC2001
-                    echo "$out" | sed 's/^/          /' >&2 || true
+                    unexpected="$(printf '%s\n' "$out" \
+                        | grep -Ev "$verify_allowed" \
+                        | grep -Ev '^[[:space:]]*$' || true)"
+                    if [ -n "$unexpected" ]; then
+                        fail "${unit}: systemd-analyze verify"
+                        # shellcheck disable=SC2001
+                        echo "$unexpected" | sed 's/^/          /' >&2
+                    else
+                        echo "        ${unit} enabled (verify: mount/swap notes only)"
+                    fi
                 fi
             else
                 echo "        ${unit} ${verb}d"
