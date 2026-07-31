@@ -38,7 +38,9 @@ fi
 echo "==> /usr/lib/opt symlinks"
 tmpfiles="/usr/lib/tmpfiles.d/zz-opt-symlinks.conf"
 if [ -f "$tmpfiles" ]; then
-    while read -r type path _ _ _ target _; do
+    # Type Path Mode User Group Age Argument: the symlink target is the
+    # Argument, four fields past Path, and Age is what one short lands on.
+    while read -r type path _ _ _ _ target; do
         case "$type" in
             L+|L)
                 target="${target//\\x20/ }"
