@@ -2,7 +2,7 @@
 //!
 //! Declaration order used to be the build order, which made every
 //! ordering fact in the repository a fact about where a line sits in
-//! modules.kdl. A `requires` already says "after the module that
+//! image.kdl. A `requires` already says "after the module that
 //! provides this", so the list no longer has to repeat it, and the two
 //! can no longer disagree.
 //!

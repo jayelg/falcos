@@ -4,7 +4,7 @@ Everything that runs at image build time. These scripts are bind mounted into th
 
 ### [Modules](../modules)
 
-Self-describing, independently cacheable build units, one Containerfile RUN layer each. What gets built is controlled by [modules.kdl](../modules.kdl): edit the list, run `just generate`, commit both. Each layer runs [lib/run-module.sh](../lib/run-module.sh), which handles the shared conventions (repo file, `module.sh`, SELinux policy, `files/` overlay, collected files).
+Self-describing, independently cacheable build units, one Containerfile RUN layer each. What gets built is controlled by [image.kdl](../image.kdl): edit the list, run `just generate`, commit both. Each layer runs [lib/run-module.sh](../lib/run-module.sh), which handles the shared conventions (repo file, `module.sh`, SELinux policy, `files/` overlay, collected files).
 
 ### Phase Scripts
 
@@ -25,11 +25,11 @@ A phase above the modules gets neither because `ARG FLAVOR` and `ARG IMAGE_VERSI
 
 ### Service enablement
 
-Modules ship `*falcos*.preset` files (`usr/lib/systemd/system-preset/` and `user-preset/`) in their `files/` overlays. 99-finalize.sh applies only those presets -- not `preset-all` -- so removing a module from [modules.kdl](../modules.kdl) removes its service enablement with it.
+Modules ship `*falcos*.preset` files (`usr/lib/systemd/system-preset/` and `user-preset/`) in their `files/` overlays. 99-finalize.sh applies only those presets -- not `preset-all` -- so removing a module from [image.kdl](../image.kdl) removes its service enablement with it.
 
 ### Module finalize hooks
 
-A module that needs run-once logic with real `systemctl` or the final image (service masking, `policy.json` edits) ships a `finalize.sh`; 99-finalize.sh sources them in modules.kdl order, flavor-gated, after systemctl is restored. See `core/auto-updates`.
+A module that needs run-once logic with real `systemctl` or the final image (service masking, `policy.json` edits) ships a `finalize.sh`; 99-finalize.sh sources them in image.kdl order, flavor-gated, after systemctl is restored. See `core/auto-updates`.
 
 Order between hooks is deliberately not a thing a module can rely on. Two modules that both need something done to the same artifact share a collected file instead: the kernel module's hook builds the initramfs from `dracut.modules`, which any module can contribute a name to.
 

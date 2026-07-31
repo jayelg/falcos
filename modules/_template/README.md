@@ -5,13 +5,13 @@
 A copy-me reference demonstrating **every** capability the build architecture
 supports. The `module-name/` subdirectory *is* the module (copy it); this
 top-level README is the how-to. Nothing here is listed in
-[modules.kdl](../../../modules.kdl), so it never builds. The `_` prefix
+[image.kdl](../../../image.kdl), so it never builds. The `_` prefix
 just keeps it sorted to the top of the modules directory.
 
 ## Quick start
 
 1. Copy the inner module directory to its destination. The path relative
-   to `modules/` is the entry you'll add to modules.kdl:
+   to `modules/` is the entry you'll add to image.kdl:
    ```
    cp -r modules/_template/module-name modules/<group-or-name>/<name>
    ```
@@ -22,7 +22,7 @@ just keeps it sorted to the top of the modules directory.
    `45-falcos-template.preset` → `45-falcos-<name>.preset`, rename
    `Containerfile.inc.example` → `Containerfile.inc` only if you need it, and
    drop the `.example` config/libexec.
-4. Add the module path (e.g. `core/my-module`) to `modules.kdl`. Position
+4. Add the module path (e.g. `core/my-module`) to `image.kdl`. Position
    decides the RUN layer's place only where the declared graph doesn't; see
    **Ordering & flavors**.
 5. `just generate` to confirm it resolves and splices in.
@@ -45,7 +45,7 @@ finalize layer.
 | `Containerfile.inc` | Verbatim Containerfile lines added above the generated block — only for what the declared fields cannot express, such as an `ARG` with a default or a second layer. Build secrets and args are declared in `module.kdl` instead. |
 | `README.md` | Every module has one; the copy here is a fill-in skeleton. |
 
-## Ordering & flavors (in modules.kdl)
+## Ordering & flavors (in image.kdl)
 
 - Build order comes from the graph: declare `requires "<capability>"` and
   the module builds after whatever provides it, wherever the two lines sit.
@@ -57,7 +57,7 @@ finalize layer.
   (the generator sets `FLAVOR_GATE`, and both `run-module.sh` and the
   `finalize.sh` loop skip it on other flavors). Gated modules always sort
   below the ungated ones, which is where the cache forks. Valid flavors are
-  declared in the `flavors` block in `modules.kdl`.
+  declared in the `flavors` block in `image.kdl`.
 
 ## Key rules & gotchas
 
@@ -75,7 +75,7 @@ finalize layer.
 - **shellcheck runs in CI** on every `*.sh` and on `files/{libexec,system-generators}`
   scripts. Sourcing a lib helper in `module.sh` also stops shellcheck from
   flagging your `$ASSET_*` env (SC2154).
-- **The modules.kdl entry IS the path** relative to `modules/`. E.g.
+- **The image.kdl entry IS the path** relative to `modules/`. E.g.
   `core/my-module` for `modules/core/my-module/`. No uniqueness
   constraint across groups — `core/tools` and `de/tools` are distinct.
 

@@ -1,6 +1,6 @@
 [root](../../README.md) / [build-phases](../README.md) / **modules**
 
-Self-describing, independently cacheable build units. Every module carries a [module.kdl](SCHEMA.md) manifest declaring what it needs from the rest of the image and what it offers back; everything else about a module is discovered from the files it ships. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), is enabled by [modules.kdl](../../modules.kdl), and builds in the order the declared graph resolves to, with the list as the tie-break. Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
+Self-describing, independently cacheable build units. Every module carries a [module.kdl](SCHEMA.md) manifest declaring what it needs from the rest of the image and what it offers back; everything else about a module is discovered from the files it ships. Each module runs in its own Containerfile RUN layer via [lib/run-module.sh](../lib/run-module.sh), is enabled by [image.kdl](../image.kdl), and builds in the order the declared graph resolves to, with the list as the tie-break. Editing the list is enough: `just build` and CI regenerate the Containerfile section from it automatically. A module is any bake-in unit — an app install, a kernel swap, or just a directory drop; create a directory here (any of the optional pieces below) and add its path to the list.
 
 ### Anatomy of a module
 
@@ -27,13 +27,13 @@ modules/<group-or-name>/<name>/
                       with a default (optional)
 ```
 
-The directory name is the module name in modules.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in modules.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
+The directory name is the module name in image.kdl. Modules are organized into group subdirectories (e.g. `core/`, `de/`, `hardware/`) or live directly under `modules/`. The entry in image.kdl is the path relative to `modules/` — e.g. `core/auto-updates` for `modules/core/auto-updates/`.
 
-To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (manifest, helpers, preset, finalize.sh, options, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in modules.kdl, so it never builds.
+To start a new module, copy [`_template/module-name/`](_template/module-name) — a copy-me reference that demonstrates every capability above (manifest, helpers, preset, finalize.sh, options, Containerfile.inc, SELinux) with a walkthrough README in [`_template/`](_template). It is not listed in image.kdl, so it never builds.
 
 ### Out-of-tree modules
 
-A module does not have to live here. An entry in [modules.kdl](../modules.kdl) carrying a `source` block pins one from another repository by archive URL, ref and SHA256; it is fetched and verified on the host before the build, into a gitignored `modules/.remote/<name>/`, and the generator emits the same layer it would for a module in this tree. The pin format is in [SCHEMA.md](SCHEMA.md#out-of-tree-modules).
+A module does not have to live here. An entry in [image.kdl](../image.kdl) carrying a `source` block pins one from another repository by archive URL, ref and SHA256; it is fetched and verified on the host before the build, into a gitignored `modules/.remote/<name>/`, and the generator emits the same layer it would for a module in this tree. The pin format is in [SCHEMA.md](SCHEMA.md#out-of-tree-modules).
 
 Three things keep that reviewable rather than a hole. The content hash is mandatory, so what runs as root in the build is what was reviewed. The module ships the same required `module.kdl`, so its requirements, secrets, packages and options are data you can read before it executes. And its expanded layer lands in the committed `Containerfile.generated`, so a third party module shows up in an ordinary diff. Nothing is fetched transitively: a remote module may `requires` a capability like any other, and whatever provides it is added to the list by hand.
 

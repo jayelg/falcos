@@ -4,7 +4,7 @@ The GitHub Actions pipelines.
 
 ### [Build Container Image](build.yml)
 
-Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `modules.kdl`, for build testing, and do not push.
+Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `image.kdl`, for build testing, and do not push.
 
 Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a regeneration of the Containerfile checked against the committed one, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
@@ -40,7 +40,7 @@ Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV 
 
 Daily watch for the day `quay.io/fedora/fedora-bootc` starts publishing cosign signatures, which is the precondition for gating the `FROM` pull with a `policy.json` and a `registries.d` entry on the builder. Until then the build pulls its base unverified, and the point of a probe is that nobody has to keep checking by hand. Opens one tracking issue when the answer changes, and does nothing on every other run.
 
-The base image reference is read out of the [`base` node in modules.kdl](../../modules.kdl) via `manifest base-image` rather than written down here, so the probe cannot drift from what the build actually pulls.
+The base image reference is read out of the [`base` node in image.kdl](../../image.kdl) via `manifest base-image` rather than written down here, so the probe cannot drift from what the build actually pulls.
 
 It asks about existence, not trust: `cosign triangulate` names where a signature would live and `cosign download signature` says whether one is there. Verifying properly would need a key or a certificate identity, and fedora publishes neither for this image, which is the very fact being waited on. Nothing is verified against the result, an issue is opened for a human to act on. This finds a signature published the way `cosign sign` publishes one by default, as a `.sig` tag beside the image; a referrers-only signature would go unnoticed, which is the trade for not depending on the referrers API.
 

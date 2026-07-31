@@ -4,7 +4,7 @@ The declared interface between a module and everything outside it. Two
 files, one parser ([tools/manifest](../tools/manifest), reached through
 [scripts/manifest.sh](../scripts/manifest.sh)), both KDL 2.0.
 
-- **[modules.kdl](../modules.kdl)** — the image author's file. Which
+- **[image.kdl](../image.kdl)** — the image author's file. Which
   modules are in the image, in what order, gated to which flavors, with
   which options set.
 - **`modules/<path>/module.kdl`** — the module author's file, required
@@ -33,7 +33,7 @@ drift both ways.
 
 A manifest declares *facts*, not *file layout*.
 
-## modules.kdl
+## image.kdl
 
 Three top-level nodes. `flavors` is optional; `base` and `modules` are
 required.
@@ -450,7 +450,7 @@ in disguise, which `requires` already expresses better.
 
 1. the module's declared `default`
 2. the selected `variant`'s `set`
-3. the value in `modules.kdl`
+3. the value in `image.kdl`
 
 Only the image author sets options, and only on the owning module's own
 entry. A module cannot set another module's option, so there are no merge
@@ -705,7 +705,7 @@ Constraints, in the order they bind:
 **Determinism is not negotiable**: the same list produces the same order
 on every machine, because a reshuffle is a full rebuild. That is also
 why there is no `weight` field. Declaration order is already the
-tie-break, and modules.kdl is the image author's file, so wanting one
+tie-break, and image.kdl is the image author's file, so wanting one
 module later is expressed by moving its line — a second knob for the
 same thing would only be a way for the two to disagree.
 
@@ -774,7 +774,7 @@ Lint fails on all of these, in seconds, before anything builds.
 
 - either file unparseable, or carrying a node or property this schema
   does not define
-- a `modules.kdl` entry that does not resolve to a module directory
+- an `image.kdl` entry that does not resolve to a module directory
 - a module directory without a `module.kdl`, or one missing
   `description` or `supports`
 - no `base` node, a `base` declared twice, one with no image reference or

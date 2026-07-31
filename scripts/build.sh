@@ -156,7 +156,7 @@ if [ "$reset" = 1 ]; then
 fi
 
 # ---- resolved build inputs -----------------------------------------------
-# scripts/flavors.sh derives both from the flavor set in modules.kdl;
+# scripts/flavors.sh derives both from the flavor set in image.kdl;
 # asking it for the default and validating against it is what keeps a typo
 # out of a 50 minute build.
 flavor="${flavor:-$(./scripts/flavors.sh default)}"

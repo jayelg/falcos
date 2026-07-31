@@ -1,4 +1,4 @@
-//! modules.kdl: the image author's file.
+//! image.kdl: the image author's file.
 //!
 //! Which modules are in the image, in what order, gated to which flavors,
 //! with which options set. Everything a module must not decide for itself.
@@ -154,7 +154,7 @@ impl List {
                     Issue::new(format!("unknown top-level node `{other}`"), file, &text)
                         .at(node.name().span(), "not part of the schema")
                         .help(
-                            "modules.kdl holds a `base` node, an optional `flavors` block and a `modules` block",
+                            "image.kdl holds a `base` node, an optional `flavors` block and a `modules` block",
                         ),
                 ),
             }

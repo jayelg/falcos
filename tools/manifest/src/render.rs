@@ -60,12 +60,12 @@ pub fn section(
 
     // The base image opens the section, because it is the first thing the
     // build does and because emitting it here is what stops the FROM and
-    // modules.kdl from naming two different images.
+    // image.kdl from naming two different images.
     if let Some(base) = &list.base {
         let _ = write!(
             out,
             "### Base Image\n\
-             # Declared in modules.kdl, along with the family the modules build\n\
+             # Declared in image.kdl, along with the family the modules build\n\
              # against and the guarantees the base carries. Emitted from there, so\n\
              # nothing has to read a FROM line back out of a Containerfile.\n\
              FROM {}\n\n",

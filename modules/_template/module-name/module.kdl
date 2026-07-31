@@ -26,7 +26,7 @@ supports "fedora"
 //   after      soft. Ordering and cache preference only, never fails.
 //
 // Nothing is ever included automatically: an unsatisfied requirement
-// tells you what to add and stops, so modules.kdl stays the complete
+// tells you what to add and stops, so image.kdl stays the complete
 // statement of what is in the image.
 //
 // requires "kernel-devel"
@@ -48,7 +48,7 @@ supports "fedora"
 // overrides "/etc/profile.d/zz-bling.sh"
 
 // OPTIONAL. Options: typed, declared here, set by the image author in
-// modules.kdl, and arriving in module.sh as env. This is what turns a
+// image.kdl, and arriving in module.sh as env. This is what turns a
 // hardcoded list inside a module's own script into something an image
 // author can change without forking the module.
 //
@@ -70,7 +70,7 @@ supports "fedora"
 // }
 
 // OPTIONAL. Variants: a named bundle of option overrides, selected as
-// `module "GROUP/template" variant="minimal"` in modules.kdl. A variant
+// `module "GROUP/template" variant="minimal"` in image.kdl. A variant
 // may only set options this same manifest declares.
 //
 // Variants resolve on the host, into the same OPT_* env, so nothing

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetches every out-of-tree module modules.kdl pins into
+# Fetches every out-of-tree module image.kdl pins into
 # modules/.remote/<name>/, so the generator can emit the same RUN block
 # for it as for a module in this repository.
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Image naming, over the flavor set declared in modules.kdl. Everything
+# Image naming, over the flavor set declared in image.kdl. Everything
 # that needs to know which flavors exist asks this script: the CI build
 # matrix, the per-flavor cache tags, the registry cleanup, the disk build
 # and the Justfile.
@@ -38,7 +38,7 @@ All output is one item per line, in declaration order.
 
   list                every declared flavor
   targets             every build target: the ungated `none`, then flavors
-  default             the flavor marked default in modules.kdl, which
+  default             the flavor marked default in image.kdl, which
                       builds use when none is given
   pr                  the flavor a pull request builds
   check <target>      succeeds if <target> is buildable, fails loudly if not

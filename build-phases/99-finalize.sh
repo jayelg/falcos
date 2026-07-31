@@ -51,7 +51,7 @@ install_selinux_module /tmp/composefs_execmem.te
 
 ### Service enablement
 # Modules ship *falcos*.preset files in their files/ overlays; only those
-# presets are applied here, so a module removed from modules.kdl takes
+# presets are applied here, so a module removed from image.kdl takes
 # its service enablement with it. Deliberately not `systemctl
 # preset-all`, which would re-apply Fedora's defaults to every unit in
 # the image.
