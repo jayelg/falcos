@@ -366,12 +366,34 @@ pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
 
 /// The module that provides a contract file path. One line, the module
 /// path, or nothing if no enabled module provides it.
-pub fn find_provider(list: &List, modules: &[Module], file_path: &str) -> String {
-    for module in modules {
-        for decl in &module.provides_files {
-            if decl.name == file_path {
-                return format!("{}\n", module.path);
-            }
+///
+/// Filtered through the list the same way `contract-files` is, because
+/// "provided" is a per-target question: a path provided only by a module
+/// gated to `desktop` is not provided on `laptop` or on the ungated
+/// build. This walked `modules` directly and returned the first match
+/// whichever flavor it was gated to, so a gated provider read as provided
+/// everywhere, and the `list` it was handed to prevent exactly that went
+/// unread. No target means every entry, which is the whole list rather
+/// than any image that gets built.
+///
+/// Answers about modules only. A path the base image guarantees has no
+/// module to name, and the callers of this want a module directory to put
+/// a file in.
+pub fn find_provider(
+    list: &List,
+    modules: &[Module],
+    file_path: &str,
+    target: Option<&str>,
+) -> String {
+    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+        let Some(module) = modules
+            .iter()
+            .find(|m| m.path == entry.path && m.flavor == entry.flavor)
+        else {
+            continue;
+        };
+        if module.provides_files.iter().any(|d| d.name == file_path) {
+            return format!("{}\n", module.path);
         }
     }
     String::new()

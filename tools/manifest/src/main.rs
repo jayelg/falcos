@@ -41,9 +41,11 @@ says otherwise.
                     when no target is given
   assets [target]   every pinned asset, pipe separated: module, name,
                     manifest, version, sha256, hash source, resolved URL
-  find-provider <abs-path>
+  find-provider <abs-path> [target]
                     the module that provides a contract file path; nothing
-                    when none does
+                    when none does. Per target when one is given, because
+                    a path provided only by a gated module is not provided
+                    on every target
   secrets [target]  every secret ID an enabled module declares, unique;
                     per target when one is given
   contract-files [target]
@@ -68,28 +70,31 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // Commands whose answer differs per target, and those that take one
-    // argument (a path or a target). `check` is in neither: it validates
-    // every target at once, so an argument to it is a mistake rather than
-    // a filter, and accepting one silently answered a question nobody
-    // asked.
+    // Commands taking an optional target to answer for. `check` is not
+    // among them: it validates every target at once, so an argument to it
+    // is a mistake rather than a filter, and accepting one silently
+    // answered a question nobody asked.
+    //
+    // `find-provider` takes a path first and the optional target after
+    // it, because which module provides a path is a per-target question
+    // in the same way the rest of these are.
     const PER_TARGET: [&str; 4] = ["summary", "assets", "secrets", "contract-files"];
-    const ONE_ARG: [&str; 5] = [
-        "summary",
-        "assets",
-        "secrets",
-        "contract-files",
-        "find-provider",
-    ];
-    let target = args.get(1).map(String::as_str);
-    if target.is_some() && !ONE_ARG.contains(&command) {
-        eprintln!("manifest: `{command}` takes no arguments");
+    let path_first = command == "find-provider";
+    let max_args = usize::from(path_first) + usize::from(path_first || PER_TARGET.contains(&command));
+    if args.len() - 1 > max_args {
+        eprintln!(
+            "manifest: `{command}` takes {}",
+            match max_args {
+                0 => "no arguments".to_string(),
+                1 => "at most one argument".to_string(),
+                n => format!("at most {n} arguments"),
+            }
+        );
         return ExitCode::FAILURE;
     }
-    if args.len() > 2 {
-        eprintln!("manifest: `{command}` takes at most one argument");
-        return ExitCode::FAILURE;
-    }
+    // Always a build target, whichever position it arrived in, so one
+    // check below covers every command that accepts one.
+    let target = args.get(1 + usize::from(path_first)).map(String::as_str);
 
     let root = PathBuf::from(std::env::var("FALCOS_ROOT").unwrap_or_else(|_| ".".into()));
     let list_path = root.join("modules.kdl");
@@ -123,20 +128,16 @@ fn main() -> ExitCode {
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
     // An unknown target is the same mistake whichever command was asked,
-    // so it is reported once here rather than in an arm apiece. Gated on
-    // PER_TARGET rather than on `target` being set, because find-provider
-    // takes a path and would otherwise be told its path is not a flavor.
-    if PER_TARGET.contains(&command) {
-        if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-            issues.push(
-                diag::Issue::new(
-                    format!("`{unknown}` is not a build target"),
-                    &list_display,
-                    &list.text,
-                )
-                .help(format!("targets: {}", list.targets().join(", "))),
-            );
-        }
+    // so it is reported once here rather than in an arm apiece.
+    if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
+        issues.push(
+            diag::Issue::new(
+                format!("`{unknown}` is not a build target"),
+                &list_display,
+                &list.text,
+            )
+            .help(format!("targets: {}", list.targets().join(", "))),
+        );
     }
 
     // Rendering is where the module directories and fragments are
@@ -163,11 +164,11 @@ fn main() -> ExitCode {
             }
         }
         "find-provider" => {
-            let Some(path) = target else {
+            let Some(path) = args.get(1) else {
                 eprintln!("manifest: find-provider needs an absolute path");
                 return ExitCode::FAILURE;
             };
-            render::find_provider(&list, &modules, path)
+            render::find_provider(&list, &modules, path, target)
         }
         "secrets" => render::secrets(&list, &modules, target),
         "contract-files" => render::contract_files(&list, &modules, target),
