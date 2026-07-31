@@ -401,14 +401,27 @@ pub fn secrets(list: &List, modules: &[Module], target: Option<&str>) -> String 
     out
 }
 
-/// Contract file paths the enabled modules declare and the finished image
-/// still carries, one per line. A `build-only` path is left out: the
-/// module that writes it removes it again in its finalize hook, so
-/// asserting it exists would fail on a correct image. When a target is
-/// given, only modules that land in that target's image are included.
+/// Contract file paths the finished image still carries, one per line:
+/// what the base image guarantees, then what the enabled modules declare.
+/// A `build-only` path is left out: the module that writes it removes it
+/// again in its finalize hook, so asserting it exists would fail on a
+/// correct image. When a target is given, only modules that land in that
+/// target's image are included.
+///
+/// The base's paths come first and are never filtered by target, because
+/// they are true of every image built on it. They used to be a hardcoded
+/// list of three binaries inside lib/validate-image.sh, which meant the
+/// checker knew paths of its own.
 pub fn contract_files(list: &List, modules: &[Module], target: Option<&str>) -> String {
     let mut seen: Vec<&str> = Vec::new();
     let mut out = String::new();
+    for decl in list.base.iter().flat_map(|b| b.provides_files.iter()) {
+        if seen.contains(&decl.name.as_str()) {
+            continue;
+        }
+        seen.push(&decl.name);
+        let _ = writeln!(out, "{}", decl.name);
+    }
     for entry in list.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()

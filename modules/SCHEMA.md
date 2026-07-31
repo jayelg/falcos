@@ -259,6 +259,12 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
 
+The [`base`](#base) node declares them too, for the binaries the base
+image guarantees. They join the same union `manifest contract-files`
+answers with, so the in-image check has one list to walk and no paths of
+its own. They are not filtered by target: they are true of every image
+built on that base.
+
 `build-only` says how long the path lives, not whether it is a contract.
 `/usr/libexec/kernel-devel-helpers.sh` is the one today: the kernel module
 writes it, both DKMS consumers `requires-file` it, and the kernel module's
