@@ -585,6 +585,18 @@ impl Module {
                 );
                 continue;
             }
+            // Checked rather than taken as given, because the renderer
+            // emits only the family being built: a typo here would not
+            // fail, it would install nothing and leave the module's own
+            // script to discover the missing binary.
+            if !FAMILIES.contains(&family.as_str()) {
+                issues.push(
+                    Issue::new(format!("unknown base family `{family}`"), file, text)
+                        .at(child.name().span(), "not a family this repository builds on")
+                        .help(format!("known families: {}", FAMILIES.join(", "))),
+                );
+                continue;
+            }
             let packages: Vec<String> = child
                 .entries()
                 .iter()

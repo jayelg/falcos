@@ -130,7 +130,8 @@ fn main() -> ExitCode {
         "pr-flavor" => lines(list.pr_flavor().map(str::to_string)),
         "targets" => lines(list.targets()),
         "section" | "check" => {
-            let section = render::section(&list, &modules, &collected, &root, &mut issues);
+            let section =
+                render::section(&list, &modules, &collected, &root, &base_family, &mut issues);
             if command == "check" {
                 String::new()
             } else {
