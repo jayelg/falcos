@@ -32,15 +32,38 @@ jobs:
           echo "image=${base}" >> "$GITHUB_OUTPUT"
 
       # fedora-bootc is not cosign signed today. When it starts being
-      # signed, this step passes and we open a tracking issue to gate the
-      # FROM pull with policy.json.
+      # signed, this step sets signed=true and we open a tracking issue to
+      # gate the FROM pull with policy.json.
+      #
+      # Not `cosign verify`: it requires either --key or a certificate
+      # identity, and fedora publishes neither for this image, so it exits
+      # on flag validation without ever looking at the registry. That
+      # cannot distinguish "unsigned" from "wrong flags", and it is a
+      # question about existence, not trust: nothing is verified against
+      # this answer, an issue is opened for a human to read. So the probe
+      # asks where a signature would live and whether anything is there.
+      #
+      # No continue-on-error. A probe that cannot run is a broken probe,
+      # and the point of it is to fire on a day nobody is watching.
+      #
+      # This finds a signature published the way `cosign sign` publishes
+      # one by default, as a `.sig` tag beside the image. A registry-
+      # referrers-only signature would not be found; that is the trade for
+      # not depending on the referrers API, and it is worth revisiting if
+      # fedora signs and this stays quiet.
       - name: Probe for a cosign signature
         id: probe
-        continue-on-error: true
         run: |
-          cosign verify --insecure-ignore-tlog=true \
-            "${{ steps.base.outputs.image }}"
-          echo "signed=true" >> "$GITHUB_OUTPUT"
+          image="${{ steps.base.outputs.image }}"
+          sig="$(cosign triangulate "$image")"
+          echo "a signature for ${image} would be published at ${sig}"
+          if cosign download signature "$image" > /dev/null 2>&1; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "one is there: fedora-bootc has started signing"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "nothing there, which is the expected answer today"
+          fi
 
       - name: Check for existing tracking issue
         id: existing
@@ -70,7 +93,7 @@ jobs:
               title: 'fedora-bootc base image is now cosign signed',
               labels: ['base-image-signing'],
               body: [
-                '`cosign verify` succeeded on `${{ steps.base.outputs.image }}`.',
+                'A cosign signature is published for `${{ steps.base.outputs.image }}`.',
                 '',
                 '## What to do',
                 '',
