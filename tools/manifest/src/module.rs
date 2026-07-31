@@ -750,13 +750,6 @@ fn providers_on_disk(root: &Path) -> BTreeMap<String, Vec<String>> {
     out
 }
 
-/// Capabilities the base family itself provides implicitly — things that
-/// cannot be abstracted across distros (rechunking, initramfs, MAC policy)
-/// and that the base image ships. A module requiring one says it depends
-/// on a distro-specific mechanism; a second base family would substitute
-/// its own.
-const BASE_CAPABILITIES: [&str; 3] = ["rechunking", "initramfs-generation", "mac-policy"];
-
 /// Single pass over the resolved graph. No fixpoint evaluation, no merge
 /// priorities, and nothing is ever auto-included: an unsatisfied
 /// requirement names what would fix it and stops, so the list stays the
@@ -772,11 +765,55 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
         }
     }
 
-    // Base-family capabilities are always satisfied: the base image
-    // provides them, and a module requiring one depends on a mechanism
-    // that is not portable across distros.
-    for cap in BASE_CAPABILITIES {
-        offered.entry(cap).or_default();
+    // What the base itself satisfies, read off the node rather than held
+    // as a constant here. A module requiring one of these depends on a
+    // mechanism that is not portable across distros; a second base family
+    // would declare its own substitutes, or declare none and let the
+    // requirement fail loudly.
+    //
+    // Kept separate from `offered` rather than seeded into it, which is
+    // what the constant did. Seeding happened after the module pass, so a
+    // module declaring one of these names landed in the same entry and
+    // read as the sole provider: it shadowed the base silently, with no
+    // duplicate-provider warning, because the entry the base had put there
+    // was empty and the count never reached two.
+    let base_caps: BTreeMap<&str, &crate::list::Decl> = list
+        .base
+        .iter()
+        .flat_map(|b| b.provides.iter().chain(b.provides_files.iter()))
+        .map(|decl| (decl.name.as_str(), decl))
+        .collect();
+
+    for cap in base_caps.keys() {
+        let Some(providers) = offered.get(cap) else {
+            continue;
+        };
+        for module in providers {
+            issues.push(
+                Issue::new(
+                    format!(
+                        "`{}` provides `{cap}`, which the base image already provides",
+                        module.path
+                    ),
+                    &module.file,
+                    &module.text,
+                )
+                .at(
+                    module
+                        .provides
+                        .iter()
+                        .chain(module.provides_files.iter())
+                        .find(|d| &d.name == cap)
+                        .map(|d| d.span)
+                        .unwrap_or_else(|| (0usize, 0usize).into()),
+                    "already provided by the base",
+                )
+                .help(format!(
+                    "the `base` node in {} declares it. Drop it from the module, or drop it from the base if the base no longer carries it",
+                    list.file
+                )),
+            );
+        }
     }
 
     // Every enabled module must support the base family it is building
@@ -836,6 +873,38 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
         }
     }
 
+    // Shipping SELinux policy is a claim on the base, not on another
+    // module: lib/run-module.sh compiles every selinux/*.te with the base
+    // image's toolchain and installs it into the base image's policy
+    // store. Declaring it keeps the dependency visible in the manifest
+    // rather than implied by a directory listing, and makes delisting
+    // `mac-policy` from the base fail here instead of mid-build.
+    const MAC_POLICY: &str = "mac-policy";
+    for module in modules {
+        let dir = root.join("modules").join(&module.path);
+        let has_policy = std::fs::read_dir(dir.join("selinux"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| e.path().extension().is_some_and(|ext| ext == "te"));
+        if !has_policy || module.requires.iter().any(|d| d.name == MAC_POLICY) {
+            continue;
+        }
+        issues.push(
+            Issue::new(
+                format!(
+                    "`{}` ships SELinux policy without requiring `{MAC_POLICY}`",
+                    module.path
+                ),
+                &module.file,
+                &module.text,
+            )
+            .help(format!(
+                "add `requires \"{MAC_POLICY}\"`; lib/run-module.sh compiles selinux/*.te against the base image's policy store"
+            )),
+        );
+    }
+
     let on_disk = providers_on_disk(root);
 
     for module in modules {
@@ -846,6 +915,12 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
             .chain(module.requires_files.iter().map(|d| (d, "requires-file")));
 
         for (decl, kind) in hard {
+            // The base satisfies it outright, and has no flavor to be
+            // gated to, so neither check below applies.
+            if base_caps.contains_key(decl.name.as_str()) {
+                continue;
+            }
+
             let Some(providers) = offered.get(decl.name.as_str()) else {
                 let help = match on_disk.get(&decl.name) {
                     Some(candidates) => format!(
@@ -853,8 +928,8 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
                         candidates.join(" or ")
                     ),
                     None => format!(
-                        "no module in the repository declares `provides {:?}`",
-                        decl.name
+                        "no module in the repository declares `provides {:?}`, and neither does the `base` node in {}",
+                        decl.name, list.file
                     ),
                 };
                 issues.push(

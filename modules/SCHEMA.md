@@ -699,6 +699,9 @@ Lint fails on all of these, in seconds, before anything builds.
 - a `modules.kdl` entry that does not resolve to a module directory
 - a module directory without a `module.kdl`, or one missing
   `description` or `supports`
+- no `base` node, a `base` declared twice, one with no image reference or
+  no `family`, or a `provides-file` on it that is not an absolute path
+- an enabled module whose `supports` does not include the base `family`
 
 **Flavors**
 
@@ -713,6 +716,8 @@ Lint fails on all of these, in seconds, before anything builds.
   would satisfy it
 - a `requires-file` no enabled module provides
 - two enabled modules providing the same capability or contract file
+- a module providing something the `base` node already provides
+- a module shipping `selinux/*.te` without `requires "mac-policy"`
 - a requirement satisfied only by a module gated to another flavor
 - a cycle, naming the edges that close it
 
