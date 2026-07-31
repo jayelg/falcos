@@ -111,6 +111,36 @@ pub struct Module {
 /// module that cannot build on a second one says so before it is tried.
 const FAMILIES: [&str; 1] = ["fedora"];
 
+const TOKEN_HELP: &str = "package names and repo IDs are emitted straight into the RUN line, so they are limited to letters, digits and . _ + : -; anything else belongs in module.sh, where it can be quoted deliberately";
+
+/// Why a package name or repo ID is not safe to emit, or None when it is.
+///
+/// An allowlist rather than a list of characters to reject: the rejecting
+/// version omitted the space, which is the one that actually splits a
+/// name into two arguments, and every future omission would be silent in
+/// the same way. This matters more than it did, because Stage 10 accepts
+/// manifests from repositories this one does not control.
+///
+/// The permitted set is what an RPM spec legitimately holds: `+` for
+/// gcc-c++, `.` for a version or an arch qualifier, `:` for an epoch, `-`
+/// and `_` for ordinary names. None of them mean anything to the shell.
+fn bad_token(value: &str) -> Option<&'static str> {
+    if value.is_empty() {
+        return Some("is empty");
+    }
+    // dnf5 would read it as a flag rather than as something to install.
+    if value.starts_with('-') {
+        return Some("starts with a dash");
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "._+:-".contains(c))
+    {
+        return Some("has a character that is not allowed");
+    }
+    None
+}
+
 fn prop<'a>(node: &'a KdlNode, key: &str) -> Option<&'a str> {
     node.entries()
         .iter()
@@ -597,12 +627,29 @@ impl Module {
                 );
                 continue;
             }
-            let packages: Vec<String> = child
-                .entries()
-                .iter()
-                .filter(|e| e.name().is_none())
-                .filter_map(|e| e.value().as_string().map(String::from))
-                .collect();
+            let mut packages: Vec<String> = Vec::new();
+            for arg in child.entries().iter().filter(|e| e.name().is_none()) {
+                // A bare 7 or #true parses fine and used to vanish here,
+                // so the module installed one package fewer than it reads
+                // as declaring.
+                let Some(value) = arg.value().as_string() else {
+                    issues.push(
+                        Issue::new("a package name has to be a string", file, text)
+                            .at(arg.span(), "not a string")
+                            .help("quote it: `fedora \"7zip\"`"),
+                    );
+                    continue;
+                };
+                if let Some(problem) = bad_token(value) {
+                    issues.push(
+                        Issue::new(format!("package name `{value}` {problem}"), file, text)
+                            .at(arg.span(), "would not survive the RUN line")
+                            .help(TOKEN_HELP),
+                    );
+                    continue;
+                }
+                packages.push(value.to_string());
+            }
             if packages.is_empty() {
                 issues.push(
                     Issue::new(
@@ -621,7 +668,14 @@ impl Module {
                 };
                 match key {
                     "enablerepo" => match entry.value().as_string() {
-                        Some(v) if !v.is_empty() => enablerepo = Some(v.to_string()),
+                        Some(v) if !v.is_empty() => match bad_token(v) {
+                            Some(problem) => issues.push(
+                                Issue::new(format!("repo ID `{v}` {problem}"), file, text)
+                                    .at(entry.span(), "would not survive the RUN line")
+                                    .help(TOKEN_HELP),
+                            ),
+                            None => enablerepo = Some(v.to_string()),
+                        },
                         _ => issues.push(
                             Issue::new("`enablerepo` needs a repo ID string", file, text)
                                 .at(entry.span(), "not a string"),
@@ -636,22 +690,6 @@ impl Module {
                         .at(entry.span(), "not part of the schema")
                         .help("a family entry in `packages` accepts `enablerepo`"),
                     ),
-                }
-            }
-            // Check for shell metacharacters in package names, as they
-            // are emitted inline into a RUN command.
-            for pkg in &packages {
-                if pkg.contains(|c: char| {
-                    c.is_ascii_control() || "$`\"'\\|&;(){}[]<>*?!~#".contains(c)
-                }) {
-                    issues.push(
-                        Issue::new(
-                            format!("package name `{pkg}` contains a shell metacharacter"),
-                            file,
-                            text,
-                        )
-                        .at(child.name().span(), "would not survive the RUN line"),
-                    );
                 }
             }
             self.packages.push(PackageGroup {

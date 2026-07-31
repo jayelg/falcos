@@ -475,9 +475,16 @@ runs, so the two together are always a build failure; `dnf5 install -y`
 in `module.sh` is where those packages belong, and with the declaration
 additive nothing is lost by refusing the combination.
 
-Only the family the build targets is emitted. A package list for another
-family sits harmlessly in the manifest until that family becomes a build
-target.
+Only the family the build targets is emitted, and the family name has to
+be one this repository knows. A package list for another known family
+sits harmlessly in the manifest until that family becomes a build target.
+
+Package names and repo IDs go straight into the RUN line, so both are
+limited to letters, digits and `. _ + : -`, and neither may start with a
+dash or be a non-string. That covers what an RPM spec legitimately holds
+(`gcc-c++`, `python3.12`, an epoch like `pkg-1:2.3`, a copr repo ID) and
+excludes everything that means something to the shell. Anything outside
+it belongs in `module.sh`, where it can be quoted deliberately.
 
 A module with complex package operations (group install, remove, copr
 enable, distro-sync, versionlock) keeps those in `module.sh`. The
