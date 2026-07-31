@@ -20,7 +20,9 @@ Anything that you want to include in an image can be packaged into a module. A m
 Modules are then explicity defined for inclusion in the image through the `modules.kdl` file.
 
 ### The build Containerfile is generated
-`scripts/gen-containerfile.sh` takes `Containerfile.template` and splices in one RUN layer per module and one per build phase, writing `Containerfile.generated`, which is the file builds use. [build-phases/](build-phases) is a drop-in directory: a `*.sh` there becomes a layer, ordered by its number around the module layers, which build at 50.
+`scripts/gen-containerfile.sh` takes [scripts/Containerfile.skeleton](scripts/Containerfile.skeleton) and splices in the base image `FROM`, one RUN layer per module and one per build phase, writing `Containerfile.generated`, which is the file builds use. [build-phases/](build-phases) is a drop-in directory: a `*.sh` there becomes a layer, ordered by its number around the module layers, which build at 50.
+
+The skeleton lives beside its generator rather than at the repository root, so the only Containerfile you meet here is the one that actually builds. It holds no decisions about the image — the parser directive, the context stage and the pre-publish lint gate — and nothing in it needs editing to change what the image contains.
 
 `Containerfile.generated` is committed, so adding a module or reordering the list shows up as the expanded build in the same diff. Every build regenerates it first and lint fails if the committed copy is stale, so it cannot drift from `modules.kdl`.
 
@@ -74,11 +76,23 @@ Dev scripts for building and testing outside CI.
 
 ### What to customize
 
-#### [Containerfile.template](Containerfile.template)
-Define the base image to use with:
-`FROM <base-image>` eg. `FROM quay.io/fedora/fedora-bootc:44`
+#### [modules.kdl](modules.kdl)
 
-Define what flavors to build in `modules.kdl`:
+Define the base image to build on, the family the modules may assume, and
+what the base brings with it:
+
+```kdl
+base "quay.io/fedora/fedora-bootc:44" {
+    family "fedora"
+    provides "rechunking" "initramfs-generation" "mac-policy"
+    provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
+}
+```
+
+This is the only place the image is named; the `FROM` in
+`Containerfile.generated` is emitted from it.
+
+Define what flavors to build in the same file:
 
 ```kdl
 flavors {
