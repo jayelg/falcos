@@ -56,8 +56,12 @@ else
     echo "    (no /usr/lib/opt symlinks declared)"
 fi
 
-# expected binaries
-echo "==> expected binaries"
+# base image contract
+# The three binaries the base image guarantees. No module declares them
+# because no module provides them, so they are the one list left here,
+# and they move onto the base node with the rest of its guarantees once
+# there is one to declare them on.
+echo "==> base image contract"
 for bin in bootc systemctl rpm-ostree; do
     if command -v "$bin" > /dev/null 2>&1; then
         echo "    ${bin} ok"
@@ -65,6 +69,27 @@ for bin in bootc systemctl rpm-ostree; do
         fail "${bin} not on PATH"
     fi
 done
+
+# module contract files
+# Every provides-file the enabled modules declare, resolved from the
+# manifests on the host and passed in, so the module knowledge stays in
+# the modules. A path declared build-only is already excluded: the module
+# that writes it removes it again before the image is finished, so
+# asserting it exists here would fail a correct build.
+echo "==> module contract files"
+if [ -z "${CONTRACT_FILES:-}" ]; then
+    echo "    (none declared)"
+else
+    # shellcheck disable=SC2086
+    set -- $CONTRACT_FILES
+    for path in "$@"; do
+        if [ -e "$path" ]; then
+            echo "    ${path} ok"
+        else
+            fail "${path}: a module declares it, the image does not have it"
+        fi
+    done
+fi
 
 # Enablement symlinks for a unit under a config root. WantedBy and
 # RequiredBy land in <target>.wants/ and <target>.requires/ one level

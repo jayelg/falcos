@@ -241,9 +241,14 @@ fi
 # Containerfile.generated is a build of the wrong image.
 ./scripts/gen-containerfile.sh
 
+# The contract file paths the validation layer asserts. Resolved here,
+# from the manifests, because the host is the only side that knows which
+# modules this target enables; the image would have to be told anyway.
+# Space separated: every path is absolute and none contains a space.
 build_args=(
     "FLAVOR=${flavor_arg}"
     "IMAGE_VERSION=${image_version}"
+    "CONTRACT_FILES=$(./scripts/manifest.sh contract-files "$flavor" | tr '\n' ' ')"
 )
 [ -z "$kernel" ] || build_args+=("KERNEL=${kernel}")
 
