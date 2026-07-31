@@ -93,16 +93,24 @@ fi
 
 # Enablement symlinks for a unit under a config root. WantedBy and
 # RequiredBy land in <target>.wants/ and <target>.requires/ one level
-# down, an [Install] Alias lands beside them at the root, and a mask is a
-# link to /dev/null rather than enablement.
+# down, named after the unit. An [Install] Alias instead lands beside
+# them at the root, named after the alias and pointing at the unit:
+# plasmalogin.service declares `Alias=display-manager.service`, so
+# enabling it writes display-manager.service and nothing named
+# plasmalogin.service exists anywhere. So both ends are matched, the
+# link's own name and what it resolves to. A mask is a link to /dev/null
+# and is not enablement either way.
 enablement_links() {
-	local root="$1" unit="$2" link
+	local root="$1" unit="$2" link target
 	[ -d "$root" ] || return 0
 	while IFS= read -r link; do
 		[ -n "$link" ] || continue
-		[ "$(readlink "$link")" = /dev/null ] && continue
-		printf '%s\n' "$link"
-	done < <(find "$root" -maxdepth 2 -name "$unit" -type l 2>/dev/null || true)
+		target="$(readlink "$link")"
+		[ "$target" = /dev/null ] && continue
+		if [ "${link##*/}" = "$unit" ] || [ "${target##*/}" = "$unit" ]; then
+			printf '%s\n' "$link"
+		fi
+	done < <(find "$root" -maxdepth 2 -type l 2>/dev/null || true)
 }
 
 # systemd unit verification
@@ -118,12 +126,24 @@ enablement_links() {
 # Unit files are found with find because systemctl show requires a
 # running PID 1.
 #
-# The one thing a container build genuinely cannot resolve is a mount or
-# swap dependency, so those lines are facts about where this runs. A
-# missing .service or .target, or a command that is not executable, is a
-# defect in the unit and still fails. Devices need no entry: verify
-# synthesises them and says nothing.
-verify_allowed='Failed to create .*: Unit [^ ]+\.(mount|swap) not found\.$'
+# Each allowlisted pattern is a fact about where this runs or about
+# packaging, never a defect in the unit. A missing .service or .target,
+# and a command that is not executable, all still fail. Devices need no
+# entry: verify synthesises them and says nothing.
+verify_allowed_patterns=(
+	# A container build has no mounts and no swap, so a unit ordered
+	# against one cannot resolve it here.
+	'Failed to create .*: Unit [^ ]+\.(mount|swap) not found\.$'
+	# Documentation= is checked by running man against it. Whether a man
+	# page was packaged is a packaging decision that says nothing about
+	# whether the unit starts, and vendor units name pages this image does
+	# not carry: plasmalogin names two.
+	"Command 'man [^']*' failed with code [0-9]+\$"
+)
+verify_allowed="$(
+	IFS='|'
+	printf '%s' "${verify_allowed_patterns[*]}"
+)"
 echo "==> systemd unit verification"
 checked=0
 for scope in system user; do
