@@ -368,6 +368,35 @@ pub fn secrets(list: &List, modules: &[Module], target: Option<&str>) -> String 
     out
 }
 
+/// Contract file paths the enabled modules declare and the finished image
+/// still carries, one per line. A `build-only` path is left out: the
+/// module that writes it removes it again in its finalize hook, so
+/// asserting it exists would fail on a correct image. When a target is
+/// given, only modules that land in that target's image are included.
+pub fn contract_files(list: &List, modules: &[Module], target: Option<&str>) -> String {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = String::new();
+    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+        let Some(module) = modules
+            .iter()
+            .find(|m| m.path == entry.path && m.flavor == entry.flavor)
+        else {
+            continue;
+        };
+        for decl in &module.provides_files {
+            if module.provides_files_build_only.contains(&decl.name) {
+                continue;
+            }
+            if seen.contains(&decl.name.as_str()) {
+                continue;
+            }
+            seen.push(&decl.name);
+            let _ = writeln!(out, "{}", decl.name);
+        }
+    }
+    out
+}
+
 fn standard(
     entry: &Entry,
     module: Option<&Module>,

@@ -41,5 +41,16 @@ FROM quay.io/fedora/fedora-bootc:44
 COPY cosign.pub /etc/pki/containers/cosign.pub
 
 ### LINTING
-## Verify final image and contents are correct.
+## Verify final image and contents are correct. Every check here is a
+## pre-publish gate: a failure stops the image before it is signed and
+## pushed to the tag users track.
+## Bind mounted and run through bash, the way every module layer runs, so
+## the validator needs no execute bit and leaves nothing in the image.
+##
+## CONTRACT_FILES is every provides-file the enabled modules declare,
+## resolved on the host by scripts/build.sh and passed in, so no list of
+## module-owned paths is written down in lib. Empty is a valid build.
+ARG CONTRACT_FILES=""
 RUN bootc container lint
+RUN --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    CONTRACT_FILES="${CONTRACT_FILES}" bash /ctx/lib/validate-image.sh

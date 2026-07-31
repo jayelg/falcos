@@ -24,9 +24,25 @@ Turns a published image into installable disk images (qcow2 and Anaconda ISO) vi
 
 > **This workflow builds from a *published* image, so one has to exist.** An image package is created by a push to the default branch, and GitHub makes a new package private on first publish — and ghcr answers an unauthorised request with 403 rather than 404, so "never pushed" and "private" look identical. Both fail the same way. The workflow checks for this up front and says which it is, rather than letting the failure surface as a bare 403 from the pull. Flip a new package to public after its first push.
 
+### [VM Boot Smoke Test](smoke-test.yml)
+
+Weekly proof that the published image boots, which nothing else in the pipeline establishes: the pre-publish validation in [validate-image.sh](../../lib/validate-image.sh) reads a filesystem, and a filesystem that passes every assertion can still fail to reach a login. Pulls the published image, turns it into a qcow2 with bootc-image-builder using the committed [Disk Config](../../disk_config), injects a throwaway SSH key with `virt-customize`, boots it headless under qemu and asserts over SSH that `bootc status` parses, that `systemctl is-system-running` reports `running`, and that no unit has failed.
+
+`/dev/kvm` is the first step, ahead of the pull and the disk build, because the boot uses `-enable-kvm` and `-cpu host` and a runner without KVM should cost a second rather than the whole job. The serial console is written to a file and dumped when the job fails, since qemu runs in the background and a VM that never reaches sshd leaves nothing else to read.
+
+Scheduled after the daily build so the image under test is the one users are getting, and it runs on `workflow_dispatch` too. Not a pre-publish gate yet: it is promoted to one once it has been stable for long enough to trust a red run.
+
 ### [Kernel Freshness](kernel-freshness.yml)
 
 Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../../modules/kernel/cachyos-kernel/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
+
+### [Base Image Signature Probe](base-sig-probe.yml)
+
+Daily watch for the day `quay.io/fedora/fedora-bootc` starts publishing cosign signatures, which is the precondition for gating the `FROM` pull with a `policy.json` and a `registries.d` entry on the builder. Until then the build pulls its base unverified, and the point of a probe is that nobody has to keep checking by hand. Opens one tracking issue when the answer changes, and does nothing on every other run.
+
+The base image reference is read out of [Containerfile.template](../../Containerfile.template) rather than written down here, so the probe cannot drift from what the build actually pulls.
+
+It asks about existence, not trust: `cosign triangulate` names where a signature would live and `cosign download signature` says whether one is there. Verifying properly would need a key or a certificate identity, and fedora publishes neither for this image, which is the very fact being waited on. Nothing is verified against the result, an issue is opened for a human to act on. This finds a signature published the way `cosign sign` publishes one by default, as a `.sig` tag beside the image; a referrers-only signature would go unnoticed, which is the trade for not depending on the referrers API.
 
 ### [Checksums](checksums.yml)
 

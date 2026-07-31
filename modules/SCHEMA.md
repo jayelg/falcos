@@ -214,6 +214,7 @@ module and the finalize phase already do informally.
 | Node | Meaning |
 | --- | --- |
 | `provides-file "<abs-path>"` | this module writes it |
+| `provides-file "<abs-path>" build-only=#true` | it writes it for other build layers, then removes it again |
 | `requires-file "<abs-path>"` | this module reads it, and fails without it |
 
 The case this exists for: `modules/kernel/cachyos-kernel` ships
@@ -224,6 +225,18 @@ shipping unsigned modules. Declared, it is a lint failure in seconds.
 
 Distinct from a capability on purpose: a capability is satisfied by any
 provider, a contract file is an exact path both sides agree on.
+
+`build-only` says how long the path lives, not whether it is a contract.
+`/usr/libexec/kernel-devel-helpers.sh` is the one today: the kernel module
+writes it, both DKMS consumers `requires-file` it, and the kernel module's
+finalize hook removes it once they have built. So it is a real contract
+that a correct image does not contain, and the two claims have to be
+separable. A `build-only` path still binds build order and still fails
+lint when its provider is delisted; what changes is that the in-image
+validation does not assert it exists, which it reaches through `manifest
+contract-files`. Only `provides-file` takes the property: reading or
+overriding a path says nothing about its lifetime, and declaring it there
+is an error rather than a no-op.
 
 ### Overlay collisions
 
