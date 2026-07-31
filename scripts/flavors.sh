@@ -23,7 +23,7 @@ none=none
 # Published images are <prefix> for the ungated build and <prefix>-<flavor>
 # for a flavor; the buildx registry cache is <prefix>-cache, one tag per
 # target.
-prefix=falcos
+prefix="$(./scripts/manifest.sh image-id)"
 
 die() {
     echo "flavors: $*" >&2
@@ -64,8 +64,8 @@ require_target() {
         || die "'${wanted}' is not a build target (have: ${targets[*]})"
 }
 
-# falcos for the ungated build, falcos-<flavor> for a flavor. Naming is a
-# hierarchy: the project, then device variants suffixed.
+# The image's own name for the ungated build, <name>-<flavor> for a
+# flavor. Naming is a hierarchy: the image, then device variants suffixed.
 image_name() {
     if [ "$1" = "$none" ]; then
         printf '%s\n' "$prefix"

@@ -1,0 +1,17 @@
+#!/bin/bash
+set -eu
+
+# Run on demand through the regenerate-grub recipe, never automatically:
+# grub2-probe cannot resolve composefs's root mount, so grub2-mkconfig
+# fails here today. See this module's README for the upstream bug.
+
+mount -o remount,rw /boot
+trap 'mount -o remount,ro /boot' EXIT
+
+if [ -d /sys/firmware/efi ]; then
+    GRUB_CFG="/etc/grub2-efi.cfg"
+else
+    GRUB_CFG="/etc/grub2.cfg"
+fi
+
+grub2-mkconfig -o "$GRUB_CFG"

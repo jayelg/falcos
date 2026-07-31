@@ -13,14 +13,14 @@
 ## Files
 
 <!-- List what the files/ overlay ships and what each piece is for, e.g. the
-     45-falcos-<name>.preset and any config/service/libexec. Omit if none. -->
+     45-module-<name>.preset and any config/service/libexec. Omit if none. -->
 
 ## Flatpaks
 
 <!-- If this module ships default flatpaks for first-boot install, list
      them in a flatpaks.list file (one ID per line). Omit the file if none.
      At build time run-module.sh concatenates every module's
-     flatpaks.list into /usr/share/falcos/default-flatpaks; the flatpak
+     flatpaks.list into /usr/share/flatpak-defaults/apps.list; the flatpak
      module's install-flatpaks service installs each one on
      first boot. -->
 

@@ -15,7 +15,7 @@ modules/<group-or-name>/<name>/
   selinux/*.te        local SELinux policy modules, each auto-compiled and
                       installed at priority 200 (optional)
   files/              overlay copied verbatim into the image, including any
-                      usr/lib/systemd/*-preset/45-falcos-<name>.preset files
+                      usr/lib/systemd/*-preset/45-module-<name>.preset files
                       that 99-finalize.sh applies (optional)
   finalize.sh         run-once logic needing real systemctl or the final
                       image (e.g. service masking, policy.json edits), sourced
@@ -48,16 +48,14 @@ For a repository that publishes modules for others to pin:
 - Prefer a release asset attached to the tag over a forge generated `/archive/` tarball where a repository publishes one. A generated archive is not guaranteed byte stable, and a forge that regenerates one fails every consumer's fetch until each recomputes the hash.
 - OCI artifacts per module are the upgrade path if module distribution becomes a product: version is a tag, integrity is a digest, signing is cosign, all of which this stack already runs.
 
-### Base (`base/`) -- do not disable
-- `base` -- pure-file base-system layer: sshd-off preset, coredump lockdown, PAM policy (faillock/pwquality), sulogin generator, os-release logo + plymouth branding
-
 ### Desktop Environment (`de/`)
 - `de/kde-desktop` -- KDE Plasma Desktop group install, apps, krunner-bazaar
 - `de/kde-theming` -- Darkly, Ant, AWW, papirus icons
-- `de/falcos-plasma-settings` -- bootc-updates KDE System Settings module + notifier (installs after kde-desktop)
+- `de/plasma-bootc-updates` -- bootc updates panel for KDE System Settings + notifier (installs after kde-desktop)
 - `de/plasma-network-audio` -- Plasma network/audio settings module
 
 ### Core System (`core/`) -- do not disable
+- `core/bootloader` -- GRUB os-prober for dual boot + the `regenerate-grub` recipe
 - `core/auto-updates` -- staged bootc auto-update timer + sigstore signature policy (pure-file + finalize.sh)
 - `core/goojust` -- goojust OS TUI + `just` justfile engine + fastfetch (KDE-independent CLI framework)
 - `core/flatpak` -- flatpak client + first-boot default apps + daily update timer
@@ -99,6 +97,8 @@ For a repository that publishes modules for others to pin:
 - `backup/backup-tools` -- borgbackup, rclone, restic
 
 ### Hardening (`hardening/`)
+- `hardening/coredumps` -- coredumps off, in systemd and through PAM limits
+- `hardening/login-policy` -- sshd off, faillock lockout, password quality, rescue sulogin
 - `hardening/hardened-malloc` -- hardened_malloc + no_rlimit_as
 - `hardening/sudo-hardening` -- sudoers.d/99-hardening
 

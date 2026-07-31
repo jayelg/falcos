@@ -13,6 +13,7 @@ FROM scratch AS ctx
 COPY build-phases/ /
 COPY lib/ /lib/
 COPY modules/ /modules/
+COPY brand/ /brand/
 
 # ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----
 #

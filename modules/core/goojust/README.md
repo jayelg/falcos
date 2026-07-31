@@ -4,7 +4,7 @@ The essential tools for managing the live image.
 
 Related modules: the OS self-update + signing *mechanism* lives in
 [auto-updates](../auto-updates); the bootc-updates KDE System Settings GUI
-lives in [de/falcos-plasma-settings](../../de/falcos-plasma-settings).
+lives in [de/plasma-bootc-updates](../../de/plasma-bootc-updates).
 
 ## goojust
 the `goojust` OS TUI for running the justfiles

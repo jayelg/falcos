@@ -78,6 +78,29 @@ Dev scripts for building and testing outside CI.
 
 #### [image.kdl](image.kdl)
 
+Name the image, and point at the assets it wears:
+
+```kdl
+image "falcos" {
+    name "Falcos"
+    url "https://github.com/jayelg/falcos"
+    issues-url "https://github.com/jayelg/falcos/issues"
+    logo "brand/distributor-logo-symbolic.svg"
+    watermark "brand/watermark.png"
+}
+```
+
+This is the only place the brand is written down. os-release carries it,
+so the same declaration is what the boot menu, the desktop's about page
+and the default hostname read, and it is what the published image is
+called (`falcos`, `falcos-desktop`). Assets live in [brand/](brand) and
+are installed by the flavor phase. No module names the image: one that
+needs it reads `/etc/os-release` on the running system.
+
+Where the image publishes is not declared: `scripts/registry.sh` derives
+that from the git remote, so a fork's images, cache and signature policy
+follow the fork with no edit.
+
 Define the base image to build on, the family the modules may assume, and
 what the base brings with it:
 
@@ -89,7 +112,7 @@ base "quay.io/fedora/fedora-bootc:44" {
 }
 ```
 
-This is the only place the image is named; the `FROM` in
+This is the only place the base image is named; the `FROM` in
 `Containerfile.generated` is emitted from it.
 
 Define what flavors to build in the same file:
@@ -184,10 +207,10 @@ One-time setup:
 
 1. `just generate-mok-key` — creates the key pair under `~/.local/share/falcos/`.
 2. Copy the public cert into the repo and commit it:
-   `cp ~/.local/share/falcos/sb_cert.der modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
+   `cp ~/.local/share/falcos/sb_cert.der modules/kernel/cachyos-kernel/files/usr/share/secureboot/sb_cert.der`
 3. Add the private key contents as the `MOK_PRIVKEY` GitHub Actions secret. The module manifests declare the secret as `mok_privkey`, which the build workflow satisfies from its `SECRET_MOK_PRIVKEY` env line; a module asks for a secret by ID and the workflow decides whether to hand one over. For local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`.
 4. On each machine, after deploying a signed image:
-   `sudo mokutil --import /usr/share/falcos/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.
+   `sudo mokutil --import /usr/share/secureboot/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.
 
 The private key never enters the repo or the image; CI mounts it as a BuildKit secret and DKMS-generated throwaway keys are scrubbed from the image.
 

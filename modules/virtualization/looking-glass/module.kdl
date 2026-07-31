@@ -4,7 +4,7 @@ supports "fedora"
 
 // kvmfr is a DKMS module, built and signed exactly like xone.
 requires "kernel-devel"
-requires-file "/usr/share/falcos/sb_cert.der"
+requires-file "/usr/share/secureboot/sb_cert.der"
 requires-file "/usr/libexec/kernel-devel-helpers.sh"
 
 // kvmfr is built and signed exactly like xone.

@@ -3,10 +3,10 @@ set -euo pipefail
 
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-# /usr/share/falcos/default-flatpaks is an aggregate of every module's
+# /usr/share/flatpak-defaults/apps.list is an aggregate of every module's
 # flatpaks.list, assembled at build time by run-module.sh. One flatpak
 # ID per line; blank lines and # comments are ignored.
-FLATPAK_LIST="/usr/share/falcos/default-flatpaks"
+FLATPAK_LIST="/usr/share/flatpak-defaults/apps.list"
 if [ -f "$FLATPAK_LIST" ]; then
     while IFS= read -r flatpak_id; do
         # skip blank lines and comments

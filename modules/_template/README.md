@@ -19,7 +19,7 @@ just keeps it sorted to the top of the modules directory.
    optional. A module can be as small as a single `files/` overlay, or just
    a `module.sh`.
 3. Fill in `README.md` (every module has one), rename
-   `45-falcos-template.preset` → `45-falcos-<name>.preset`, rename
+   `45-module-template.preset` → `45-module-<name>.preset`, rename
    `Containerfile.inc.example` → `Containerfile.inc` only if you need it, and
    drop the `.example` config/libexec.
 4. Add the module path (e.g. `core/my-module`) to `image.kdl`. Position
@@ -39,7 +39,7 @@ finalize layer.
 | `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set, `$ASSET_*` for every asset pin and `$OPT_*` for every option declared in `module.kdl`. Omit for a pure-file module. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
-| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-falcos-<name>.preset` here to enable/disable units. Shipping a path another module also ships is a lint failure unless the later one declares `overrides`. |
+| `files/` | Overlay copied verbatim into the image root. Ship a `usr/lib/systemd/*-preset/45-module-<name>.preset` here to enable/disable units. Shipping a path another module also ships is a lint failure unless the later one declares `overrides`. |
 | `finalize.sh` | Run-once logic needing the real `systemctl` or the finished image. Sourced by 99-finalize.sh, flavor-gated, in build order. |
 | `justfile.inc` | goojust recipes. Picked up because `core/goojust` declares it collects this filename; the destination lives there, not here. |
 | `Containerfile.inc` | Verbatim Containerfile lines added above the generated block — only for what the declared fields cannot express, such as an `ARG` with a default or a second layer. Build secrets and args are declared in `module.kdl` instead. |
@@ -62,7 +62,7 @@ finalize layer.
 ## Key rules & gotchas
 
 - **`systemctl` is stubbed during the build.** You cannot enable services in
-  `module.sh` — ship a `45-falcos-<name>.preset` in `files/`, or do it in
+  `module.sh` — ship a `45-module-<name>.preset` in `files/`, or do it in
   `finalize.sh` (which runs after systemctl is restored).
 - **SELinux:** just drop a `selinux/<name>.te` — run-module.sh compiles and
   installs it. Author rules from real denials with `ausearch -m avc |

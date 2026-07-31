@@ -16,14 +16,18 @@ unverified updates on a timer.
 - `pki/containers/cosign.pub` -- the public half of the CI signing key.
   Declared `provides-file`, so lint fails if the finished image does not
   carry it
-- `registries.d/falcos.yaml` -- enables sigstore attachments for
-  `ghcr.io/jayelg`
 
 ## finalize.sh
 
 Runs in the finalize layer, which is where the final image's policy.json
-exists: merges a `sigstoreSigned` entry for `ghcr.io/jayelg` into
-`/etc/containers/policy.json`, naming the key above as its `keyPath`.
+exists. Writes `registries.d/10-sigstore.yaml` to enable sigstore
+attachments, and merges a `sigstoreSigned` entry naming the key above as
+its `keyPath` into `/etc/containers/policy.json`.
+
+Both are scoped to `IMAGE_REGISTRY`, which scripts/registry.sh derives
+from the git remote, so a fork verifies its own images without editing
+this module. A build with no namespace to derive says so and leaves the
+policy alone rather than trusting a namespace nobody asked for.
 
 ## The other half of the key
 

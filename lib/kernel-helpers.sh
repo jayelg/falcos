@@ -9,6 +9,6 @@
 # kernel-core when no kernel module has run yet.
 kver() {
     local pkg
-    pkg="$(cat /usr/lib/falcos/kernel-package 2>/dev/null || echo 'kernel-core')"
+    pkg="$(cat /usr/lib/kernel-build/kernel-package 2>/dev/null || echo 'kernel-core')"
     rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$pkg"
 }
