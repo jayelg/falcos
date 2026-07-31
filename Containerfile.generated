@@ -64,6 +64,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/flatpak,target=/ctx/modules/
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y flatpak && \
     bash /ctx/lib/run-module.sh /ctx/modules/core/flatpak
 
 # ---- core/brew ----
@@ -80,6 +81,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/cli-tools,target=/ctx/module
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y 7zip-standalone bash-completion bc bsdunzip btop htop iw mtr pv rsync tmux tree vim-enhanced whois wl-clipboard zip && \
     bash /ctx/lib/run-module.sh /ctx/modules/core/cli-tools
 
 # ---- kernel/cachyos-kernel ----
@@ -125,6 +127,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/backup/backup-tools,target=/ctx/m
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y borgbackup rclone restic && \
     bash /ctx/lib/run-module.sh /ctx/modules/backup/backup-tools
 
 # ---- hardware/intel-wifi ----
@@ -133,6 +136,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/intel-wifi,target=/ctx/m
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y iwlwifi-mvm-firmware iwlwifi-mld-firmware && \
     bash /ctx/lib/run-module.sh /ctx/modules/hardware/intel-wifi
 
 # ---- hardware/gaming ----
@@ -142,6 +146,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/gaming,target=/ctx/modul
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    dnf5 install -y gamemode && \
     ASSET_XONE_VERSION="3484f603484782dd7551c64e5a33fc602b127051" \
     KERNEL=${KERNEL} bash /ctx/lib/run-module.sh /ctx/modules/hardware/gaming
 
@@ -151,6 +156,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/hardware-tools,target=/c
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y alsa-ucm alsa-utils dmidecode intel-lpmd lm_sensors lshw pciutils powerstat && \
     bash /ctx/lib/run-module.sh /ctx/modules/hardware/hardware-tools
 
 # ---- hardware/logitech ----
@@ -159,6 +165,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/logitech,target=/ctx/mod
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y solaar-udev && \
     bash /ctx/lib/run-module.sh /ctx/modules/hardware/logitech
 
 # ---- hardware/yubikey ----
@@ -167,6 +174,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/yubikey,target=/ctx/modu
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y opensc pam-u2f pam_yubico pamu2fcfg pcsc-lite pcsc-lite-ccid yubikey-manager && \
     bash /ctx/lib/run-module.sh /ctx/modules/hardware/yubikey
 
 # ---- de/kde-desktop ----
@@ -199,6 +207,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/networking,target=/ctx/modules/ne
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y avahi-gobject avahi-tools cifs-utils nmap-ncat tcpdump traceroute wireguard-tools && \
     MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/networking
 
 # ---- dev-tools ----
@@ -207,6 +216,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/dev-tools,target=/ctx/modules/dev
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y direnv git git-credential-libsecret git-delta git-lfs && \
     bash /ctx/lib/run-module.sh /ctx/modules/dev-tools
 
 # ---- virtualization/libvirt ----
@@ -215,6 +225,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/libvirt,target=/ct
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y edk2-ovmf libvirt libvirt-nss qemu qemu-img qemu-system-x86-core qemu-user-binfmt qemu-user-static-aarch64 virt-manager virt-v2v virt-viewer && \
     bash /ctx/lib/run-module.sh /ctx/modules/virtualization/libvirt
 
 # ---- virtualization/incus ----
@@ -223,6 +234,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/incus,target=/ctx/
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y incus incus-agent lxc systemd-container && \
     bash /ctx/lib/run-module.sh /ctx/modules/virtualization/incus
 
 # ---- virtualization/podman ----
@@ -231,6 +243,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/podman,target=/ctx
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y podman-compose podman-machine podman-tui slirp4netns && \
     bash /ctx/lib/run-module.sh /ctx/modules/virtualization/podman
 
 # ---- vpn/mullvad-vpn ----
@@ -287,6 +300,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/goojust,target=/ctx/modules/
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y just fastfetch && \
     ASSET_GOOJUST_VERSION="0.1.5" \
     ASSET_GOOJUST_URL="https://github.com/jayelg/goojust/releases/download/v0.1.5/goojust-v0.1.5-x86_64-linux-gnu.tar.gz" \
     ASSET_GOOJUST_SHA256="b5555c822de33e74793d43d99df27adaebc9f4be08dc956e8d7cbfb2a5121375" \
@@ -298,6 +312,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/cli-customizations,target=/ctx/mo
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y bat eza fd-find gum ripgrep ugrep zoxide && \
     ASSET_AICHAT_VERSION="0.30.0" \
     ASSET_AICHAT_URL="https://github.com/sigoden/aichat/releases/download/v0.30.0/aichat-v0.30.0-x86_64-unknown-linux-musl.tar.gz" \
     ASSET_AICHAT_SHA256="6b0cc08c5ceb551dc52bfac2221752f82215be5908c70605d655e9b91ab1557c" \
@@ -318,6 +333,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/manage-dotfiles,target=/ctx/modul
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y chezmoi jq && \
     ASSET_BW_VERSION="2026.6.0" \
     ASSET_BW_URL="https://github.com/bitwarden/clients/releases/download/cli-v2026.6.0/bw-linux-2026.6.0.zip" \
     ASSET_BW_SHA256="392549496c712ab86bfbd6c27302df9fd2c431cfc7a47e26941ac3e3893f4d27" \
@@ -351,6 +367,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/kde-theming,target=/ctx/module
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y papirus-icon-theme plasma-wallpapers-dynamic plasma-wallpapers-dynamic-builder && \
     ASSET_DARKLY_VERSION="0.5.38" \
     ASSET_DARKLY_URL="https://github.com/Bali10050/Darkly/archive/refs/tags/v0.5.38.tar.gz" \
     ASSET_DARKLY_SHA256="6ffb293b9b109fe4a4f8aad20027edb640f063fbc5e7b3621ec58762e42f4bbb" \
@@ -368,6 +385,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/apps/affinity,target=/ctx/modules
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    dnf5 install -y winetricks clinfo zstd 7zip && \
     ASSET_WINE_AFFINITY_VERSION="11.12" \
     ASSET_WINE_AFFINITY_URL="https://github.com/ryzendew/Affinity-Wine-Builder/releases/download/11.12/ElementalWarrior-wine-11.12.tar.xz" \
     ASSET_WINE_AFFINITY_SHA256="44a99f2a90356790936f08620ccca573581c0bb006b9bed6899dd4ed465986aa" \

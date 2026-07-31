@@ -441,6 +441,59 @@ Absence is not a mark: the next reader takes a missing annotation for an
 oversight and wires it up, which is exactly what the reason exists to
 prevent.
 
+### Packages
+
+Declared packages as well as calling the installer directly, so the
+generator emits one batched transaction per layer, package sets lint can
+inspect, and adding a second base family later is a data change in one
+place: the module manifest.
+
+Additive, never a replacement. A module keeps `dnf5 install -y` in
+`module.sh` whenever it prefers, and most of them do. The declaration
+exists for the modules where a flat list is genuinely all there is, and
+says nothing about the rest.
+
+```kdl
+packages {
+    fedora "just" "fastfetch"
+    fedora "tailscale" enablerepo="tailscale-stable"
+}
+```
+
+Each child node names a base family and carries the package names as
+positional arguments. On Fedora the generator emits `dnf5 install -y`
+for each unique (family, enablerepo) group; a second family would pick
+its own verb.
+
+| Property | Meaning |
+| --- | --- |
+| `enablerepo=` | install from a repo the base image already carries disabled. Not the module's own `repo` file: that is sourced by `run-module.sh`, after the generated install runs. |
+
+A module that ships a `repo` file cannot declare `packages` at all, and
+lint says so. The repo does not exist yet when the generated install
+runs, so the two together are always a build failure; `dnf5 install -y`
+in `module.sh` is where those packages belong, and with the declaration
+additive nothing is lost by refusing the combination.
+
+Only the family the build targets is emitted, and the family name has to
+be one this repository knows. A package list for another known family
+sits harmlessly in the manifest until that family becomes a build target.
+
+Package names and repo IDs go straight into the RUN line, so both are
+limited to letters, digits and `. _ + : -`, and neither may start with a
+dash or be a non-string. That covers what an RPM spec legitimately holds
+(`gcc-c++`, `python3.12`, an epoch like `pkg-1:2.3`, a copr repo ID) and
+excludes everything that means something to the shell. Anything outside
+it belongs in `module.sh`, where it can be quoted deliberately.
+
+A module with complex package operations (group install, remove, copr
+enable, distro-sync, versionlock) keeps those in `module.sh`. The
+declaration covers the simple case — one batched install per layer —
+which is most of them.
+
+Packages are installed before `module.sh` runs, chained with `&&`, so a
+failure stops the layer and the module's own script still executes.
+
 ### Build inputs
 
 The parameters a module needs from the build itself. These exist because
@@ -690,8 +743,5 @@ Deliberately out of scope, recorded so the shapes above are not mistaken
 for oversights. Each is additive: none of them changes a node defined
 here.
 
-- **`packages { fedora "..." }`**, declaring packages instead of calling
-  the installer, and `supports` becoming enforced against the base family
-  rather than merely declared.
 - **`source`, `ref` and `sha256`** on list entries, for out-of-tree
   modules.

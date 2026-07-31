@@ -1,11 +1,6 @@
 ### KDE Theming
 source /ctx/lib/fetch-helpers.sh
 
-dnf5 install -y \
-    papirus-icon-theme \
-    plasma-wallpapers-dynamic \
-    plasma-wallpapers-dynamic-builder
-
 ### Darkly Qt widget style + KWin window decoration, built from source
 DARKLY_BUILD_DEPS=(
     cmake gcc-c++ extra-cmake-modules

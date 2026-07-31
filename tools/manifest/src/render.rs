@@ -48,6 +48,7 @@ pub fn section(
     modules: &[Module],
     collected: &BTreeMap<String, Vec<(String, String)>>,
     root: &Path,
+    base_family: &str,
     issues: &mut Issues,
 ) -> String {
     let mut out = String::new();
@@ -96,7 +97,12 @@ pub fn section(
             blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
         }
         if module.is_none_or(|m| m.standard_layer) {
-            blocks.push(standard(entry, module, collected.get(&entry.path)));
+            blocks.push(standard(
+                entry,
+                module,
+                collected.get(&entry.path),
+                base_family,
+            ));
         }
         if inc.is_file() && fragment_after {
             blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
@@ -401,6 +407,7 @@ fn standard(
     entry: &Entry,
     module: Option<&Module>,
     collected: Option<&Vec<(String, String)>>,
+    base_family: &str,
 ) -> String {
     let mut env = String::new();
     if let Some(flavor) = &entry.flavor {
@@ -460,6 +467,13 @@ fn standard(
         env.insert_str(0, &format!("{name}=${{{name}}} "));
     }
 
+    // Declared packages, one dnf5 install per unique (family, enablerepo)
+    // group, chained with && before the module runner. Above the env
+    // prefix, not below it: a `VAR=x cmd1 && cmd2` prefix binds to cmd1
+    // alone, so an env written before the install would never reach the
+    // runner.
+    let packages_cmd = packages_install(module, base_family);
+
     let path = &entry.path;
     let mut out = String::new();
     let _ = write!(
@@ -469,8 +483,41 @@ fn standard(
          --mount=type=cache,target=/var/cache \\\n    \
          --mount=type=cache,target=/var/log \\\n    \
          --mount=type=tmpfs,target=/tmp \\\n    \
-         {secrets}{assets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
+         {secrets}{packages_cmd}{assets}{env}bash /ctx/lib/run-module.sh /ctx/modules/{path}"
     );
+    out
+}
+
+/// The install commands for declared packages, if any. One command per
+/// unique (family, enablerepo) group, each ending with ` && ` and a
+/// continuation, so what follows is the runner with its own env prefix on
+/// a line of its own.
+///
+/// Only the family being built is emitted, which is the point of keying
+/// the declaration by family: a list for another one sits in the manifest
+/// until that family becomes a build target, and costs nothing here.
+/// fedora is that family today and its verb is dnf5; a second family adds
+/// its own verb beside this filter rather than sharing one install helper.
+fn packages_install(module: Option<&Module>, base_family: &str) -> String {
+    let groups = match module {
+        Some(m) if !m.packages.is_empty() => m.packages.as_slice(),
+        _ => return String::new(),
+    };
+    let mut out = String::new();
+    for group in groups.iter().filter(|g| g.family == base_family) {
+        let pkgs = group.packages.join(" ");
+        match &group.enablerepo {
+            Some(repo) => {
+                let _ = write!(
+                    out,
+                    "dnf5 install -y --enablerepo='{repo}' {pkgs} && \\\n    "
+                );
+            }
+            None => {
+                let _ = write!(out, "dnf5 install -y {pkgs} && \\\n    ");
+            }
+        }
+    }
     out
 }
 

@@ -2,6 +2,17 @@ description "Affinity Photo, Designer and Publisher, under a patched Wine prefix
 
 supports "fedora"
 
+// winetricks drives the prefix setup; Wine's OpenCL passthrough goes
+// through the base image's OpenCL-ICD-Loader with the rusticl ICD
+// (mesa-libOpenCL, modules/media-codecs), which clinfo is how you check;
+// zstd for the vkd3d-proton tarball module.sh fetches.
+// 7zip needed at runtime by `falcos affinity-setup` to extract the .NET
+// 4.8 offline installer's x64 MSI (bypassing the 32-bit self-extractor
+// which fails on this WoW64-only Wine build).
+packages {
+    fedora "winetricks" "clinfo" "zstd" "7zip"
+}
+
 // None of these upstreams publish a checksum, so every hash here is
 // trust-on-first-use: taken at PR time, which still catches a release
 // asset swapped after the pin was made.

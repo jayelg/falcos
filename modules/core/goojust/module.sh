@@ -1,8 +1,5 @@
 # goojust
 
-# Fastfetch - required for goojust below
-dnf5 install -y just fastfetch
-
 source /ctx/lib/fetch-helpers.sh
 
 ### goojust — an OS TUI for running justfiles on the system

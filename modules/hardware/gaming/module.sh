@@ -1,5 +1,4 @@
 ### Hardware & gaming performance
-dnf5 install -y gamemode
 
 ### xone Xbox Wireless Adapter driver
 source /ctx/lib/dkms-helpers.sh
