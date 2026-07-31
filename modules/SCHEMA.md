@@ -443,13 +443,20 @@ whole RUN block to get one.
 that skips what the secret enables, and the alternative is a repository
 that only its owner can build.
 
-Where the value comes from is a convention, not a second declaration: the
-build workflow writes every ID the target declares from the repository
-secret of the same name uppercased, so `secret "mok_privkey"` reads
-`MOK_PRIVKEY`. Adding a secret to a module is therefore a manifest line
-and a repository setting, with no workflow edit. A declared ID the
-repository has no secret for is a warning and an absent file, which is
-the `required=false` case above.
+**A module asks for a secret, it never picks one.** The ID names what the
+module wants; whether this repository is willing to hand it over is the
+build workflow's `SECRET_` env list, one line per secret it allows.
+`secret "mok_privkey"` is satisfied by `SECRET_MOK_PRIVKEY`, wired to the
+`MOK_PRIVKEY` repository secret. Adding a secret to a module is a
+manifest line, a repository secret and one workflow line.
+
+The allowlist is the point, not overhead. A manifest is data, and Stage
+10 accepts manifests from outside this repository, so an ID that selected
+its own value would let a module name a secret it has no business reading
+and have it mounted into a layer it controls. An ID must also be
+`[a-z0-9_]`, since it becomes a variable name and a filename. A declared
+ID the list does not cover is a warning and an absent file, which is the
+`required=false` case above.
 
 An `arg` must be declared somewhere above the module's layer, or the
 generator fails rather than expanding it to an empty string.

@@ -169,7 +169,7 @@ One-time setup:
 1. `just generate-mok-key` — creates the key pair under `~/.local/share/falcos/`.
 2. Copy the public cert into the repo and commit it:
    `cp ~/.local/share/falcos/sb_cert.der modules/kernel/cachyos-kernel/files/usr/share/falcos/sb_cert.der`
-3. Add the private key contents as the `MOK_PRIVKEY` GitHub Actions secret -- the module manifests declare the secret as `mok_privkey`, and the workflow finds the repository secret by uppercasing that (for local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`).
+3. Add the private key contents as the `MOK_PRIVKEY` GitHub Actions secret. The module manifests declare the secret as `mok_privkey`, which the build workflow satisfies from its `SECRET_MOK_PRIVKEY` env line; a module asks for a secret by ID and the workflow decides whether to hand one over. For local signed builds, `export MOK_KEY_PATH=~/.local/share/falcos/MOK.priv` before `just build`.
 4. On each machine, after deploying a signed image:
    `sudo mokutil --import /usr/share/falcos/sb_cert.der`, then reboot and complete the MokManager enrollment prompt.
 

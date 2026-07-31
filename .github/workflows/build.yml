@@ -256,18 +256,24 @@ jobs:
             io.artifacthub.package.prerelease=false
             containers.bootc=1
 
-      # Build secrets, derived from the manifests rather than named here.
-      # Every ID a module in this target declares is written from the
-      # repository secret of the same name uppercased, so `secret
-      # "mok_privkey"` reads MOK_PRIVKEY. Each potential secret is
-      # explicitly mapped as a step env var; adding a secret to a module
-      # means adding one env line here.
+      # Build secrets, derived from the manifests but never chosen by them.
+      # Which IDs a target wants comes from the module manifests; which
+      # ones this repository is willing to satisfy is the SECRET_ env list
+      # below, one line per secret. Adding a secret to a module is a
+      # manifest line plus a line here.
+      #
+      # Both halves matter. `toJSON(secrets)` would remove the second line
+      # but hand every repository secret, the cosign signing key included,
+      # to a loop driven by manifest content. The SECRET_ prefix is the
+      # same argument one level down: without it a manifest declaring
+      # `secret "path"` would read $PATH out of this step's environment
+      # and write it out as a build secret.
       #
       # Gated on PUBLISH, so a build that never ships an image never has a
-      # private key on disk. A declared ID the repository has no secret
-      # for is a warning and no file: every secret is `required=false` in
-      # the Containerfile, so a fork builds cleanly without them, and an
-      # empty file would look like a key while signing nothing.
+      # private key on disk. A declared ID this list does not cover is a
+      # warning and no file: every secret is `required=false` in the
+      # Containerfile, so a fork builds cleanly without them, and an empty
+      # file would look like a key while signing nothing.
       #
       # The directory is the interface to the build step below: one file
       # per secret, named by its ID.
@@ -275,17 +281,26 @@ jobs:
         if: env.PUBLISH == 'true'
         env:
           TARGET: ${{ matrix.target }}
-          MOK_PRIVKEY: ${{ secrets.MOK_PRIVKEY }}
+          SECRET_MOK_PRIVKEY: ${{ secrets.MOK_PRIVKEY }}
         run: |
           umask 077
           mkdir -p "${RUNNER_TEMP}/build-secrets"
           while IFS= read -r id; do
             [ -n "$id" ] || continue
-            name="${id^^}"
-            value="${!name}"
+            # The ID becomes a variable name and a filename, so hold it to
+            # what both accept rather than trusting the manifest with
+            # either. An out-of-tree manifest is data from elsewhere.
+            case "$id" in
+              *[!a-z0-9_]*)
+                echo "::warning::build secret id '${id}' is not [a-z0-9_], ignoring it"
+                continue
+                ;;
+            esac
+            name="SECRET_${id^^}"
+            value="${!name:-}"
             if [ -z "$value" ]; then
               echo "::warning::a module declares the build secret '${id}'," \
-                "but this repository has no '${name}' secret. Building without it."
+                "but this workflow passes no ${name}. Building without it."
               continue
             fi
             printf '%s' "$value" > "${RUNNER_TEMP}/build-secrets/${id}"
@@ -555,6 +570,12 @@ jobs:
 
       # Tags after the first are registry-side copies of its digest, so
       # every tag shares one manifest for cosign to cover.
+      #
+      # Five retries rather than three, because everything expensive has
+      # already happened by here: a ghcr.io 502 part way through a blob
+      # upload throws away a 45 minute build and a rechunk. Deliberately
+      # no --retry-delay, which would swap skopeo's exponential backoff
+      # for a fixed one, and backoff is what rides out a registry blip.
       - name: Push chunked image
         id: push
         if: env.PUBLISH == 'true'
@@ -563,12 +584,12 @@ jobs:
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
             if [ -z "$digest" ]; then
-              sudo skopeo copy --retry-times 3 \
+              sudo skopeo copy --retry-times 5 \
                 "containers-storage:localhost/${IMAGE_NAME}:chunked" \
                 "docker://${tag}" --digestfile "${RUNNER_TEMP}/digestfile"
               digest="$(cat "${RUNNER_TEMP}/digestfile")"
             else
-              sudo skopeo copy --retry-times 3 \
+              sudo skopeo copy --retry-times 5 \
                 "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" \
                 "docker://${tag}"
             fi
