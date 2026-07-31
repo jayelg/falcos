@@ -37,6 +37,9 @@ jobs:
 
       # qcow2 disk image from the container image, using the committed
       # disk config so the VM layout matches what an installed system has.
+      # Built from the reference the step above pulled, which the shared
+      # container storage below makes available: naming a localhost/ copy
+      # instead meant naming a tag nothing had ever created.
       - name: Build qcow2 disk image
         run: |
           sudo podman run --rm --privileged \
@@ -50,7 +53,7 @@ jobs:
             --type qcow2 \
             --use-librepo=True \
             --rootfs=btrfs \
-            "localhost/${IMAGE_NAME}:latest"
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
           ls -lh "${RUNNER_TEMP}/qcow2/"
 
       - name: Generate SSH key for VM access
