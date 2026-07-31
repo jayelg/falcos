@@ -443,11 +443,15 @@ prevent.
 
 ### Packages
 
-Declared packages instead of calling the installer directly, so the
+Declared packages as well as calling the installer directly, so the
 generator emits one batched transaction per layer, package sets lint can
-inspect, and there are no scattered `dnf5 install -y` calls. Adding a
-second base family later is a data change in one place: the module
-manifest.
+inspect, and adding a second base family later is a data change in one
+place: the module manifest.
+
+Additive, never a replacement. A module keeps `dnf5 install -y` in
+`module.sh` whenever it prefers, and most of them do. The declaration
+exists for the modules where a flat list is genuinely all there is, and
+says nothing about the rest.
 
 ```kdl
 packages {
@@ -463,7 +467,13 @@ its own verb.
 
 | Property | Meaning |
 | --- | --- |
-| `enablerepo=` | install from a repo that was added disabled (the `repo` file pattern). **Not yet usable**: the repo is configured inside `run-module.sh`, after the generated `dnf5 install` runs. For now, `--enablerepo` packages must stay in `module.sh`. |
+| `enablerepo=` | install from a repo the base image already carries disabled. Not the module's own `repo` file: that is sourced by `run-module.sh`, after the generated install runs. |
+
+A module that ships a `repo` file cannot declare `packages` at all, and
+lint says so. The repo does not exist yet when the generated install
+runs, so the two together are always a build failure; `dnf5 install -y`
+in `module.sh` is where those packages belong, and with the declaration
+additive nothing is lost by refusing the combination.
 
 Only the family the build targets is emitted. A package list for another
 family sits harmlessly in the manifest until that family becomes a build

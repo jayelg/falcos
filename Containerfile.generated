@@ -252,7 +252,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/vpn/mullvad-vpn,target=/ctx/modul
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    dnf5 install -y mullvad-vpn && \
     bash /ctx/lib/run-module.sh /ctx/modules/vpn/mullvad-vpn
 
 # ---- vpn/netbird ----
@@ -261,7 +260,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/vpn/netbird,target=/ctx/modules/v
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    dnf5 install -y netbird && \
     bash /ctx/lib/run-module.sh /ctx/modules/vpn/netbird
 
 # ---- vpn/tailscale ----
