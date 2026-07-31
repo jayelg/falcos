@@ -50,6 +50,7 @@ flavors {
 // }
 modules {
     module "base"
+    module "core/signature-policy"
     module "core/auto-updates"
     module "core/system-just-scripts"
     module "core/flatpak"

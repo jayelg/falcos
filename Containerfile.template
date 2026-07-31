@@ -28,13 +28,6 @@ COPY modules/ /modules/
 #
 # ---- END GENERATED ----
 
-### SIGNING POLICY
-## Bake cosign public key so bootc upgrade can verify signatures against it.
-## The registries config and the policy.json merge live in the
-## auto-updates module (files/ overlay + finalize.sh).
-## Kept above LINTING so it's checked too.
-COPY cosign.pub /etc/pki/containers/cosign.pub
-
 ### LINTING
 ## Verify final image and contents are correct. Every check here is a
 ## pre-publish gate: a failure stops the image before it is signed and

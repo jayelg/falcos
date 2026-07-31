@@ -669,6 +669,11 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           IMAGE_DIGEST="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+          # The key moved into the module that owns the signing policy, so
+          # its repo path is asked for rather than written down here, the
+          # way the Justfile resolves the Secure Boot cert.
+          key="modules/$(./scripts/manifest.sh find-provider /etc/pki/containers/cosign.pub)/files/etc/pki/containers/cosign.pub"
+          [ -f "$key" ] || { echo "no module provides the cosign key" >&2; exit 1; }
           # stdout discarded on both: what verification says is on stderr
           # and in the exit code, while stdout is the payload echoed back.
           # For the attestation that payload is the whole decoded SBOM

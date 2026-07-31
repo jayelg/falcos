@@ -1,3 +1,10 @@
-description "Staged bootc auto-update timer and the sigstore signature policy it verifies against"
+description "Staged bootc auto-update timer"
 
 supports "fedora"
+
+// Fetching updates on a timer without verifying them is the one
+// combination that must not be buildable, so the signature policy is a
+// declared requirement rather than something that happens to be listed
+// nearby. Delisting core/signature-policy now fails lint here instead of
+// producing an image that pulls unverified updates unattended.
+requires "signature-policy"

@@ -1,0 +1,21 @@
+description "Sigstore signature verification for the image's own updates"
+
+supports "fedora"
+
+// Verifying an update is a separate decision from fetching one on a
+// timer, which is why this is not part of `core/auto-updates` any more.
+// An image can verify signatures without auto-updating: a manual `bootc
+// upgrade` consults the same policy. The reverse is the dangerous
+// configuration, so auto-updates requires this rather than the other way
+// round.
+provides "signature-policy"
+
+// The cosign public key the policy names as its `keyPath`. A contract
+// file because the two have to ship together: an image carrying the
+// policy without the key rejects every update it is offered, and would do
+// so silently until the first upgrade.
+//
+// It used to be a COPY in the Containerfile skeleton, beside a comment
+// noting that its registries config and policy merge already lived in a
+// module. This is the rest of that move.
+provides-file "/etc/pki/containers/cosign.pub"
