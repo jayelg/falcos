@@ -2,8 +2,15 @@ description "Opinionated shell UX: eza, bat, ripgrep, fd, zoxide, starship, flyl
 
 supports "fedora"
 
+// Modern replacements for the default tools. What each one replaces is
+// what says why it is here, since the aliases that put them in the way
+// live in files/etc/profile.d/zz-bling.sh rather than beside the names.
 packages {
-    fedora "bat" "eza" "fd-find" "gum" "ripgrep" "ugrep" "zoxide"
+    fedora "bat" /* cat */ "eza" /* ls */ "fd-find" /* find */ \
+           "gum" /* TUI scripting helper */ \
+           "ripgrep" /* grep, additive: rg */ \
+           "ugrep" /* grep, aliased */ \
+           "zoxide" /* cd */
 }
 
 // Which Nerd Font families to install. A list, because the set is the

@@ -2,6 +2,10 @@ description "Flatpak client, first-boot install of the default app set, and a da
 
 supports "fedora"
 
+// The first-boot default-app install and the daily update are wired up by
+// this module's files/ overlay (services + preset), so the client itself
+// is the one part the overlay cannot supply: the fedora-bootc base does
+// not guarantee it.
 packages {
     fedora "flatpak"
 }

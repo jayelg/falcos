@@ -3,7 +3,8 @@ description "chezmoi and the Bitwarden CLI, with a setup-dotfiles recipe to rest
 supports "fedora"
 
 packages {
-    fedora "chezmoi" "jq"
+    fedora "chezmoi" /* dotfiles */ \
+           "jq" /* parses `bw status` in the setup-dotfiles recipe */
 }
 
 // The Bitwarden CLI. Releases are tagged cli-v<version>, hence the

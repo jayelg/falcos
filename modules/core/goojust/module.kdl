@@ -4,6 +4,9 @@ supports "fedora"
 
 collects "justfile.inc" into="/usr/share/goojust/justfile.apps"
 
+// Both are goojust's runtime dependencies rather than this image's: it
+// runs justfiles through just and renders fastfetch. module.sh installs
+// goojust itself from the pinned asset below.
 packages {
     fedora "just" "fastfetch"
 }
