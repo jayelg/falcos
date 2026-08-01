@@ -1,10 +1,10 @@
 #!/bin/bash
-# Runs after all install phases: restores systemctl, applies the falcos
+# Runs after all install phases: restores systemctl, applies the module
 # systemd presets, runs per-module finalize.sh hooks, and the remaining
 # global tweaks (bootloader, SELinux workaround). Only genuinely global,
 # run-once operations live here; module-owned finalize logic lives in each
-# module's finalize.sh. Initramfs regeneration is now owned by the kernel
-# module's finalize.sh.
+# module's finalize.sh. The initramfs is built by the kernel module's
+# hook.
 
 set -ouex pipefail
 
@@ -29,10 +29,6 @@ done
 rm -rf /opt
 mv /opt.bak /opt
 
-### Bootloader
-# Let GRUB discover other installed OSes (dual boot).
-echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
-
 ### SELinux Policy: composefs/overlay execmem workaround
 # A composefs/overlay mmap bug mislabels legitimate userspace execmem
 # mappings as kernel_t (ublue-os/akmods#537). Drop once fixed upstream.
@@ -50,15 +46,17 @@ source /ctx/lib/selinux-helpers.sh
 install_selinux_module /tmp/composefs_execmem.te
 
 ### Service enablement
-# Modules ship *falcos*.preset files in their files/ overlays; only those
-# presets are applied here, so a module removed from image.kdl takes
-# its service enablement with it. Deliberately not `systemctl
-# preset-all`, which would re-apply Fedora's defaults to every unit in
-# the image.
-apply_falcos_presets() {
+# Modules ship 45-module-*.preset files in their files/ overlays; only
+# those presets are applied here, so a module removed from image.kdl takes
+# its service enablement with it. Deliberately not `systemctl preset-all`,
+# which would re-apply Fedora's defaults to every unit in the image. The
+# prefix is the module system's, not this image's, so a module written
+# elsewhere enables its own services here without knowing what it is
+# being built into.
+apply_module_presets() {
     local scope="$1" dir="$2" flag=() f verb unit
     [ "$scope" = "user" ] && flag=(--global)
-    for f in "$dir"/*falcos*.preset; do
+    for f in "$dir"/45-module-*.preset; do
         [ -f "$f" ] || continue
         while read -r verb unit; do
             case "$verb" in
@@ -69,8 +67,8 @@ apply_falcos_presets() {
         done < "$f"
     done
 }
-apply_falcos_presets system /usr/lib/systemd/system-preset
-apply_falcos_presets user /usr/lib/systemd/user-preset
+apply_module_presets system /usr/lib/systemd/system-preset
+apply_module_presets user /usr/lib/systemd/user-preset
 
 ### Module finalize hooks
 # Some modules need real systemctl or must run after every other module

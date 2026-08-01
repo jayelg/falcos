@@ -35,10 +35,18 @@ A manifest declares *facts*, not *file layout*.
 
 ## image.kdl
 
-Three top-level nodes. `flavors` is optional; `base` and `modules` are
-required.
+Four top-level nodes. `flavors` is optional; `image`, `base` and `modules`
+are required.
 
 ```kdl
+image "falcos" {
+    name "Falcos"
+    url "https://github.com/jayelg/falcos"
+    issues-url "https://github.com/jayelg/falcos/issues"
+    logo "brand/distributor-logo-symbolic.svg"
+    watermark "brand/watermark.png"
+}
+
 base "quay.io/fedora/fedora-bootc:44" {
     family "fedora"
     provides "rechunking" "initramfs-generation" "mac-policy"
@@ -59,7 +67,7 @@ flavors {
 }
 
 modules {
-    module "base"
+    module "core/bootloader"
     module "core/auto-updates"
     module "kernel/cachyos-kernel"
 
@@ -90,11 +98,44 @@ resolves, which is document order wherever the graph says nothing.
 Nesting rather than INI-style section headers makes "outside a flavor
 block means ungated" structural instead of positional.
 
+### `image`
+
+What the image calls itself. The argument is its machine name, matching
+`^[a-z][a-z0-9-]*$` because it becomes an image tag, a cache tag and the
+default hostname.
+
+| Child | Meaning |
+| --- | --- |
+| `name` | os-release `NAME`, the human one. Required. |
+| `pretty-name` | os-release `PRETTY_NAME`. Defaults to `<name> <version>`. |
+| `url` | os-release `HOME_URL` and `DOCUMENTATION_URL`. |
+| `issues-url` | os-release `SUPPORT_URL` and `BUG_REPORT_URL`. |
+| `logo` | scalable icon, installed into the hicolor theme. Its filename without the extension becomes os-release `LOGO`, so the two cannot name different icons. |
+| `watermark` | plymouth boot splash watermark. |
+
+os-release is the carrier, so this one declaration also reaches the GRUB
+entry titles ostree writes and the desktop's about page. The published
+image name comes from here too: `<name>` for the ungated build and
+`<name>-<flavor>` for a flavor, which is what `scripts/flavors.sh`
+answers with.
+
+Asset paths are relative to the repository root and must be under
+`brand/`, the one directory of theirs the build context carries. The
+values reach the build as the `IMAGE_*` ARGs the phases below the module
+layers read, and no module is given any of them: **a module never spells
+the image out**. One that needs the brand at runtime reads
+`/etc/os-release` on the running system, the way `core/goojust` names its
+TUI alias.
+
+Where the image *publishes* is deliberately not here. `scripts/registry.sh`
+derives that from the git remote, so a fork follows its own with no edit,
+and the finalize phase receives it as `IMAGE_REGISTRY`.
+
 ### `base`
 
 The image every layer builds on, and what building on it may assume. The
 argument is the full reference, emitted verbatim as the `FROM` in
-`Containerfile.generated`: this file is the only place the image is
+`Containerfile.generated`: this file is the only place the base image is
 named, so the declaration and the build cannot drift.
 
 | Child | Meaning |
@@ -174,8 +215,8 @@ an existing entry changes.
 
 ```kdl
 module "steam-tweaks" {
-    source "https://github.com/owner/falcos-modules/archive/refs/tags/{ref}.tar.gz" {
-        renovate datasource="github-tags" depName="owner/falcos-modules"
+    source "https://github.com/owner/bootc-modules/archive/refs/tags/{ref}.tar.gz" {
+        renovate datasource="github-tags" depName="owner/bootc-modules"
         ref "steam-tweaks/v1.2.0"
         sha256 "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3"
         path "modules/steam-tweaks"
@@ -268,7 +309,7 @@ description "kvmfr DKMS module for Looking Glass GPU passthrough"
 supports "fedora"
 
 requires "kernel-devel"
-requires-file "/usr/share/falcos/sb_cert.der"
+requires-file "/usr/share/secureboot/sb_cert.der"
 after "vfio"
 
 secret "mok_privkey"
@@ -323,7 +364,7 @@ module and the finalize phase already do informally.
 | `requires-file "<abs-path>"` | this module reads it, and fails without it |
 
 The case this exists for: `modules/kernel/cachyos-kernel` ships
-`/usr/share/falcos/sb_cert.der`, and both `hardware/gaming` and
+`/usr/share/secureboot/sb_cert.der`, and both `hardware/gaming` and
 `virtualization/looking-glass` read it to sign their DKMS modules.
 Dropping the kernel module from the list today leaves those two silently
 shipping unsigned modules. Declared, it is a lint failure in seconds.
@@ -380,7 +421,7 @@ contributes.
 collects "justfile.inc" into="/usr/share/goojust/justfile.apps"
 
 // modules/core/flatpak/module.kdl
-collects "flatpaks.list" into="/usr/share/falcos/default-flatpaks"
+collects "flatpaks.list" into="/usr/share/flatpak-defaults/apps.list"
 ```
 
 | Part | Meaning |
@@ -720,11 +761,13 @@ shows, layer by layer, and what `manifest summary` prints.
 A **flavor** is an image build variant. A **target** is something the
 matrix builds, which is every flavor plus the ungated set.
 
+The image column is the [`image`](#image) name, suffixed per flavor:
+
 | Target | Image | Cache tag | `FLAVOR` |
 | --- | --- | --- | --- |
-| `none` | `falcos` | `none` | unset |
-| `desktop` | `falcos-desktop` | `desktop` | `desktop` |
-| `laptop` | `falcos-laptop` | `laptop` | `laptop` |
+| `none` | `<image>` | `none` | unset |
+| `desktop` | `<image>-desktop` | `desktop` | `desktop` |
+| `laptop` | `<image>-laptop` | `laptop` | `laptop` |
 
 `none` is a reserved token, not a flavor, and is rejected as a flavor
 name. It exists because a cache tag and a matrix entry both need a
@@ -739,7 +782,7 @@ no-flavors path continuously built rather than a degenerate case that
 rots. A gated module still emits a layer in this build; the layer sees an
 empty `FLAVOR`, skips, and costs nothing.
 
-The installer ISO targets `falcos` **by rule**, not by a maintained
+The installer ISO targets the ungated set **by rule**, not by a maintained
 value. Kargs under `/usr/lib/bootc/kargs.d/` are static and cannot be
 made conditional on hardware, so an installer payload must be the ungated
 set; moving to a device flavor afterwards is a `bootc switch`, made cheap
@@ -777,6 +820,9 @@ Lint fails on all of these, in seconds, before anything builds.
 - an `image.kdl` entry that does not resolve to a module directory
 - a module directory without a `module.kdl`, or one missing
   `description` or `supports`
+- no `image` node, an `image` declared twice, one with no name, no
+  `name` child, a name outside `^[a-z][a-z0-9-]*$`, or an asset path
+  outside `brand/` or naming a file that does not exist
 - no `base` node, a `base` declared twice, one with no image reference or
   no `family`, or a `provides-file` on it that is not an absolute path
 - an enabled module whose `supports` does not include the base `family`

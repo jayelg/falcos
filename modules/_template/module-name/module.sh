@@ -13,7 +13,7 @@
 #   - every option declared in module.kdl is in $OPT_<NAME>, variant
 #     overrides already folded in
 #   - `systemctl` is STUBBED. Don't enable services here; ship a
-#     45-falcos-<name>.preset in files/, or use finalize.sh.
+#     45-module-<name>.preset in files/, or use finalize.sh.
 
 ### 1. Packages from the base repos
 # dnf5 install -y <package-name> <another-package>

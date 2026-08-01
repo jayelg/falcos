@@ -2,7 +2,7 @@
 # Copies the image-staged Affinity DLLs and WinRT metadata into this user's
 # Wine prefix, so image updates (Wine/DXVK/vkd3d bumps) reach existing
 # prefixes. Called by affinity-sync.service at login and by
-# `falcos affinity-setup`. DllOverrides persist in the prefix registry and
+# `goojust affinity-setup`. DllOverrides persist in the prefix registry and
 # need no refresh. DXVK's dxgi + vkd3d-proton's d3d12 is the standard
 # pairing; Affinity loads d3d12 and the wintypes shim from its own
 # directory.

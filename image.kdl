@@ -3,8 +3,38 @@
 // The schema is documented in modules/SCHEMA.md.
 // scripts/manifest.sh reads from this file.
 //
+// What the image calls itself. os-release carries it, so this one
+// declaration reaches the GRUB entry titles ostree writes, the desktop's
+// about page, the default hostname and the published image name. No
+// module spells the brand out: a module that needs it reads os-release at
+// runtime, and everything else is derived from here.
+//
+// Where the image publishes is deliberately absent: scripts/registry.sh
+// derives that from the git remote, so a fork follows its own with no
+// edit here.
+//
+// - the node argument is the machine name: published image (falcos,
+//                 falcos-desktop), default hostname, MOK key directory
+// - name          os-release NAME, what a person reads
+// - pretty-name   os-release PRETTY_NAME, default "<name> <version>"
+// - url           os-release HOME_URL and DOCUMENTATION_URL
+// - issues-url    os-release SUPPORT_URL and BUG_REPORT_URL
+// - logo          scalable icon, installed into the icon theme and named
+//                 by os-release LOGO
+// - watermark     plymouth boot splash watermark
+//
+// Asset paths are relative to the repository root and live in brand/,
+// the directory the build context carries for them.
+image "falcos" {
+    name "Falcos"
+    url "https://github.com/jayelg/falcos"
+    issues-url "https://github.com/jayelg/falcos/issues"
+    logo "brand/distributor-logo-symbolic.svg"
+    watermark "brand/watermark.png"
+}
+
 // The base image every layer builds on top of, and what it brings with
-// it. This is the only place the image is named: the FROM in
+// it. This is the only place the base image is named: the FROM in
 // Containerfile.generated is emitted from here, so the two cannot drift.
 //
 // Use major version tags with quay.io/fedora as old untagged manifests are
@@ -59,7 +89,7 @@ flavors {
 //     }
 // }
 modules {
-    module "base"
+    module "core/bootloader"
     module "core/signature-policy"
     module "core/auto-updates"
     module "core/system-just-scripts"
@@ -69,6 +99,8 @@ modules {
 
     module "kernel/cachyos-kernel"
 
+    module "hardening/coredumps"
+    module "hardening/login-policy"
     module "hardening/hardened-malloc"
     module "hardening/sudo-hardening"
 
@@ -109,7 +141,7 @@ modules {
     module "core/goojust"
     module "cli-customizations"
     module "manage-dotfiles"
-    module "de/falcos-plasma-settings"
+    module "de/plasma-bootc-updates"
     module "de/plasma-network-audio"
     module "de/kde-theming"
     module "apps/affinity"

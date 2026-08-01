@@ -36,8 +36,8 @@ supports "fedora"
 // reads. Unlike a capability, both sides name the same path. Lint fails
 // on a reader whose writer is not in the image.
 //
-// provides-file "/usr/lib/falcos/example-marker"
-// requires-file "/usr/share/falcos/sb_cert.der"
+// provides-file "/usr/lib/example/marker"
+// requires-file "/usr/share/secureboot/sb_cert.der"
 
 // OPTIONAL. Overlay overrides: the files/ overlay is copied over the
 // image root in build order, so two modules shipping the same path
@@ -140,7 +140,7 @@ supports "fedora"
 // that collects it is not in the list, so a contribution cannot go
 // missing silently.
 //
-// collects "example.inc" into="/usr/share/falcos/example.d/all"
+// collects "example.inc" into="/usr/share/example/all.inc"
 
 // OPTIONAL, and only alongside a Containerfile.inc. Shipping that file
 // is what adds a fragment; this node says the two things the file cannot

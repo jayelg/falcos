@@ -9,7 +9,7 @@
 # denials with `ausearch -m avc | audit2allow` (or `audit2allow -a`) after
 # boot-testing, then paste the vetted subset here. Delete this file if the
 # module needs no custom SELinux policy.
-module falcos_template 1.0;
+module example 1.0;
 
 require {
 	type unconfined_t;

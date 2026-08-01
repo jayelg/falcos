@@ -56,7 +56,7 @@ cat > /usr/bin/affinity <<'EOF'
 export WINEPREFIX="${AFFINITY_PREFIX:-$HOME/.local/share/affinity}"
 AFFINITY_EXE="C:\\Program Files\\Affinity\\Affinity\\Affinity.exe"
 if [ ! -f "$WINEPREFIX/drive_c/Program Files/Affinity/Affinity/Affinity.exe" ]; then
-    msg="Affinity is not set up for this user yet. Run: falcos affinity-setup"
+    msg="Affinity is not set up for this user yet. Run: goojust affinity-setup"
     command -v kdialog >/dev/null && kdialog --error "$msg" || echo "$msg" >&2
     exit 1
 fi

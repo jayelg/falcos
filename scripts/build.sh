@@ -24,10 +24,16 @@ cd "$(dirname "$0")/.."
 
 containerfile=Containerfile.generated
 
+# What the image calls itself, from image.kdl. The local daemon and its
+# cache volume are named after it so one checkout's build state is its
+# own, and so nothing here spells the image name out.
+image_id="$(./scripts/manifest.sh image-id)"
+
 # renovate: datasource=docker depName=docker.io/moby/buildkit
 buildkit_image="docker.io/moby/buildkit:v0.31.2"
-buildkit_container=falcos-buildkitd
-buildkit_volume=falcos-buildkit
+buildkit_container="${image_id}-buildkitd"
+buildkit_volume="${image_id}-buildkit"
+buildkit_label="${image_id}.buildkitd"
 # Paths inside that container, not on the host
 buildkit_context=/build
 buildkit_secret_dir=/run/secrets
@@ -173,7 +179,7 @@ image_version="${IMAGE_VERSION:-$(date -u +%Y%m%d)}"
 while IFS= read -r line; do
 	if [ -n "$line" ]; then tags+=("$line"); fi
 done <<<"${TAGS:-}"
-[ "${#tags[@]}" -gt 0 ] || tags=("${IMAGE_NAME:-falcos}:${DEFAULT_TAG:-latest}")
+[ "${#tags[@]}" -gt 0 ] || tags=("${IMAGE_NAME:-$image_id}:${DEFAULT_TAG:-latest}")
 
 while IFS= read -r line; do
 	if [ -n "$line" ]; then labels+=("$line"); fi
@@ -245,9 +251,15 @@ fi
 # from the manifests, because the host is the only side that knows which
 # modules this target enables; the image would have to be told anyway.
 # Space separated: every path is absolute and none contains a space.
+#
+# The registry namespace comes from the same place the cache refs do, so
+# the signature policy baked into the image is scoped to wherever this
+# checkout publishes. Empty when there is nothing to derive one from,
+# which the finalize phase reports rather than guessing at a namespace.
 build_args=(
 	"FLAVOR=${flavor_arg}"
 	"IMAGE_VERSION=${image_version}"
+	"IMAGE_REGISTRY=$(./scripts/registry.sh namespace 2>/dev/null || true)"
 	"CONTRACT_FILES=$(./scripts/manifest.sh contract-files "$flavor" | tr '\n' ' ')"
 )
 [ -z "$kernel" ] || build_args+=("KERNEL=${kernel}")
@@ -288,12 +300,12 @@ buildkitd_ensure() {
 	local want have
 	want="$(printf '%s\n' "$buildkit_image" "${run_args[@]}" | sha256sum | cut -d' ' -f1)"
 	have="$(podman inspect --format \
-		'{{index .Config.Labels "falcos.buildkitd"}} {{.State.Running}}' \
+		"{{index .Config.Labels \"${buildkit_label}\"}} {{.State.Running}}" \
 		"$buildkit_container" 2>/dev/null || true)"
 	[ "$have" = "${want} true" ] && return 0
 
 	podman rm --force "$buildkit_container" >/dev/null 2>&1 || true
-	podman run "${run_args[@]}" --label "falcos.buildkitd=${want}" \
+	podman run "${run_args[@]}" --label "${buildkit_label}=${want}" \
 		"$buildkit_image" >/dev/null
 
 	for _ in $(seq 30); do

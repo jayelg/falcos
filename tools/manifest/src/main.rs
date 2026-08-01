@@ -28,6 +28,9 @@ usage: manifest <command>
 Output is one item per line, in declaration order, except where a command
 says otherwise.
 
+  image-id          the image's machine name: what it publishes as, and
+                    what a flavor image is prefixed with
+  image-name        the image's human name, as os-release NAME
   base-image        the base image reference, which the generated FROM uses
   base-family       the base family every module's `supports` is checked
                     against
@@ -57,7 +60,7 @@ says otherwise.
                     when one is given. Excludes `build-only` paths
   check             validate every manifest, printing what is wrong
 
-Run from the repository root, or set FALCOS_ROOT.
+Run from the repository root, or set MANIFEST_ROOT.
 ";
 
 fn main() -> ExitCode {
@@ -99,7 +102,7 @@ fn main() -> ExitCode {
     // check below covers every command that accepts one.
     let target = args.get(1 + usize::from(path_first)).map(String::as_str);
 
-    let root = PathBuf::from(std::env::var("FALCOS_ROOT").unwrap_or_else(|_| ".".into()));
+    let root = PathBuf::from(std::env::var("MANIFEST_ROOT").unwrap_or_else(|_| ".".into()));
     let list_path = root.join("image.kdl");
     let list_display = list_path.display().to_string();
 
@@ -158,6 +161,8 @@ fn main() -> ExitCode {
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
+        "image-id" => lines(list.image.as_ref().map(|i| i.id.clone())),
+        "image-name" => lines(list.image.as_ref().map(|i| i.name.clone())),
         "base-image" => lines(list.base.as_ref().map(|b| b.image.clone())),
         "base-family" => lines(list.base.as_ref().map(|b| b.family.clone())),
         "base-provides" => lines(

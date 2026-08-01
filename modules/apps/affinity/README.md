@@ -4,7 +4,7 @@ Affinity v3 (Canva unified app: Photo, Designer, Publisher) baked into the
 image under a patched WoW64 Wine build.  The Wine build, PE DXVK and
 vkd3d-proton DLLs, WinRT metadata, wintypes shim, VC++ redistributable,
 .NET 4.8 offline installer, and the launcher are all image-staged.  The
-mutable per-user prefix is created by `falcos affinity-setup`.
+mutable per-user prefix is created by `goojust affinity-setup`.
 
 ## Build
 
@@ -29,9 +29,9 @@ At image build time:
 
 ## Runtime
 
-Run `falcos affinity-setup` once per user to create the Wine prefix.
+Run `goojust affinity-setup` once per user to create the Wine prefix.
 
 ### Justfile recipes
 
-- `falcos affinity-setup` -- Create the per-user Wine prefix
-- `falcos affinity-remove` -- Remove the per-user Wine prefix
+- `goojust affinity-setup` -- Create the per-user Wine prefix
+- `goojust affinity-remove` -- Remove the per-user Wine prefix

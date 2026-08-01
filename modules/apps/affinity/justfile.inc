@@ -88,7 +88,7 @@ affinity-setup:
 		echo "Verify OpenCL under Settings > Performance (Hardware acceleration)."
 	else
 		echo "Installer finished but $appdir was not found;"
-		echo "re-run 'falcos affinity-setup' after a successful install."
+		echo "re-run 'goojust affinity-setup' after a successful install."
 		exit 1
 	fi
 

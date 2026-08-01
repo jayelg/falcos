@@ -16,6 +16,7 @@ FROM scratch AS ctx
 COPY build-phases/ /
 COPY lib/ /lib/
 COPY modules/ /modules/
+COPY brand/ /brand/
 
 # ---- BEGIN GENERATED (build phases and modules; see scripts/gen-containerfile.sh) ----
 
@@ -38,13 +39,13 @@ RUN --mount=type=bind,from=ctx,source=/00-setup.sh,target=/ctx/00-setup.sh \
     --mount=type=tmpfs,target=/tmp \
     /ctx/00-setup.sh
 
-# ---- base ----
-RUN --mount=type=bind,from=ctx,source=/modules/base,target=/ctx/modules/base \
+# ---- core/bootloader ----
+RUN --mount=type=bind,from=ctx,source=/modules/core/bootloader,target=/ctx/modules/core/bootloader \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    bash /ctx/lib/run-module.sh /ctx/modules/base
+    MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/core/bootloader
 
 # ---- core/signature-policy ----
 RUN --mount=type=bind,from=ctx,source=/modules/core/signature-policy,target=/ctx/modules/core/signature-policy \
@@ -116,6 +117,22 @@ RUN --mount=type=bind,from=ctx,source=/modules/kernel/cachyos-kernel,target=/ctx
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
     KERNEL=${KERNEL} bash /ctx/lib/run-module.sh /ctx/modules/kernel/cachyos-kernel
+
+# ---- hardening/coredumps ----
+RUN --mount=type=bind,from=ctx,source=/modules/hardening/coredumps,target=/ctx/modules/hardening/coredumps \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/hardening/coredumps
+
+# ---- hardening/login-policy ----
+RUN --mount=type=bind,from=ctx,source=/modules/hardening/login-policy,target=/ctx/modules/hardening/login-policy \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    bash /ctx/lib/run-module.sh /ctx/modules/hardening/login-policy
 
 # ---- hardening/hardened-malloc ----
 RUN --mount=type=bind,from=ctx,source=/modules/hardening/hardened-malloc,target=/ctx/modules/hardening/hardened-malloc \
@@ -195,7 +212,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/kde-desktop,target=/ctx/module
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="dracut.modules=/usr/lib/falcos/dracut.modules" bash /ctx/lib/run-module.sh /ctx/modules/de/kde-desktop
+    MODULE_COLLECT="dracut.modules=/usr/lib/kernel-build/dracut.modules" bash /ctx/lib/run-module.sh /ctx/modules/de/kde-desktop
 
 # ---- de/bazaar ----
 RUN --mount=type=bind,from=ctx,source=/modules/de/bazaar,target=/ctx/modules/de/bazaar \
@@ -203,7 +220,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/bazaar,target=/ctx/modules/de/
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="flatpaks.list=/usr/share/falcos/default-flatpaks" bash /ctx/lib/run-module.sh /ctx/modules/de/bazaar
+    MODULE_COLLECT="flatpaks.list=/usr/share/flatpak-defaults/apps.list" bash /ctx/lib/run-module.sh /ctx/modules/de/bazaar
 
 # ---- media-codecs ----
 RUN --mount=type=bind,from=ctx,source=/modules/media-codecs,target=/ctx/modules/media-codecs \
@@ -304,7 +321,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/apps/bitwarden,target=/ctx/module
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    MODULE_COLLECT="flatpaks.list=/usr/share/falcos/default-flatpaks" bash /ctx/lib/run-module.sh /ctx/modules/apps/bitwarden
+    MODULE_COLLECT="flatpaks.list=/usr/share/flatpak-defaults/apps.list" bash /ctx/lib/run-module.sh /ctx/modules/apps/bitwarden
 
 # ---- core/goojust ----
 RUN --mount=type=bind,from=ctx,source=/modules/core/goojust,target=/ctx/modules/core/goojust \
@@ -351,8 +368,8 @@ RUN --mount=type=bind,from=ctx,source=/modules/manage-dotfiles,target=/ctx/modul
     ASSET_BW_SHA256="392549496c712ab86bfbd6c27302df9fd2c431cfc7a47e26941ac3e3893f4d27" \
     MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/manage-dotfiles
 
-# ---- de/falcos-plasma-settings ----
-RUN --mount=type=bind,from=ctx,source=/modules/de/falcos-plasma-settings,target=/ctx/modules/de/falcos-plasma-settings \
+# ---- de/plasma-bootc-updates ----
+RUN --mount=type=bind,from=ctx,source=/modules/de/plasma-bootc-updates,target=/ctx/modules/de/plasma-bootc-updates \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
@@ -360,7 +377,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/de/falcos-plasma-settings,target=
     ASSET_FALCOS_BOOTC_UPDATES_VERSION="0.1.1" \
     ASSET_FALCOS_BOOTC_UPDATES_URL="https://github.com/jayelg/falcos-bootc-updates/releases/download/v0.1.1/falcos-bootc-updates-0.1.1-1.fc44.x86_64.rpm" \
     ASSET_FALCOS_BOOTC_UPDATES_SHA256="2272f4682aff39bd0bff7b2b13db71854da971eda99b6e84653ba1da32d94b7a" \
-    bash /ctx/lib/run-module.sh /ctx/modules/de/falcos-plasma-settings
+    bash /ctx/lib/run-module.sh /ctx/modules/de/plasma-bootc-updates
 
 # ---- de/plasma-network-audio ----
 RUN --mount=type=bind,from=ctx,source=/modules/de/plasma-network-audio,target=/ctx/modules/de/plasma-network-audio \
@@ -476,23 +493,44 @@ ARG FINALIZE_ORDER="core/signature-policy core/auto-updates kernel/cachyos-kerne
 # that RUN mentions it.
 ARG IMAGE_VERSION=dev
 
+# ---- image identity ----
+# What the image calls itself, from image.kdl. os-release carries it,
+# so the boot menu and the desktop read the same declaration. Below the
+# modules for the same reason as the version: an ARG in scope is part of
+# the cache key of every RUN under it.
+#
+# IMAGE_REGISTRY is not declared in image.kdl. scripts/build.sh passes
+# it from scripts/registry.sh, which derives it from the git remote, so
+# a fork's signature policy names the fork's own namespace.
+ARG IMAGE_ID="falcos"
+ARG IMAGE_NAME="Falcos"
+ARG IMAGE_URL="https://github.com/jayelg/falcos"
+ARG IMAGE_ISSUES_URL="https://github.com/jayelg/falcos/issues"
+ARG IMAGE_LOGO="brand/distributor-logo-symbolic.svg"
+ARG IMAGE_WATERMARK="brand/watermark.png"
+ARG IMAGE_REGISTRY=""
+
 # ---- phase 50-flavor.sh ----
 RUN --mount=type=bind,from=ctx,source=/50-flavor.sh,target=/ctx/50-flavor.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=bind,from=ctx,source=/modules,target=/ctx/modules \
+    --mount=type=bind,from=ctx,source=/brand,target=/ctx/brand \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} FINALIZE_ORDER="${FINALIZE_ORDER}" /ctx/50-flavor.sh
+    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} FINALIZE_ORDER="${FINALIZE_ORDER}" \
+    IMAGE_ID="${IMAGE_ID}" IMAGE_NAME="${IMAGE_NAME}" IMAGE_URL="${IMAGE_URL}" IMAGE_ISSUES_URL="${IMAGE_ISSUES_URL}" IMAGE_LOGO="${IMAGE_LOGO}" IMAGE_WATERMARK="${IMAGE_WATERMARK}" IMAGE_REGISTRY="${IMAGE_REGISTRY}" /ctx/50-flavor.sh
 
 # ---- phase 99-finalize.sh ----
 RUN --mount=type=bind,from=ctx,source=/99-finalize.sh,target=/ctx/99-finalize.sh \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=bind,from=ctx,source=/modules,target=/ctx/modules \
+    --mount=type=bind,from=ctx,source=/brand,target=/ctx/brand \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} FINALIZE_ORDER="${FINALIZE_ORDER}" /ctx/99-finalize.sh
+    FLAVOR=${FLAVOR} IMAGE_VERSION=${IMAGE_VERSION} FINALIZE_ORDER="${FINALIZE_ORDER}" \
+    IMAGE_ID="${IMAGE_ID}" IMAGE_NAME="${IMAGE_NAME}" IMAGE_URL="${IMAGE_URL}" IMAGE_ISSUES_URL="${IMAGE_ISSUES_URL}" IMAGE_LOGO="${IMAGE_LOGO}" IMAGE_WATERMARK="${IMAGE_WATERMARK}" IMAGE_REGISTRY="${IMAGE_REGISTRY}" /ctx/99-finalize.sh
 
 # ---- END GENERATED ----
 

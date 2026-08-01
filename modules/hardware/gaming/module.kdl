@@ -11,7 +11,7 @@ packages {
 // rather than as kernel/cachyos-kernel, so swapping the kernel provider
 // does not break this.
 requires "kernel-devel"
-requires-file "/usr/share/falcos/sb_cert.der"
+requires-file "/usr/share/secureboot/sb_cert.der"
 requires-file "/usr/libexec/kernel-devel-helpers.sh"
 
 // The xone DKMS build targets, and signs for, whichever kernel variant

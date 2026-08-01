@@ -13,14 +13,14 @@
 
 set -ouex pipefail
 
-KERNEL_PKG="$(cat /usr/lib/falcos/kernel-package 2>/dev/null || echo 'kernel-core')"
+KERNEL_PKG="$(cat /usr/lib/kernel-build/kernel-package 2>/dev/null || echo 'kernel-core')"
 KVER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' "$KERNEL_PKG")"
 
-# /usr/lib/falcos/dracut.modules is an aggregate of every module's
+# /usr/lib/kernel-build/dracut.modules is an aggregate of every module's
 # dracut.modules, assembled at build time by run-module.sh. One dracut
 # module name per line; blank lines and # comments are ignored.
 DRACUT_MODULES=(ostree crypt)
-COLLECTED="/usr/lib/falcos/dracut.modules"
+COLLECTED="/usr/lib/kernel-build/dracut.modules"
 if [ -f "$COLLECTED" ]; then
     while IFS= read -r name; do
         [[ -z "$name" || "$name" == \#* ]] && continue

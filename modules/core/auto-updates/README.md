@@ -13,7 +13,7 @@ the dependency is declared and lint enforces it.
 
 - `bootc-fetch-apply-updates.{service,timer}.d/10-override.conf` -- tunes the upstream bootc auto-update timer/service
 - `rpm-ostree-countme.service.d/10-override.conf` -- resume-retry drop-in for the countme service
-- `45-falcos-updates.preset` -- enables `bootc-fetch-apply-updates.timer`
+- `45-module-updates.preset` -- enables `bootc-fetch-apply-updates.timer`
 
 ## finalize.sh
 

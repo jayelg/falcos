@@ -1,8 +1,8 @@
 # Interactive alias for the OS TUI (goojust): the OS name (lowercased)
-# launches it, so `falcos` shows the system panel and recipe menu, and
-# `falcos <recipe>` runs one. Read from /etc/os-release rather than
-# hardcoded so a rebrand carries the alias with it. Subshell keeps NAME out
-# of the environment.
+# launches it, so typing the OS name shows the system panel and recipe
+# menu, and `<os-name> <recipe>` runs one. Read from /etc/os-release rather
+# than hardcoded, so this module names no image and a rebrand carries the
+# alias with it. Subshell keeps NAME out of the environment.
 case $- in
     *i*)
         # First word only: alias names can't contain spaces (e.g. an
