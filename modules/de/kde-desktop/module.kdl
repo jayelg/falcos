@@ -3,3 +3,11 @@ description "KDE Plasma desktop, its application set and the krunner-bazaar inte
 supports "fedora"
 
 provides "plasma-desktop"
+
+// plasmalogin.service names two man pages in Documentation=, and this
+// image does not carry them. systemd-analyze verify checks those by
+// running man against each, so what it reports is a packaging decision
+// that says nothing about whether the unit starts. Scoped to this unit
+// rather than tolerated image-wide, which is what it used to be:
+// dropping KDE from the list now drops this with it.
+allow-verify "man-page-missing" unit="plasmalogin.service"

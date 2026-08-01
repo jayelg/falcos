@@ -465,6 +465,86 @@ There are zero collisions today, which is why the check and the escape
 hatch arrive together: an escape hatch with nothing to escape, and no
 check to escape from, would be surface nothing could verify.
 
+### Verify exceptions
+
+Every system unit a preset enables passes through `systemd-analyze verify`
+in [validate-image.sh](../lib/validate-image.sh), and a complaint is
+fatal. Some complaints are facts about where the build runs or about
+packaging rather than defects in the unit, and this is how a module says
+which of those it accepts, on which of its units.
+
+| Node | Meaning |
+| --- | --- |
+| `allow-verify "<class>" unit="<unit>"` | this diagnostic class is expected on this unit |
+
+| Class | What it is |
+| --- | --- |
+| `mount-not-found` | a unit ordered against a `.mount` or `.swap` unit, which a container build has not got |
+| `man-page-missing` | a `Documentation=` man page this image does not carry, which verify checks by running `man` against it |
+
+**In the module, never on `base`.** The case that prompted this,
+`plasmalogin.service`, arrives through `de/kde-desktop`. On the `base`
+node an image with no KDE would carry a dead exception, the ungated target
+would carry it while having no plasmalogin, and swapping KDE for GNOME
+would leave it with nothing to say it had gone obsolete. Declared in the
+module, delisting takes the exception with it and flavor gating comes
+free, which are the same two properties that put presets and
+`provides-file` in modules.
+
+**Keyed on a class and a unit, never on a package.** The validator sees
+units. Mapping a package name onto them would need `rpm -qf` at validation
+time, and it is wrong regardless, because an overlay-shipped unit belongs
+to no package. A package key would also over-silence, hiding a genuinely
+broken `ExecStart` in another unit of the same package.
+
+**Named classes, never raw regexes.** A regex in a manifest is a footgun:
+one careless `.*` silences the check and no reviewer catches it. The set
+is enumerable from what verify actually emits, and closing it buys a
+property worth having, which is that *a failure matching no known class is
+itself the signal*. Benign noise is a closed set, so anything outside it
+is more likely a real defect. The pattern each class stands for stays in
+`lib/validate-image.sh` and never travels: only the class name reaches the
+build, because a pattern holding `$` and backslashes would not survive a
+build arg. `scripts/lint.sh` checks the two lists against each other, and
+fails if either comes up empty rather than letting two empty lists compare
+equal.
+
+These patterns used to be an unconditional allowlist applied to every unit
+in the image, so the same complaint was silenced on all twenty-five of
+them, including ones where it would have been a real defect. Scoping them
+is the point of the change; the escape hatch is what keeps the two genuine
+cases working.
+
+When verify fails, the message names the declaration to add, the way
+`just lint` says to stage the regenerated file and `flavors.sh check`
+prints the valid targets:
+
+```
+FAIL: tuned.service: systemd-analyze verify
+      tuned.service: Command 'man tuned(8)' failed with code 16
+        this is the known class 'man-page-missing'. If it is expected here,
+        declare it in the module shipping 45-module-kde-desktop.preset:
+          allow-verify "man-page-missing" unit="tuned.service"
+```
+
+Unlike [`overrides`](#overlay-collisions), an unused exception is **not** a
+lint failure. Whether verify emits a given diagnostic is only knowable
+from inside a built image, so the host has nothing to check it against. It
+is the one escape hatch here that can outlive its cause.
+
+**Not `validation=strict|permissive`.** A global mode is two paths through
+every check, and the less used one rots. Worse, it would disable the
+assertions that matter most alongside the noisy one: a missing contract
+file means a module lied, and for `sb_cert.der` that means shipping
+unsigned kernel modules. Most of what a permissive mode would buy already
+exists, since the validator collects every failure and reports them all
+before exiting.
+
+**Not configured per workflow.** The validation is a `RUN` layer in the
+Containerfile, run identically by `just build` and by CI.
+`scripts/build.sh` exists so those two cannot drift, and putting the gate
+behind a [`workflows`](#workflows) toggle would reintroduce exactly that.
+
 ### Collecting
 
 A module that wants every copy of a filename in the image says so, and
@@ -914,6 +994,17 @@ Lint fails on all of these, in seconds, before anything builds.
 - two enabled modules that land in the same image shipping the same
   `files/` path, without the later one declaring `overrides`
 - an `overrides` for a path no earlier module ships
+
+**Verify exceptions**
+
+- an `allow-verify` naming a class outside the known set, listing them
+- an `allow-verify` with no class, or no `unit=`
+- the same class allowed twice on the same unit in one module
+- the class list in `lib/validate-image.sh` disagreeing with the one in
+  the parser, or either coming up empty
+
+Not checked here, and not checkable: whether a declared exception is ever
+used. That is only knowable from inside a built image.
 
 **Collecting**
 
