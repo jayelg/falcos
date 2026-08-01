@@ -1,0 +1,100 @@
+# Reconciles the `workflows` block in image.kdl against what GitHub
+# actually has enabled.
+#
+# Through the API, never by editing files under .github/workflows/:
+# GITHUB_TOKEN cannot push a change to that path, so a reconciler that
+# rewrote them would need a PAT or a GitHub App, and a template user would
+# have to provision a secret before their fork worked at all. The API does
+# the same job with `actions: write`, leaves no commit, and touches no
+# tree, so nothing here is subject to the Containerfile drift check.
+name: Reconcile workflow toggles
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # The declaration itself, and the directory it names: a workflow
+      # added while declared off has to be switched off once it exists.
+      - image.kdl
+      - .github/workflows/**
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # `manifest workflows` is answered from image.kdl and the workflow
+      # directory alone, above the point where module manifests load, so
+      # this needs no fetch of the out-of-tree modules and no module tree
+      # on disk. Reading the declaration with anything else here would be
+      # a second parser for the format.
+      - name: Resolve the declared state
+        run: ./scripts/manifest.sh workflows | tee declared.txt
+
+      - name: Reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # What GitHub has now, as path|state. A workflow that has never
+          # been on the default branch is absent from this entirely, which
+          # is why a missing entry is skipped rather than treated as off.
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows" --paginate \
+            --jq '.workflows[] | "\(.path)|\(.state)"' > current.txt
+
+          # The reconciler never disables itself. Doing so would leave the
+          # declaration with nothing to act on it and no way back in from
+          # this file, so a fork that wants none of this deletes the file
+          # rather than declaring it off. Resolved from the run context so
+          # no path to this workflow is written down.
+          self="${GITHUB_WORKFLOW_REF%%@*}"
+          self="${self##*/}"
+
+          # Read up front rather than piping the loop, so that nothing
+          # inside it shares stdin with the declaration being walked. A
+          # command that consumed a line would skip a workflow silently,
+          # which is the one failure this whole block exists to rule out.
+          mapfile -t declared < declared.txt
+
+          changed=0
+          for line in "${declared[@]}"; do
+            IFS='|' read -r file want <<< "$line"
+            [ -n "$file" ] || continue
+            state="$(awk -F'|' -v p=".github/workflows/${file}" \
+              '$1 == p { print $2 }' current.txt)"
+
+            if [ -z "$state" ]; then
+              echo "skip ${file}: not registered with Actions yet"
+              continue
+            fi
+            if [ "$file" = "$self" ]; then
+              echo "skip ${file}: this is the reconciler"
+              continue
+            fi
+
+            # `active` is the only enabled state. disabled_manually is a
+            # human or this job; disabled_inactivity is GitHub switching a
+            # scheduled workflow off after 60 days of repository quiet,
+            # and re-enabling that is a welcome side effect rather than a
+            # special case.
+            if [ "$want" = "true" ] && [ "$state" != "active" ]; then
+              verb=enable
+            elif [ "$want" = "false" ] && [ "$state" = "active" ]; then
+              verb=disable
+            else
+              echo "ok   ${file}: ${state}"
+              continue
+            fi
+
+            echo "${verb} ${file} (was ${state})"
+            gh api --method PUT \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/${file}/${verb}"
+            changed=$((changed + 1))
+          done
+
+          echo "reconciled ${changed} workflow(s)" >> "${GITHUB_STEP_SUMMARY}"
