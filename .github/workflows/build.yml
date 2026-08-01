@@ -680,9 +680,9 @@ jobs:
           # predicate, about 9MB on one line, and feeding that to the
           # Actions log collector wedges the step long after cosign has
           # finished its work.
-          cosign verify --key cosign.pub --insecure-ignore-tlog=true \
+          cosign verify --key "$key" --insecure-ignore-tlog=true \
             "${IMAGE_DIGEST}" > /dev/null
-          cosign verify-attestation --key cosign.pub --type spdxjson \
+          cosign verify-attestation --key "$key" --type spdxjson \
             --insecure-ignore-tlog=true "${IMAGE_DIGEST}" > /dev/null
 
       # Old versions are pruned daily by cleanup-registry.yml, which keeps
