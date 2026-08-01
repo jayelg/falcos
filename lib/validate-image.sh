@@ -111,29 +111,78 @@ enablement_links() {
 # this an assertion about enablement rather than about a unit merely
 # existing, and it needs no PID 1, which a container build has not got.
 # System units also pass through systemd-analyze verify, and a failure
-# there is fatal unless every line it printed is on the allowlist below.
+# there is fatal unless every line it printed is allowed for that unit.
 # User units skip verify because --user needs a running user manager.
 # Unit files are found with find because systemctl show requires a
 # running PID 1.
 #
-# Each allowlisted pattern is a fact about where this runs or about
-# packaging, never a defect in the unit. A missing .service or .target,
-# and a command that is not executable, all still fail. Devices need no
-# entry: verify synthesises them and says nothing.
-verify_allowed_patterns=(
+# Each class below is a fact about where this runs or about packaging,
+# never a defect in the unit. A missing .service or .target, and a command
+# that is not executable, all still fail. Devices need no entry: verify
+# synthesises them and says nothing.
+#
+# This is the only place a verify diagnostic is written down as a regex. A
+# manifest names a class instead, because a regex in a manifest is a
+# footgun: one careless `.*` silences the check and no reviewer catches
+# it. The class names are also in tools/manifest/src/module.rs, which
+# validates the declarations; scripts/lint.sh checks the two agree.
+declare -A verify_class=(
 	# A container build has no mounts and no swap, so a unit ordered
 	# against one cannot resolve it here.
-	'Failed to create .*: Unit [^ ]+\.(mount|swap) not found\.$'
+	[mount-not-found]='Failed to create .*: Unit [^ ]+\.(mount|swap) not found\.$'
 	# Documentation= is checked by running man against it. Whether a man
 	# page was packaged is a packaging decision that says nothing about
 	# whether the unit starts, and vendor units name pages this image does
 	# not carry: plasmalogin names two.
-	"Command 'man [^']*' failed with code [0-9]+\$"
+	[man-page-missing]="Command 'man [^']*' failed with code [0-9]+\$"
 )
-verify_allowed="$(
-	IFS='|'
-	printf '%s' "${verify_allowed_patterns[*]}"
-)"
+
+# What the enabled modules accept, as <class>|<unit> tokens resolved per
+# target on the host and passed in the way CONTRACT_FILES is.
+#
+# Scoped to one unit rather than allowed image-wide, which is what these
+# patterns used to be. An exception belongs to the module that ships the
+# unit, so delisting that module takes the exception with it, and a flavor
+# that never had the module never had the exception either. The blanket
+# version silenced the same diagnostic on all twenty-five units, including
+# ones where it would have been a real defect.
+verify_classes_known="$(printf '%s ' "${!verify_class[@]}")"
+verify_classes_known="${verify_classes_known% }"
+for token in ${VERIFY_EXCEPTIONS:-}; do
+	class="${token%%|*}"
+	if [ -z "${verify_class[$class]+set}" ]; then
+		fail "allow-verify \"${class}\": not a diagnostic class this image knows;" \
+			"known: ${verify_classes_known}"
+	fi
+done
+
+# Every pattern declared for one unit, as a single alternation. Empty when
+# nothing was declared for it, which is the normal case: a unit with no
+# exceptions has to come back clean.
+verify_allowed_for() {
+	local unit="$1" token class allowed=""
+	for token in ${VERIFY_EXCEPTIONS:-}; do
+		[ "${token#*|}" = "$unit" ] || continue
+		class="${token%%|*}"
+		[ -n "${verify_class[$class]+set}" ] || continue
+		allowed="${allowed:+${allowed}|}${verify_class[$class]}"
+	done
+	printf '%s' "$allowed"
+}
+
+# Which known class a diagnostic line falls into, or nothing. What turns a
+# failure into an actionable message: a line matching a class needs a
+# declaration, and a line matching none is more likely a real defect,
+# because benign noise is a closed set.
+verify_classify() {
+	local line="$1" class
+	for class in "${!verify_class[@]}"; do
+		if printf '%s\n' "$line" | grep -Eq "${verify_class[$class]}"; then
+			printf '%s' "$class"
+			return 0
+		fi
+	done
+}
 echo "==> systemd unit verification"
 checked=0
 for scope in system user; do
@@ -177,15 +226,34 @@ for scope in system user; do
 				elif [ -z "${out//[[:space:]]/}" ]; then
 					fail "${unit}: systemd-analyze verify failed without saying why"
 				else
-					unexpected="$(printf '%s\n' "$out" |
-						grep -Ev "$verify_allowed" |
-						grep -Ev '^[[:space:]]*$' || true)"
+					allowed="$(verify_allowed_for "$unit")"
+					if [ -n "$allowed" ]; then
+						unexpected="$(printf '%s\n' "$out" |
+							grep -Ev "$allowed" |
+							grep -Ev '^[[:space:]]*$' || true)"
+					else
+						unexpected="$(printf '%s\n' "$out" |
+							grep -Ev '^[[:space:]]*$' || true)"
+					fi
 					if [ -n "$unexpected" ]; then
 						fail "${unit}: systemd-analyze verify"
-						# shellcheck disable=SC2001
-						echo "$unexpected" | sed 's/^/          /' >&2
+						while IFS= read -r line; do
+							[ -n "$line" ] || continue
+							echo "          ${line}" >&2
+							# Naming the declaration to add is what the
+							# rest of the repo already does: lint says to
+							# stage the regenerated file, manifest.sh
+							# prints install instructions when cargo is
+							# missing, flavors.sh prints the valid targets.
+							class="$(verify_classify "$line")"
+							if [ -n "$class" ]; then
+								echo "            this is the known class '${class}'. If it is expected here," >&2
+								echo "            declare it in the module shipping ${preset##*/}:" >&2
+								echo "              allow-verify \"${class}\" unit=\"${unit}\"" >&2
+							fi
+						done <<< "$unexpected"
 					else
-						echo "        ${unit} enabled (verify: mount/swap notes only)"
+						echo "        ${unit} enabled (verify: declared exceptions only)"
 					fi
 				fi
 			else

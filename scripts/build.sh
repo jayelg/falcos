@@ -247,10 +247,12 @@ fi
 # Containerfile.generated is a build of the wrong image.
 ./scripts/gen-containerfile.sh
 
-# The contract file paths the validation layer asserts. Resolved here,
-# from the manifests, because the host is the only side that knows which
-# modules this target enables; the image would have to be told anyway.
-# Space separated: every path is absolute and none contains a space.
+# The contract file paths the validation layer asserts, and the verify
+# diagnostics it accepts on named units. Resolved here, from the
+# manifests, because the host is the only side that knows which modules
+# this target enables; the image would have to be told anyway. Space
+# separated: every path is absolute, every exception is one
+# <class>|<unit> token, and none of them contains a space.
 #
 # The registry namespace comes from the same place the cache refs do, so
 # the signature policy baked into the image is scoped to wherever this
@@ -261,6 +263,7 @@ build_args=(
 	"IMAGE_VERSION=${image_version}"
 	"IMAGE_REGISTRY=$(./scripts/registry.sh namespace 2>/dev/null || true)"
 	"CONTRACT_FILES=$(./scripts/manifest.sh contract-files "$flavor" | tr '\n' ' ')"
+	"VERIFY_EXCEPTIONS=$(./scripts/manifest.sh verify-exceptions "$flavor" | tr '\n' ' ')"
 )
 [ -z "$kernel" ] || build_args+=("KERNEL=${kernel}")
 

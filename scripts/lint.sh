@@ -41,6 +41,32 @@ echo "lint: shellcheck passed on ${#scripts[@]} scripts"
 # line each is on, rather than stopping at the first.
 ./scripts/manifest.sh check
 
+# The allow-verify diagnostic classes are named in two places by
+# necessity: lib/validate-image.sh holds the regex each one stands for,
+# because a pattern must never cross into a build arg, and the parser
+# holds the names, because a bad declaration should fail here in seconds
+# rather than mid-build. Nothing else makes the two agree, so this does.
+#
+# Both extractions have to find something. A pattern that silently matched
+# nothing would leave two empty lists comparing equal, which is the
+# failure this exists to catch.
+shell_classes="$(sed -n 's/^\t\[\([a-z-]*\)\]=.*/\1/p' lib/validate-image.sh | sort)"
+parser_classes="$(sed -n 's/^const VERIFY_CLASSES[^=]*= \[\(.*\)\];$/\1/p' \
+    tools/manifest/src/module.rs | tr -d '" ' | tr ',' '\n' | sort)"
+if [ -z "$shell_classes" ]; then
+    echo "lint: no verify classes found in lib/validate-image.sh" >&2
+    exit 1
+elif [ -z "$parser_classes" ]; then
+    echo "lint: no VERIFY_CLASSES found in tools/manifest/src/module.rs" >&2
+    exit 1
+elif [ "$shell_classes" != "$parser_classes" ]; then
+    echo "lint: the verify diagnostic classes disagree" >&2
+    diff <(echo "$shell_classes") <(echo "$parser_classes") |
+        sed 's/^</  only in validate-image.sh: /; s/^>/  only in module.rs:        /' >&2
+    exit 1
+fi
+echo "lint: verify classes agree ($(echo "$shell_classes" | tr '\n' ' ' | sed 's/ *$//'))"
+
 # Then the splice itself, which is the part manifest.sh does not own:
 # skeleton marker damage would otherwise only surface at build time.
 #

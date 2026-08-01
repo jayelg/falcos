@@ -42,7 +42,15 @@ COPY brand/ /brand/
 ## CONTRACT_FILES is every provides-file the enabled modules declare,
 ## resolved on the host by scripts/build.sh and passed in, so no list of
 ## module-owned paths is written down in lib. Empty is a valid build.
+##
+## VERIFY_EXCEPTIONS is every systemd-analyze verify diagnostic those
+## modules accept on their own units, as <class>|<unit> tokens, resolved
+## the same way and for the same reason. Only the class name travels: the
+## pattern it stands for stays in lib/validate-image.sh, where it does not
+## have to survive a build arg. Empty is a valid build, and the common one.
 ARG CONTRACT_FILES=""
+ARG VERIFY_EXCEPTIONS=""
 RUN bootc container lint
 RUN --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    CONTRACT_FILES="${CONTRACT_FILES}" bash /ctx/lib/validate-image.sh
+    CONTRACT_FILES="${CONTRACT_FILES}" \
+    VERIFY_EXCEPTIONS="${VERIFY_EXCEPTIONS}" bash /ctx/lib/validate-image.sh
