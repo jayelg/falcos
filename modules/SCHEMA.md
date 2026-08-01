@@ -465,6 +465,39 @@ There are zero collisions today, which is why the check and the escape
 hatch arrive together: an escape hatch with nothing to escape, and no
 check to escape from, would be surface nothing could verify.
 
+The index this check is built on answers one more question, so it is
+exposed rather than discarded:
+
+```
+$ manifest owns /usr/lib/modprobe.d/vfio.conf desktop
+virtualization/vfio-passthrough
+```
+
+`owns <abs-path> [target]` names the module whose overlay actually puts a
+file at that path, or nothing when none does. Where
+[`find-provider`](#contract-files) answers over *declared* paths, this
+answers over *shipped* ones, and the two are complementary: a
+`provides-file` is a contract whoever writes it, including a module that
+writes it from `module.sh`, while this is the overlay a file physically
+came from. A package-installed path is in neither and could not be without
+`rpm -qf` on a built image. That is still enough for the case it was added
+for, since a preset naming a unit is overlay-shipped, and it is not
+inferrable from the filename, which is the tempting shortcut:
+`45-module-updates.preset` lives in `core/auto-updates`.
+
+**Per target, for the reason `find-provider` is.** The index deliberately
+holds every module whatever flavor it is gated to, because the collision
+check applies gating at comparison time instead. Handing that out
+unfiltered would reproduce the bug `find-provider` already had and fixed,
+where a path shipped only by a `desktop` module read as shipped on
+`laptop` and on the ungated build too. So `vfio.conf` above is owned by
+nothing on `laptop`.
+
+When two modules ship one path, this names the later one in build order,
+which is the file that survives into the image. Without a declared
+`overrides` that case is a lint failure anyway, so in a tree that passes
+`check` there is only ever one answer.
+
 ### Verify exceptions
 
 Every system unit a preset enables passes through `systemd-analyze verify`

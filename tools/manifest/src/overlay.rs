@@ -16,19 +16,79 @@ use crate::module::Module;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-pub fn check(modules: &[Module], root: &Path, issues: &mut Issues) {
-    // Image path to the modules shipping it, in build order.
-    let mut shipped: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+/// Every path an overlay puts in the image, to the modules shipping it, as
+/// indices into `modules` in build order.
+///
+/// Covers every module whatever flavor it is gated to. Gating is applied
+/// by the caller: at comparison time in `check`, by target in `owns`.
+pub type Index = BTreeMap<String, Vec<usize>>;
+
+/// Built once and handed to both readers.
+///
+/// Split out of `check` rather than rebuilt beside it. The collision check
+/// and `owns` are two questions about one fact, and a second walk of every
+/// overlay would only rediscover what the first already knew.
+pub fn index(modules: &[Module], root: &Path) -> Index {
+    let mut shipped: Index = BTreeMap::new();
     for (index, module) in modules.iter().enumerate() {
         let overlay = root.join("modules").join(&module.dir).join("files");
         for path in overlay_paths(&overlay) {
             shipped.entry(path).or_default().push(index);
         }
     }
+    shipped
+}
 
+/// The module whose overlay actually puts a file at `path` in a target's
+/// image. One line, the module path, or nothing when none does.
+///
+/// Filtered by target from the start, because the index deliberately holds
+/// every module whatever it is gated to. `check` gets away with that by
+/// asking `coinstalled` at comparison time; an answer handed to a caller
+/// has no such second chance. Exposing it unfiltered would reproduce the
+/// bug `find-provider` already had and had fixed, where a path shipped
+/// only by a module gated to `desktop` read as shipped on `laptop` and on
+/// the ungated build too. No target means every module, which is the whole
+/// list rather than any image that gets built.
+///
+/// The last shipper in build order, not the first: overlays are copied in
+/// build order, so the later one is the file that survives into the image.
+/// Without a declared `overrides` two shippers are already a lint failure,
+/// so in a tree that passes `check` this names the only module whose file
+/// could be there.
+///
+/// Answers over what is shipped, where `find-provider` answers over what
+/// is declared, and the two are complementary. A `provides-file` names a
+/// contract whoever writes it, including a module that writes it from
+/// module.sh; this names the overlay a file physically came from. A
+/// package-installed path is in neither and could not be without `rpm -qf`
+/// on a built image.
+pub fn owns(modules: &[Module], shipped: &Index, path: &str, target: Option<&str>) -> String {
+    let Some(owners) = shipped.get(path) else {
+        return String::new();
+    };
+    owners
+        .iter()
+        .rev()
+        .find(|&&owner| in_target(&modules[owner], target))
+        .map(|&owner| format!("{}\n", modules[owner].path))
+        .unwrap_or_default()
+}
+
+/// Whether a module lands in a target's image. No target means every
+/// module, which is how the rest of the per-target commands read.
+fn in_target(module: &Module, target: Option<&str>) -> bool {
+    match (&module.flavor, target) {
+        (None, _) => true,
+        (Some(_), None) => true,
+        (Some(gate), Some(target)) => gate == target,
+    }
+}
+
+pub fn check(modules: &[Module], shipped: &Index, issues: &mut Issues) {
     let mut used: Vec<BTreeSet<&str>> = vec![BTreeSet::new(); modules.len()];
 
-    for (path, owners) in &shipped {
+    for (path, owners) in shipped {
         for (position, &later) in owners.iter().enumerate() {
             // The nearest earlier module that ends up in the same image
             // as this one: whichever it is, this overlay lands on top of
