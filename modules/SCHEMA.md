@@ -35,8 +35,8 @@ A manifest declares *facts*, not *file layout*.
 
 ## image.kdl
 
-Four top-level nodes. `flavors` is optional; `image`, `base` and `modules`
-are required.
+Five top-level nodes. `flavors` and `workflows` are optional; `image`,
+`base` and `modules` are required.
 
 ```kdl
 image "falcos" {
@@ -64,6 +64,12 @@ flavors {
     // surface. Unrelated to default; they coincide today by choice.
     desktop default=#true pr-build=#true
     laptop
+}
+
+workflows {
+    // Only the ones this repository has an opinion about. A workflow not
+    // named here runs, so an absent block is the repository as it ships.
+    smoke-test enabled=#false
 }
 
 modules {
@@ -176,6 +182,55 @@ one positional accident stood in for all of them.
 gating, `FLAVOR` unset, an unsuffixed image name, a single-element build
 matrix, no sibling cache ref, one package to prune. That is the path a
 stripped-down fork hits first, so it is the path that must work.
+
+### `workflows`
+
+Which pipelines in [`.github/workflows/`](../.github/workflows) actually
+run. Each child node is a workflow's **file stem**: `smoke-test` for
+`smoke-test.yml`.
+
+| Property | Meaning |
+| --- | --- |
+| `enabled=#false` | the workflow does not run |
+| `enabled=#true` | the workflow runs, which is also what silence means |
+
+**The block is optional, and so is any given workflow.** A workflow not
+named here runs, so an absent block is the repository as it ships. Only
+the ones a fork has an opinion about are listed, which is why `enabled` is
+required on the ones that are: a bare name states nothing, and a line
+somebody wrote on purpose that changes nothing is worse than an error.
+
+The case this exists for: a fork wants the weekly smoke test off, or has
+no ghcr namespace to publish to and wants `build`, `checksums` and
+`cleanup-registry` quiet. Both are decisions about the repository that
+previously needed an edit to a file the next rebase overwrites.
+
+`manifest workflows` answers with every file in the directory and the
+state the declaration asks for, pipe separated. Every file, not only the
+declared ones: reconciliation has to be able to switch a workflow back
+*on* after somebody switched it off in the web UI, and it can only do that
+if it is told the declared state of one nobody has mentioned.
+
+**Reconciled through the API, never by editing the files.**
+[`reconcile-workflows.yml`](../.github/workflows/reconcile-workflows.yml)
+calls `PUT /repos/{owner}/{repo}/actions/workflows/{id}/{enable,disable}`
+on every push to `main` that touches this file or that directory.
+`GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`,
+so a reconciler that rewrote them would need a PAT or a GitHub App, and a
+template user would have to provision a secret before their fork worked at
+all. Nothing else in this repository needs elevated credentials, and the
+API does the same job with `actions: write`.
+
+Nothing here reaches a build, which is why changing a toggle does not
+regenerate `Containerfile.generated`. The
+[generate-and-drift-check](#build-order) boundary earns its cost for what
+the build consumes, and a workflow is not consumed by the build.
+
+The reconciler is the one workflow that cannot be switched off from here.
+It skips itself, resolved from `GITHUB_WORKFLOW_REF` at run time rather
+than from a path written down anywhere, because disabling it would leave
+this block with nothing to act on it and no way back in. A fork that wants
+none of this deletes the file.
 
 ### `module`
 
@@ -833,6 +888,15 @@ Lint fails on all of these, in seconds, before anything builds.
 - a `flavors` block with no `default=#true`, or with more than one
 - more than one `pr-build=#true`
 - a `flavor` block naming an undeclared flavor
+
+**Workflows**
+
+- a `workflows` entry naming no file under `.github/workflows/`, listing
+  the stems that are there. The node name is a file stem and nothing else
+  constrains it, so an unchecked typo would read as a decision and do
+  nothing
+- a workflow declared twice, or one with no `enabled`
+- an empty `workflows` block
 
 **Graph**
 

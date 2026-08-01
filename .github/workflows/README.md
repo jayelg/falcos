@@ -2,6 +2,8 @@
 
 The GitHub Actions pipelines.
 
+Which of them run is declared in the [`workflows` block in image.kdl](../../modules/SCHEMA.md#workflows) and reconciled by [Reconcile workflow toggles](reconcile-workflows.yml). A workflow not named there runs, so nothing below is off today.
+
 ### [Build Container Image](build.yml)
 
 Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `image.kdl`, for build testing, and do not push.
@@ -53,5 +55,15 @@ It carries no list of assets: `manifest.sh assets` and `manifest.sh remotes` rep
 ### [Clean up Registry](cleanup-registry.yml)
 
 Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
+
+### [Reconcile workflow toggles](reconcile-workflows.yml)
+
+Applies the [`workflows` block in image.kdl](../../modules/SCHEMA.md#workflows) to what GitHub actually has enabled, on every push to main touching that file or this directory. Reads the declaration through `manifest workflows`, which answers with every file here and the state declared for it, so this workflow carries no list of its own and cannot drift from the block.
+
+Through `PUT /actions/workflows/{id}/{enable,disable}`, never by editing the files here. `GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`, so a reconciler that rewrote them would need a PAT or a GitHub App, and a fork of this repository would have to provision a secret before it worked at all. Nothing else in the repo needs elevated credentials, and the API does the same job with `actions: write`, leaving no commit and nothing for the drift check to notice.
+
+A workflow that has never been on the default branch is not registered with Actions and is skipped rather than treated as disabled. `disabled_inactivity`, which is GitHub switching a scheduled workflow off after 60 days of repository quiet, reconciles back to active like any other difference.
+
+It never disables itself: that would leave the declaration with nothing to act on it and no way back in from the file. The check resolves this workflow's own filename from `GITHUB_WORKFLOW_REF` at run time, so no path to it is written down. A fork that wants none of this deletes the file.
 
 ## Notes / Todo

@@ -17,6 +17,7 @@ mod order;
 mod overlay;
 mod remote;
 mod render;
+mod workflow;
 
 use list::List;
 use std::path::PathBuf;
@@ -47,6 +48,9 @@ says otherwise.
                     manifest, version, sha256, hash source, resolved URL
   remotes           every out-of-tree module pin, pipe separated: name,
                     directory, ref, sha256, resolved URL, subtree path
+  workflows         every file in .github/workflows/ and whether the
+                    declaration says it runs, pipe separated: file,
+                    enabled. Undeclared is enabled
   find-provider <abs-path> [target]
                     the module that provides a contract file path; nothing
                     when none does. Per target when one is given, because
@@ -121,6 +125,21 @@ fn main() -> ExitCode {
     // command below this needs those directories to exist.
     if command == "remotes" {
         let output = render::remotes(&list);
+        if issues.report(&list_display) {
+            return ExitCode::FAILURE;
+        }
+        print!("{output}");
+        return ExitCode::SUCCESS;
+    }
+
+    // Resolved for every command, so a declaration naming a workflow that
+    // does not exist fails `check` like anything else, and answered
+    // before the modules load for the same reason `remotes` is: which
+    // workflows run has nothing to do with what is in the image, so the
+    // reconciler needs no module tree fetched to ask.
+    let workflows = workflow::resolve(&list, &root, &mut issues);
+    if command == "workflows" {
+        let output = workflow::render(&workflows);
         if issues.report(&list_display) {
             return ExitCode::FAILURE;
         }
