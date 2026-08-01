@@ -17,6 +17,7 @@ mod order;
 mod overlay;
 mod remote;
 mod render;
+mod workflow;
 
 use list::List;
 use std::path::PathBuf;
@@ -47,17 +48,30 @@ says otherwise.
                     manifest, version, sha256, hash source, resolved URL
   remotes           every out-of-tree module pin, pipe separated: name,
                     directory, ref, sha256, resolved URL, subtree path
+  workflows         every file in .github/workflows/ and whether the
+                    declaration says it runs, pipe separated: file,
+                    enabled. Undeclared is enabled
   find-provider <abs-path> [target]
                     the module that provides a contract file path; nothing
                     when none does. Per target when one is given, because
                     a path provided only by a gated module is not provided
                     on every target
+  owns <abs-path> [target]
+                    the module whose files/ overlay puts a path in the
+                    image; nothing when none does. Per target for the same
+                    reason find-provider is. Overlay-shipped paths only: a
+                    package-installed one is not in the index and could
+                    not be without rpm -qf on a built image
   secrets [target]  every secret ID an enabled module declares, unique;
                     per target when one is given
   contract-files [target]
                     every contract file path an enabled module provides and
                     the finished image still carries, unique; per target
                     when one is given. Excludes `build-only` paths
+  verify-exceptions [target]
+                    every systemd-analyze verify diagnostic an enabled
+                    module accepts on one of its own units, pipe
+                    separated: class, unit; per target when one is given
   check             validate every manifest, printing what is wrong
 
 Run from the repository root, or set MANIFEST_ROOT.
@@ -81,11 +95,17 @@ fn main() -> ExitCode {
     // is a mistake rather than a filter, and accepting one silently
     // answered a question nobody asked.
     //
-    // `find-provider` takes a path first and the optional target after
-    // it, because which module provides a path is a per-target question
-    // in the same way the rest of these are.
-    const PER_TARGET: [&str; 4] = ["summary", "assets", "secrets", "contract-files"];
-    let path_first = command == "find-provider";
+    // `find-provider` and `owns` take a path first and the optional
+    // target after it, because which module a path comes from is a
+    // per-target question in the same way the rest of these are.
+    const PER_TARGET: [&str; 5] = [
+        "summary",
+        "assets",
+        "secrets",
+        "contract-files",
+        "verify-exceptions",
+    ];
+    let path_first = matches!(command, "find-provider" | "owns");
     let max_args = usize::from(path_first) + usize::from(path_first || PER_TARGET.contains(&command));
     if args.len() - 1 > max_args {
         eprintln!(
@@ -128,6 +148,21 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    // Resolved for every command, so a declaration naming a workflow that
+    // does not exist fails `check` like anything else, and answered
+    // before the modules load for the same reason `remotes` is: which
+    // workflows run has nothing to do with what is in the image, so the
+    // reconciler needs no module tree fetched to ask.
+    let workflows = workflow::resolve(&list, &root, &mut issues);
+    if command == "workflows" {
+        let output = workflow::render(&workflows);
+        if issues.report(&list_display) {
+            return ExitCode::FAILURE;
+        }
+        print!("{output}");
+        return ExitCode::SUCCESS;
+    }
+
     // Every module's own manifest. Loaded for every command so that a
     // missing or malformed one fails the same way wherever it is noticed,
     // rather than only when something happens to need a field from it.
@@ -142,7 +177,10 @@ fn main() -> ExitCode {
     let order = order::sort(&list, &modules, &mut issues);
     order::apply(&mut list, &mut modules, &order);
     module::check_graph(&modules, &list, &root, &mut issues);
-    overlay::check(&modules, &root, &mut issues);
+    // One walk of every overlay, read twice: by the collision check, and
+    // by `owns` below. They are two questions about the same fact.
+    let shipped = overlay::index(&modules, &root);
+    overlay::check(&modules, &shipped, &mut issues);
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
     // An unknown target is the same mistake whichever command was asked,
@@ -190,8 +228,16 @@ fn main() -> ExitCode {
             };
             render::find_provider(&list, &modules, path, target)
         }
+        "owns" => {
+            let Some(path) = args.get(1) else {
+                eprintln!("manifest: owns needs an absolute path");
+                return ExitCode::FAILURE;
+            };
+            overlay::owns(&modules, &shipped, path, target)
+        }
         "secrets" => render::secrets(&list, &modules, target),
         "contract-files" => render::contract_files(&list, &modules, target),
+        "verify-exceptions" => render::verify_exceptions(&list, &modules, target),
         "summary" => render::summary(&list, &modules, target),
         "assets" => render::assets(&list, &modules, target),
         other => {

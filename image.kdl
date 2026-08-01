@@ -61,6 +61,32 @@ flavors {
     laptop
 }
 
+// Optional. Which workflows in .github/workflows/ actually run, named by
+// file stem, for a fork that wants the weekly smoke test off or has no
+// registry to publish to.
+//
+// - enabled: #false switches the workflow off, #true switches it back on
+//
+// A workflow not named here runs, so an absent block is this repository as
+// it ships, which is why nothing is declared below. Uncomment to turn one
+// off:
+//
+// workflows {
+//     smoke-test enabled=#false
+// }
+//
+// Reconciled by .github/workflows/reconcile-workflows.yml through the
+// GitHub API on every push to main that touches this file. Not by
+// rewriting the workflow files: GITHUB_TOKEN cannot push under that path,
+// so anything that edited them would need a PAT or a GitHub App, and a
+// fork would have to provision a secret before it built at all. Nothing
+// here reaches a build, so changing it does not regenerate the
+// Containerfile.
+//
+// The reconciler is the one workflow that cannot be switched off from
+// here: it skips itself, because disabling it would leave this block with
+// nothing to act on it. Delete the file instead.
+
 // Modules compile into one Containerfile RUN layer each in the build
 // Containerfile (Containerfile.generated). The build order is resolved
 // from the graph, and this list is what it falls back to:

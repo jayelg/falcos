@@ -45,6 +45,15 @@ pub struct Collect {
     pub span: SourceSpan,
 }
 
+/// One `systemd-analyze verify` diagnostic a module accepts on one of its
+/// units, so that a known-benign complaint does not have to be tolerated
+/// image-wide.
+pub struct VerifyException {
+    pub class: String,
+    pub unit: String,
+    pub span: SourceSpan,
+}
+
 pub struct Module {
     /// The list path, which is the module's identity everywhere. These
     /// three carry the module's source for the graph checks that read
@@ -82,6 +91,11 @@ pub struct Module {
     /// because the winner is otherwise decided by build order and
     /// nothing says it was meant to.
     pub overrides: Vec<Decl>,
+    /// Verify diagnostics this module's own units are allowed to produce.
+    /// Declared here rather than on the `base` node so that delisting the
+    /// module takes its exceptions with it, and so flavor gating comes
+    /// free: an image with no KDE carries no plasmalogin exception.
+    pub verify_exceptions: Vec<VerifyException>,
     /// The flavor this module is gated to, from the list rather than the
     /// manifest: a module never names a flavor.
     pub flavor: Option<String>,
@@ -113,6 +127,22 @@ pub struct Module {
 /// The only base family today. Declared rather than assumed so that a
 /// module that cannot build on a second one says so before it is tried.
 const FAMILIES: [&str; 1] = ["fedora"];
+
+/// The diagnostic classes `allow-verify` may name.
+///
+/// A closed set of names rather than raw regexes. A regex in a manifest
+/// is a footgun: one careless `.*` silences the check and no reviewer
+/// catches it. The set is enumerable from what `systemd-analyze verify`
+/// actually emits, and naming it buys a property worth having, which is
+/// that a failure matching no known class is itself the signal. Benign
+/// noise is a closed set, so anything outside it is more likely a defect.
+///
+/// The patterns these stand for live in lib/validate-image.sh, the only
+/// place a verify diagnostic is written down as a regex. Nothing here
+/// needs to know what one looks like, and no regex ever crosses the
+/// boundary into a build arg, where `$` and backslashes would not
+/// survive. scripts/lint.sh checks the two lists against each other.
+const VERIFY_CLASSES: [&str; 2] = ["mount-not-found", "man-page-missing"];
 
 const TOKEN_HELP: &str = "package names and repo IDs are emitted straight into the RUN line, so they are limited to letters, digits and . _ + : -; anything else belongs in module.sh, where it can be quoted deliberately";
 
@@ -227,6 +257,7 @@ impl Module {
             provides_files_build_only: Vec::new(),
             requires_files: Vec::new(),
             overrides: Vec::new(),
+            verify_exceptions: Vec::new(),
             flavor: entry.flavor.clone(),
             collects: Vec::new(),
             secrets: Vec::new(),
@@ -370,6 +401,103 @@ impl Module {
                             module.secrets.push(decl);
                         } else {
                             module.args.push(decl);
+                        }
+                    }
+                }
+                // `allow-verify "<class>" unit="<unit>"`
+                //
+                // Keyed on a diagnostic class and a unit, never on a
+                // package. The validator sees units; mapping a package
+                // name onto them would need `rpm -qf` at validation time
+                // and is wrong regardless, because an overlay-shipped
+                // unit belongs to no package. A package key would also
+                // over-silence, hiding a genuinely broken ExecStart in
+                // another unit of the same package.
+                "allow-verify" => {
+                    let span = node.name().span();
+                    let class = string_args(node).first().map(|s| s.to_string());
+                    let mut unit = None;
+                    for prop in node.entries() {
+                        let Some(key) = prop.name().map(|n| n.value()) else {
+                            continue; // the class itself
+                        };
+                        match key {
+                            "unit" => match prop.value().as_string() {
+                                Some(v) => unit = Some(v.to_string()),
+                                None => issues.push(
+                                    Issue::new("`unit` must be a string", &file, &text)
+                                        .at(prop.span(), "not a string"),
+                                ),
+                            },
+                            other => issues.push(
+                                Issue::new(
+                                    format!("unknown `allow-verify` property `{other}`"),
+                                    &file,
+                                    &text,
+                                )
+                                .at(prop.span(), "not part of the schema")
+                                .help("`allow-verify` accepts `unit`"),
+                            ),
+                        }
+                    }
+
+                    match (class, unit) {
+                        (Some(class), Some(unit)) => {
+                            if !VERIFY_CLASSES.contains(&class.as_str()) {
+                                issues.push(
+                                    Issue::new(
+                                        format!("`{class}` is not a verify diagnostic class"),
+                                        &file,
+                                        &text,
+                                    )
+                                    .at(span, "not one of the known classes")
+                                    .help(format!(
+                                        "known classes: {}. They are named rather than written as regexes, and lib/validate-image.sh holds the pattern each one stands for",
+                                        VERIFY_CLASSES.join(", ")
+                                    )),
+                                );
+                            } else if let Some(dup) = module
+                                .verify_exceptions
+                                .iter()
+                                .find(|e| e.class == class && e.unit == unit)
+                            {
+                                issues.push(
+                                    Issue::new(
+                                        format!("`{class}` is allowed twice on `{unit}`"),
+                                        &file,
+                                        &text,
+                                    )
+                                    .at(dup.span, "first here")
+                                    .at(span, "and again here"),
+                                );
+                            } else {
+                                module.verify_exceptions.push(VerifyException {
+                                    class,
+                                    unit,
+                                    span,
+                                });
+                            }
+                        }
+                        (class, unit) => {
+                            let missing = if class.is_none() {
+                                "a diagnostic class"
+                            } else if unit.is_none() {
+                                "unit=, the unit it applies to"
+                            } else {
+                                "both a class and a unit"
+                            };
+                            issues.push(
+                                Issue::new(
+                                    format!("`allow-verify` needs {missing}"),
+                                    &file,
+                                    &text,
+                                )
+                                .at(span, "incomplete")
+                                .help(
+                                    "`allow-verify \"man-page-missing\" unit=\"plasmalogin.service\"`, \
+                                     which accepts one diagnostic on one unit rather than image-wide",
+                                ),
+                            );
                         }
                     }
                 }

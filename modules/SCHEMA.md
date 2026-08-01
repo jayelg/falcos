@@ -35,8 +35,8 @@ A manifest declares *facts*, not *file layout*.
 
 ## image.kdl
 
-Four top-level nodes. `flavors` is optional; `image`, `base` and `modules`
-are required.
+Five top-level nodes. `flavors` and `workflows` are optional; `image`,
+`base` and `modules` are required.
 
 ```kdl
 image "falcos" {
@@ -64,6 +64,12 @@ flavors {
     // surface. Unrelated to default; they coincide today by choice.
     desktop default=#true pr-build=#true
     laptop
+}
+
+workflows {
+    // Only the ones this repository has an opinion about. A workflow not
+    // named here runs, so an absent block is the repository as it ships.
+    smoke-test enabled=#false
 }
 
 modules {
@@ -176,6 +182,55 @@ one positional accident stood in for all of them.
 gating, `FLAVOR` unset, an unsuffixed image name, a single-element build
 matrix, no sibling cache ref, one package to prune. That is the path a
 stripped-down fork hits first, so it is the path that must work.
+
+### `workflows`
+
+Which pipelines in [`.github/workflows/`](../.github/workflows) actually
+run. Each child node is a workflow's **file stem**: `smoke-test` for
+`smoke-test.yml`.
+
+| Property | Meaning |
+| --- | --- |
+| `enabled=#false` | the workflow does not run |
+| `enabled=#true` | the workflow runs, which is also what silence means |
+
+**The block is optional, and so is any given workflow.** A workflow not
+named here runs, so an absent block is the repository as it ships. Only
+the ones a fork has an opinion about are listed, which is why `enabled` is
+required on the ones that are: a bare name states nothing, and a line
+somebody wrote on purpose that changes nothing is worse than an error.
+
+The case this exists for: a fork wants the weekly smoke test off, or has
+no ghcr namespace to publish to and wants `build`, `checksums` and
+`cleanup-registry` quiet. Both are decisions about the repository that
+previously needed an edit to a file the next rebase overwrites.
+
+`manifest workflows` answers with every file in the directory and the
+state the declaration asks for, pipe separated. Every file, not only the
+declared ones: reconciliation has to be able to switch a workflow back
+*on* after somebody switched it off in the web UI, and it can only do that
+if it is told the declared state of one nobody has mentioned.
+
+**Reconciled through the API, never by editing the files.**
+[`reconcile-workflows.yml`](../.github/workflows/reconcile-workflows.yml)
+calls `PUT /repos/{owner}/{repo}/actions/workflows/{id}/{enable,disable}`
+on every push to `main` that touches this file or that directory.
+`GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`,
+so a reconciler that rewrote them would need a PAT or a GitHub App, and a
+template user would have to provision a secret before their fork worked at
+all. Nothing else in this repository needs elevated credentials, and the
+API does the same job with `actions: write`.
+
+Nothing here reaches a build, which is why changing a toggle does not
+regenerate `Containerfile.generated`. The
+[generate-and-drift-check](#build-order) boundary earns its cost for what
+the build consumes, and a workflow is not consumed by the build.
+
+The reconciler is the one workflow that cannot be switched off from here.
+It skips itself, resolved from `GITHUB_WORKFLOW_REF` at run time rather
+than from a path written down anywhere, because disabling it would leave
+this block with nothing to act on it and no way back in. A fork that wants
+none of this deletes the file.
 
 ### `module`
 
@@ -409,6 +464,119 @@ the same image, so they are not a collision.
 There are zero collisions today, which is why the check and the escape
 hatch arrive together: an escape hatch with nothing to escape, and no
 check to escape from, would be surface nothing could verify.
+
+The index this check is built on answers one more question, so it is
+exposed rather than discarded:
+
+```
+$ manifest owns /usr/lib/modprobe.d/vfio.conf desktop
+virtualization/vfio-passthrough
+```
+
+`owns <abs-path> [target]` names the module whose overlay actually puts a
+file at that path, or nothing when none does. Where
+[`find-provider`](#contract-files) answers over *declared* paths, this
+answers over *shipped* ones, and the two are complementary: a
+`provides-file` is a contract whoever writes it, including a module that
+writes it from `module.sh`, while this is the overlay a file physically
+came from. A package-installed path is in neither and could not be without
+`rpm -qf` on a built image. That is still enough for the case it was added
+for, since a preset naming a unit is overlay-shipped, and it is not
+inferrable from the filename, which is the tempting shortcut:
+`45-module-updates.preset` lives in `core/auto-updates`.
+
+**Per target, for the reason `find-provider` is.** The index deliberately
+holds every module whatever flavor it is gated to, because the collision
+check applies gating at comparison time instead. Handing that out
+unfiltered would reproduce the bug `find-provider` already had and fixed,
+where a path shipped only by a `desktop` module read as shipped on
+`laptop` and on the ungated build too. So `vfio.conf` above is owned by
+nothing on `laptop`.
+
+When two modules ship one path, this names the later one in build order,
+which is the file that survives into the image. Without a declared
+`overrides` that case is a lint failure anyway, so in a tree that passes
+`check` there is only ever one answer.
+
+### Verify exceptions
+
+Every system unit a preset enables passes through `systemd-analyze verify`
+in [validate-image.sh](../lib/validate-image.sh), and a complaint is
+fatal. Some complaints are facts about where the build runs or about
+packaging rather than defects in the unit, and this is how a module says
+which of those it accepts, on which of its units.
+
+| Node | Meaning |
+| --- | --- |
+| `allow-verify "<class>" unit="<unit>"` | this diagnostic class is expected on this unit |
+
+| Class | What it is |
+| --- | --- |
+| `mount-not-found` | a unit ordered against a `.mount` or `.swap` unit, which a container build has not got |
+| `man-page-missing` | a `Documentation=` man page this image does not carry, which verify checks by running `man` against it |
+
+**In the module, never on `base`.** The case that prompted this,
+`plasmalogin.service`, arrives through `de/kde-desktop`. On the `base`
+node an image with no KDE would carry a dead exception, the ungated target
+would carry it while having no plasmalogin, and swapping KDE for GNOME
+would leave it with nothing to say it had gone obsolete. Declared in the
+module, delisting takes the exception with it and flavor gating comes
+free, which are the same two properties that put presets and
+`provides-file` in modules.
+
+**Keyed on a class and a unit, never on a package.** The validator sees
+units. Mapping a package name onto them would need `rpm -qf` at validation
+time, and it is wrong regardless, because an overlay-shipped unit belongs
+to no package. A package key would also over-silence, hiding a genuinely
+broken `ExecStart` in another unit of the same package.
+
+**Named classes, never raw regexes.** A regex in a manifest is a footgun:
+one careless `.*` silences the check and no reviewer catches it. The set
+is enumerable from what verify actually emits, and closing it buys a
+property worth having, which is that *a failure matching no known class is
+itself the signal*. Benign noise is a closed set, so anything outside it
+is more likely a real defect. The pattern each class stands for stays in
+`lib/validate-image.sh` and never travels: only the class name reaches the
+build, because a pattern holding `$` and backslashes would not survive a
+build arg. `scripts/lint.sh` checks the two lists against each other, and
+fails if either comes up empty rather than letting two empty lists compare
+equal.
+
+These patterns used to be an unconditional allowlist applied to every unit
+in the image, so the same complaint was silenced on all twenty-five of
+them, including ones where it would have been a real defect. Scoping them
+is the point of the change; the escape hatch is what keeps the two genuine
+cases working.
+
+When verify fails, the message names the declaration to add, the way
+`just lint` says to stage the regenerated file and `flavors.sh check`
+prints the valid targets:
+
+```
+FAIL: tuned.service: systemd-analyze verify
+      tuned.service: Command 'man tuned(8)' failed with code 16
+        this is the known class 'man-page-missing'. If it is expected here,
+        declare it in the module shipping 45-module-kde-desktop.preset:
+          allow-verify "man-page-missing" unit="tuned.service"
+```
+
+Unlike [`overrides`](#overlay-collisions), an unused exception is **not** a
+lint failure. Whether verify emits a given diagnostic is only knowable
+from inside a built image, so the host has nothing to check it against. It
+is the one escape hatch here that can outlive its cause.
+
+**Not `validation=strict|permissive`.** A global mode is two paths through
+every check, and the less used one rots. Worse, it would disable the
+assertions that matter most alongside the noisy one: a missing contract
+file means a module lied, and for `sb_cert.der` that means shipping
+unsigned kernel modules. Most of what a permissive mode would buy already
+exists, since the validator collects every failure and reports them all
+before exiting.
+
+**Not configured per workflow.** The validation is a `RUN` layer in the
+Containerfile, run identically by `just build` and by CI.
+`scripts/build.sh` exists so those two cannot drift, and putting the gate
+behind a [`workflows`](#workflows) toggle would reintroduce exactly that.
 
 ### Collecting
 
@@ -834,6 +1002,15 @@ Lint fails on all of these, in seconds, before anything builds.
 - more than one `pr-build=#true`
 - a `flavor` block naming an undeclared flavor
 
+**Workflows**
+
+- a `workflows` entry naming no file under `.github/workflows/`, listing
+  the stems that are there. The node name is a file stem and nothing else
+  constrains it, so an unchecked typo would read as a decision and do
+  nothing
+- a workflow declared twice, or one with no `enabled`
+- an empty `workflows` block
+
 **Graph**
 
 - a `requires` no enabled module provides, listing every module that
@@ -850,6 +1027,17 @@ Lint fails on all of these, in seconds, before anything builds.
 - two enabled modules that land in the same image shipping the same
   `files/` path, without the later one declaring `overrides`
 - an `overrides` for a path no earlier module ships
+
+**Verify exceptions**
+
+- an `allow-verify` naming a class outside the known set, listing them
+- an `allow-verify` with no class, or no `unit=`
+- the same class allowed twice on the same unit in one module
+- the class list in `lib/validate-image.sh` disagreeing with the one in
+  the parser, or either coming up empty
+
+Not checked here, and not checkable: whether a declared exception is ever
+used. That is only knowable from inside a built image.
 
 **Collecting**
 
