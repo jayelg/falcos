@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # shellcheck over every Bash script in the repo, then a generator dry
-      # run that validates image.kdl without a full image build. The
+      # run that validates the image files without a full image build. The
       # script owns the file set, so `just lint` checks exactly what this
       # gate checks. shellcheck is preinstalled on the runner image.
       - name: Run lint
@@ -81,9 +81,9 @@ jobs:
             python3 -m unittest discover -s "$d" -v
           done
 
-  # Builds every target: the ungated set published unsuffixed, then one
-  # per flavor declared in image.kdl. A separate job because the matrix
-  # context isn't available in a job-level if.
+  # Builds every declared target: for each image, the ungated
+  # set published unsuffixed, then one per flavor. A separate job because
+  # the matrix context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -94,14 +94,13 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.set.outputs.targets }}
-      base_provides: ${{ steps.set.outputs.base_provides }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          # Pull requests build one flavor, for half the runner time.
-          # Which one is declared in image.kdl as pr-build rather than
+          # Pull requests build one target, for half the runner time.
+          # Which one is declared as pr-build rather than
           # inferred from list position, because covering the most build
           # surface and being the default are unrelated properties that
           # only happen to coincide.
@@ -109,16 +108,9 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             selection="pr"
           fi
-          targets="$(./scripts/flavors.sh "$selection" \
+          targets="$(./scripts/targets.sh "$selection" \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
-
-          # What the base image itself brings, declared in image.kdl.
-          # Resolved once here rather than per matrix leg, since it is a
-          # property of the base and not of the target being built.
-          provides="$(./scripts/manifest.sh base-provides \
-            | jq -Rsc 'split("\n") | map(select(length > 0))')"
-          echo "base_provides=${provides}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
@@ -142,7 +134,7 @@ jobs:
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
-      # Checked out first because the steps below read scripts/flavors.sh.
+      # Checked out first because the steps below read scripts/targets.sh.
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -153,8 +145,26 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
-          echo "IMAGE_NAME=$(./scripts/flavors.sh image "$TARGET")" >> "${GITHUB_ENV}"
+          {
+            echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}"
+            echo "IMAGE_NAME=$(./scripts/targets.sh image "$TARGET")"
+            # The expanded build for this image: one generated Containerfile
+            # per image, so every flavor of it reads the same file. The
+            # image is the half of the target before the slash. Resolved
+            # once here for the source label and the artifact upload below.
+            echo "CONTAINERFILE=containerfiles/${TARGET%%/*}.generated"
+            # Whether this image's base brings rechunking, which is a
+            # property of the base and so a per-image question: two images
+            # need not build on the same one. Resolved to a flag here
+            # rather than passed as a list, so the step below is a plain
+            # boolean rather than a substring match over a JSON blob.
+            rechunk=false
+            if ./scripts/manifest.sh base-provides "${TARGET%%/*}" \
+               | grep -qx rechunking; then
+              rechunk=true
+            fi
+            echo "RECHUNK=${rechunk}"
+          } >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
              && [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] \
@@ -251,7 +261,7 @@ jobs:
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }} (${{ matrix.target }})
             org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/Containerfile.generated
+            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/blob/${{ github.sha }}/${{ env.CONTAINERFILE }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/tree/${{ github.sha }}
             org.opencontainers.image.vendor=${{ github.repository_owner }}
@@ -358,7 +368,7 @@ jobs:
           TAGS: ${{ steps.metadata.outputs.tags }}
           LABELS: ${{ steps.metadata.outputs.labels }}
         run: |
-          args=(--backend buildx --flavor "$TARGET")
+          args=(--backend buildx --target "$TARGET")
           # Whatever the step above wrote, by the ID it named the file
           # with. Absent on a build that does not publish, and absent per
           # secret the repository does not hold.
@@ -405,7 +415,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: containerfile-${{ env.IMAGE_NAME }}
-          path: Containerfile.generated
+          path: ${{ env.CONTAINERFILE }}
           retention-days: 30
 
       - name: Setup Syft
@@ -560,7 +570,7 @@ jobs:
       # first pull, not a failed build.
       - name: Rechunk image
         id: rechunk
-        if: env.PUBLISH == 'true' && contains(fromJSON(needs.compute-matrix.outputs.base_provides), 'rechunking')
+        if: env.PUBLISH == 'true' && env.RECHUNK == 'true'
         run: |
           sudo podman run --rm --privileged ${{ steps.runtime.outputs.flag }} \
             --volume /var/lib/containers:/var/lib/containers \

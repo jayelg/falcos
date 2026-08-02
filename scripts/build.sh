@@ -22,18 +22,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-containerfile=Containerfile.generated
-
-# What the image calls itself, from image.kdl. The local daemon and its
+# The checkout's default image. The local daemon and its
 # cache volume are named after it so one checkout's build state is its
-# own, and so nothing here spells the image name out.
-image_id="$(./scripts/manifest.sh image-id)"
+# own, and so nothing here spells a name out. One daemon serves every
+# image: its state is a layer cache, which is shared, not per image.
+default_image="$(./scripts/manifest.sh default-image)"
 
 # renovate: datasource=docker depName=docker.io/moby/buildkit
 buildkit_image="docker.io/moby/buildkit:v0.31.2"
-buildkit_container="${image_id}-buildkitd"
-buildkit_volume="${image_id}-buildkit"
-buildkit_label="${image_id}.buildkitd"
+buildkit_container="${default_image}-buildkitd"
+buildkit_volume="${default_image}-buildkit"
+buildkit_label="${default_image}.buildkitd"
 # Paths inside that container, not on the host
 buildkit_context=/build
 buildkit_secret_dir=/run/secrets
@@ -47,9 +46,10 @@ usage() {
 	cat >&2 <<'EOF'
 usage: scripts/build.sh [options]
 
-  --flavor <name>     target to build: a flavor, or `none` for the
-                      ungated set published unsuffixed (default:
-                      scripts/flavors.sh default)
+  --target <image/flavor>
+                      what to build, e.g. falcos/desktop; the flavor half
+                      is `none` for the ungated set, which publishes
+                      unsuffixed (default: scripts/targets.sh default)
   --kernel <name>     KERNEL build arg (default: unset, the Containerfile
                       decides, which is how the kernel-freshness fallback
                       switches the whole pipeline to the stock kernel)
@@ -78,7 +78,7 @@ EOF
 
 # ---- arguments -----------------------------------------------------------
 backend="${BUILD_BACKEND:-buildkit}"
-flavor=""
+target=""
 kernel=""
 oci_output=""
 cache_from=1
@@ -94,9 +94,9 @@ need_value() {
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--flavor)
+	--target)
 		need_value "$1" "$#"
-		flavor="$2"
+		target="$2"
 		shift 2
 		;;
 	--kernel)
@@ -162,11 +162,21 @@ if [ "$reset" = 1 ]; then
 fi
 
 # ---- resolved build inputs -----------------------------------------------
-# scripts/flavors.sh derives both from the flavor set in image.kdl;
-# asking it for the default and validating against it is what keeps a typo
-# out of a 50 minute build.
-flavor="${flavor:-$(./scripts/flavors.sh default)}"
-./scripts/flavors.sh check "$flavor"
+# scripts/targets.sh derives both from what the image files declare; asking it
+# for the default and validating against it is what keeps a typo out of a
+# 50 minute build.
+target="${target:-$(./scripts/targets.sh default)}"
+./scripts/targets.sh check "$target"
+
+# The two halves. Which image decides what is built and which generated
+# Containerfile builds it; the flavor decides what is gated in.
+image="${target%%/*}"
+flavor="${target#*/}"
+
+# One generated Containerfile per image, named for the image. Derived
+# rather than fixed: images build on different bases, so which file this
+# build uses follows from which image is being built.
+containerfile="containerfiles/${image}.generated"
 
 # `none` names the ungated build for a cache tag and a matrix entry, but
 # inside the build it is simply no flavor: FLAVOR is empty, so every
@@ -179,7 +189,8 @@ image_version="${IMAGE_VERSION:-$(date -u +%Y%m%d)}"
 while IFS= read -r line; do
 	if [ -n "$line" ]; then tags+=("$line"); fi
 done <<<"${TAGS:-}"
-[ "${#tags[@]}" -gt 0 ] || tags=("${IMAGE_NAME:-$image_id}:${DEFAULT_TAG:-latest}")
+[ "${#tags[@]}" -gt 0 ] ||
+	tags=("${IMAGE_NAME:-$(./scripts/targets.sh image "$target")}:${DEFAULT_TAG:-latest}")
 
 while IFS= read -r line; do
 	if [ -n "$line" ]; then labels+=("$line"); fi
@@ -228,14 +239,18 @@ done
 cache_import_refs=()
 cache_export_ref=""
 if [ "$cache_from" = 1 ] || [ "$cache_to" = 1 ]; then
-	if repo="$(./scripts/registry.sh ref "$(./scripts/flavors.sh cache-image)")"; then
+	if repo="$(./scripts/registry.sh ref "$(./scripts/targets.sh cache-image)")"; then
+		# One tag per target, spelled as the published image name: a tag
+		# cannot hold the slash a target is written with, and the
+		# published name is already unique across images.
+		tag="$(./scripts/targets.sh image "$target")"
 		if [ "$cache_from" = 1 ]; then
-			cache_import_refs+=("${repo}:${flavor}")
+			cache_import_refs+=("${repo}:${tag}")
 			while IFS= read -r sibling; do
-				cache_import_refs+=("${repo}:${sibling}")
-			done < <(./scripts/flavors.sh siblings "$flavor")
+				cache_import_refs+=("${repo}:$(./scripts/targets.sh image "$sibling")")
+			done < <(./scripts/targets.sh siblings "$target")
 		fi
-		[ "$cache_to" = 0 ] || cache_export_ref="${repo}:${flavor},mode=max"
+		[ "$cache_to" = 0 ] || cache_export_ref="${repo}:${tag},mode=max"
 	else
 		[ "$cache_to" = 0 ] || die "--cache-to needs a registry namespace"
 		echo "build: skipping the registry layer cache" >&2
@@ -244,7 +259,7 @@ fi
 
 # ---- the Containerfile the build actually uses ---------------------------
 # Regenerated here rather than by each caller: a build against a stale
-# Containerfile.generated is a build of the wrong image.
+# generated Containerfile is a build of the wrong image.
 ./scripts/gen-containerfile.sh
 
 # The contract file paths the validation layer asserts, and the verify
@@ -262,12 +277,12 @@ build_args=(
 	"FLAVOR=${flavor_arg}"
 	"IMAGE_VERSION=${image_version}"
 	"IMAGE_REGISTRY=$(./scripts/registry.sh namespace 2>/dev/null || true)"
-	"CONTRACT_FILES=$(./scripts/manifest.sh contract-files "$flavor" | tr '\n' ' ')"
-	"VERIFY_EXCEPTIONS=$(./scripts/manifest.sh verify-exceptions "$flavor" | tr '\n' ' ')"
+	"CONTRACT_FILES=$(./scripts/manifest.sh contract-files "$target" | tr '\n' ' ')"
+	"VERIFY_EXCEPTIONS=$(./scripts/manifest.sh verify-exceptions "$target" | tr '\n' ' ')"
 )
 [ -z "$kernel" ] || build_args+=("KERNEL=${kernel}")
 
-echo "build: ${backend} flavor=${flavor} version=${image_version}${kernel:+ kernel=${kernel}}"
+echo "build: ${backend} target=${target} version=${image_version}${kernel:+ kernel=${kernel}}"
 echo "build: tags ${tags[*]}"
 [ "${#cache_import_refs[@]}" -eq 0 ] ||
 	echo "build: importing cache from ${cache_import_refs[*]}"

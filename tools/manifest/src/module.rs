@@ -8,7 +8,7 @@
 
 use crate::asset::{self, Asset};
 use crate::diag::{Issue, Issues};
-use crate::list::{Entry, List};
+use crate::list::{Entry, Image};
 use crate::options::{self, Opt, Variant};
 use kdl::{KdlDocument, KdlNode};
 use miette::SourceSpan;
@@ -191,7 +191,7 @@ fn string_args(node: &KdlNode) -> Vec<&str> {
 }
 
 impl Module {
-    pub fn load(entry: &Entry, list: &List, root: &Path, issues: &mut Issues) -> Option<Self> {
+    pub fn load(entry: &Entry, image: &Image, root: &Path, issues: &mut Issues) -> Option<Self> {
         // A pinned module keeps its list name as its identity but lives
         // under the fetch root, so a name that is also an in-tree module
         // would make every message about it ambiguous.
@@ -199,8 +199,8 @@ impl Module {
             issues.push(
                 Issue::new(
                     format!("`{}` is pinned but also exists in tree", entry.path),
-                    &list.file,
-                    &list.text,
+                    &image.file,
+                    &image.text,
                 )
                 .at(entry.span, "two modules would answer to this name")
                 .help(format!(
@@ -218,15 +218,15 @@ impl Module {
             issues.push(
                 Issue::new(
                     format!("`{}` has no module.kdl", entry.path),
-                    &list.file,
-                    &list.text,
+                    &image.file,
+                    &image.text,
                 )
                 .at(entry.span, "every module needs a manifest")
                 .help(match entry.remote {
                     // The pin is fetched by generate and by lint, so the
                     // usual reason for this is a manifest run by hand
                     // before either has happened.
-                    Some(_) => "run ./scripts/fetch-modules.sh to fetch what image.kdl pins"
+                    Some(_) => "run ./scripts/fetch-modules.sh to fetch what the image pins"
                         .to_string(),
                     None => format!(
                         "create {file}; modules/_template/module-name/module.kdl is a copy-me reference"
@@ -687,7 +687,7 @@ impl Module {
             &file,
             &text,
             entry,
-            list,
+            image,
             issues,
         );
 
@@ -911,7 +911,7 @@ fn providers_on_disk(root: &Path) -> BTreeMap<String, Vec<String>> {
 /// priorities, and nothing is ever auto-included: an unsatisfied
 /// requirement names what would fix it and stops, so the list stays the
 /// complete statement of what is in the image.
-pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Issues) {
+pub fn check_graph(modules: &[Module], image: &Image, root: &Path, issues: &mut Issues) {
     // What each capability is offered by. Position no longer matters
     // here: a requirement is an edge in the sort, so a provider is
     // already above everything that needs it.
@@ -934,7 +934,7 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
     // read as the sole provider: it shadowed the base silently, with no
     // duplicate-provider warning, because the entry the base had put there
     // was empty and the count never reached two.
-    let base_caps: BTreeMap<&str, &crate::list::Decl> = list
+    let base_caps: BTreeMap<&str, &crate::list::Decl> = image
         .base
         .iter()
         .flat_map(|b| b.provides.iter().chain(b.provides_files.iter()))
@@ -967,7 +967,7 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
                 )
                 .help(format!(
                     "the `base` node in {} declares it. Drop it from the module, or drop it from the base if the base no longer carries it",
-                    list.file
+                    image.file
                 )),
             );
         }
@@ -978,7 +978,7 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
     // Skipped entirely when the base names no family: that is already
     // reported on the node itself, and checking against an empty name
     // would blame forty modules for one missing line.
-    let base_family = list
+    let base_family = image
         .base
         .as_ref()
         .map(|b| b.family.as_str())
@@ -1084,12 +1084,12 @@ pub fn check_graph(modules: &[Module], list: &List, root: &Path, issues: &mut Is
             let Some(providers) = offered.get(decl.name.as_str()) else {
                 let help = match on_disk.get(&decl.name) {
                     Some(candidates) => format!(
-                        "{} would satisfy it; add it to image.kdl. Nothing is included automatically, so the list stays the complete statement of what is in the image",
+                        "{} would satisfy it; add it to this image. Nothing is included automatically, so the list stays the complete statement of what is in the image",
                         candidates.join(" or ")
                     ),
                     None => format!(
                         "no module in the repository declares `provides {:?}`, and neither does the `base` node in {}",
-                        decl.name, list.file
+                        decl.name, image.file
                     ),
                 };
                 issues.push(
@@ -1260,7 +1260,7 @@ pub fn resolve_collects(
                         &module.text,
                     )
                     .help(format!(
-                        "`{collector}` collects it; add it to image.kdl, or drop the {file}"
+                        "`{collector}` collects it; add it to this image, or drop the {file}"
                     )),
                 ),
             }

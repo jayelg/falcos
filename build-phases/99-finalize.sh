@@ -47,7 +47,7 @@ install_selinux_module /tmp/composefs_execmem.te
 
 ### Service enablement
 # Modules ship 45-module-*.preset files in their files/ overlays; only
-# those presets are applied here, so a module removed from image.kdl takes
+# those presets are applied here, so a module removed from the image takes
 # its service enablement with it. Deliberately not `systemctl preset-all`,
 # which would re-apply Fedora's defaults to every unit in the image. The
 # prefix is the module system's, not this image's, so a module written

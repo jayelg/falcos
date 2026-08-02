@@ -1,6 +1,6 @@
 //! Which workflows run.
 //!
-//! The declaration in image.kdl reconciled against `.github/workflows/`,
+//! The declaration in repo.kdl reconciled against `.github/workflows/`,
 //! for a fork that wants the weekly smoke test off or has no registry to
 //! publish to. Reconciled through the GitHub API, never by rewriting the
 //! files: GITHUB_TOKEN cannot push a change under that path, so anything
@@ -42,8 +42,8 @@ pub fn resolve(list: &List, root: &Path, issues: &mut Issues) -> Vec<(String, bo
         issues.push(
             Issue::new(
                 format!("`{}` is not a workflow", toggle.name),
-                &list.file,
-                &list.text,
+                &list.repo_file,
+                &list.repo_text,
             )
             .at(toggle.span, format!("no such file under {WORKFLOW_DIR}/"))
             .help(if known.is_empty() {

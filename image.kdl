@@ -1,185 +1,180 @@
-// module configuration: Defining all of the modules included in the image builds.
+// An image definition: what this image is called, what it builds on, and
+// every module it is made of.
 //
 // The schema is documented in modules/SCHEMA.md.
 // scripts/manifest.sh reads from this file.
 //
-// What the image calls itself. os-release carries it, so this one
-// declaration reaches the GRUB entry titles ostree writes, the desktop's
-// about page, the default hostname and the published image name. No
-// module spells the brand out: a module that needs it reads os-release at
-// runtime, and everything else is derived from here.
+// One `image` node holds all of it, and this whole file is that one image.
+// A second image is a second file, so the two never share a base, a flavor
+// set or a module list by accident, and adding one edits nothing that
+// already exists.
 //
-// Where the image publishes is deliberately absent: scripts/registry.sh
-// derives that from the git remote, so a fork follows its own with no
-// edit here.
-//
-// - the node argument is the machine name: published image (falcos,
-//                 falcos-desktop), default hostname, MOK key directory
-// - name          os-release NAME, what a person reads
-// - pretty-name   os-release PRETTY_NAME, default "<name> <version>"
-// - url           os-release HOME_URL and DOCUMENTATION_URL
-// - issues-url    os-release SUPPORT_URL and BUG_REPORT_URL
-// - logo          scalable icon, installed into the icon theme and named
-//                 by os-release LOGO
-// - watermark     plymouth boot splash watermark
-//
-// Asset paths are relative to the repository root and live in brand/,
-// the directory the build context carries for them.
-image "falcos" {
+// The name of this file decides nothing: every name the build and the
+// artifact use is declared inside it, so image.kdl and falcos.kdl are the
+// same image and renaming it changes nothing. Decisions about the
+// repository rather than about any image in it are in repo.kdl.
+
+image {
+    // What the image calls itself. os-release carries it, so these
+    // declarations reach the GRUB entry titles ostree writes, the desktop's
+    // about page, the default hostname and the published image name. No
+    // module spells the brand out: a module that needs it reads os-release
+    // at runtime, and everything else is derived from here.
+    //
+    // Where the image publishes is deliberately absent: scripts/registry.sh
+    // derives that from the git remote, so a fork follows its own with no
+    // edit here. So is the name of this file, which is where the definition
+    // lives and nothing else: rename it and the build is unchanged.
+    //
+    // - name          os-release NAME, what a person reads
+    // - id            the machine name: published image (falcos,
+    //                 falcos-desktop), build target, cache tag, default
+    //                 hostname, MOK key directory. Derived from `name`
+    //                 lowercased when absent, which is why it is not
+    //                 written below: "Falcos" already derives "falcos".
+    //                 Declare it when the two should differ.
+    // - pretty-name   os-release PRETTY_NAME, default "<name> <version>"
+    // - url           os-release HOME_URL and DOCUMENTATION_URL
+    // - issues-url    os-release SUPPORT_URL and BUG_REPORT_URL
+    // - logo          scalable icon, installed into the icon theme and
+    //                 named by os-release LOGO
+    // - watermark     plymouth boot splash watermark
+    //
+    // Asset paths are relative to the repository root and live in brand/,
+    // the directory the build context carries for them.
     name "Falcos"
     url "https://github.com/jayelg/falcos"
     issues-url "https://github.com/jayelg/falcos/issues"
     logo "brand/distributor-logo-symbolic.svg"
     watermark "brand/watermark.png"
-}
 
-// The base image every layer builds on top of, and what it brings with
-// it. This is the only place the base image is named: the FROM in
-// Containerfile.generated is emitted from here, so the two cannot drift.
-//
-// Use major version tags with quay.io/fedora as old untagged manifests are
-// pruned within days. Pinned fedora-bootc digest tags break Renovate.
-//
-// - family        which distro's packaging and tooling the modules can
-//                 assume; checked against every module's `supports`
-// - provides      capabilities the base itself satisfies, which a module
-//                 may `require` but no module can implement portably
-// - provides-file binaries the base guarantees, checked on the finished
-//                 image alongside the modules' own contract files
-base "quay.io/fedora/fedora-bootc:44" {
-    family "fedora"
-    provides "rechunking" "initramfs-generation" "mac-policy"
-    provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
-}
-
-// Optional build flavors
-// flavours can have the following boolean properties:
-// - default: what `just build` builds
-// - pr-build: what builds during a pull request
-flavors {
-    desktop default=#true pr-build=#true
-    laptop
-}
-
-// Optional. Which workflows in .github/workflows/ actually run, named by
-// file stem, for a fork that wants the weekly smoke test off or has no
-// registry to publish to.
-//
-// - enabled: #false switches the workflow off, #true switches it back on
-//
-// A workflow not named here runs, so an absent block is this repository as
-// it ships, which is why nothing is declared below. Uncomment to turn one
-// off:
-//
-// workflows {
-//     smoke-test enabled=#false
-// }
-//
-// Reconciled by .github/workflows/reconcile-workflows.yml through the
-// GitHub API on every push to main that touches this file. Not by
-// rewriting the workflow files: GITHUB_TOKEN cannot push under that path,
-// so anything that edited them would need a PAT or a GitHub App, and a
-// fork would have to provision a secret before it built at all. Nothing
-// here reaches a build, so changing it does not regenerate the
-// Containerfile.
-//
-// The reconciler is the one workflow that cannot be switched off from
-// here: it skips itself, because disabling it would leave this block with
-// nothing to act on it. Delete the file instead.
-
-// Modules compile into one Containerfile RUN layer each in the build
-// Containerfile (Containerfile.generated). The build order is resolved
-// from the graph, and this list is what it falls back to:
-// - A module that `requires` something builds after whatever provides it,
-//   wherever the two sit here. Dependencies are declared, not ordered by
-//   hand.
-// - Ungated modules build before gated ones, so they stay above the
-//   flavor gate and are shared by every image.
-// - Everything the graph says nothing about builds in the order below, so
-//   this is still where "less frequently updated first, for caching" is
-//   expressed.
-// Flavor specific modules are defined with the following syntax:
-// modules {
-//     flavor "flavor-name" {
-//        module "module-name"
-//    }
-// }
-// A module from another repository is pinned on its entry, and fetched
-// into modules/.remote/ at generate time:
-// module "module-name" {
-//     source "https://host/owner/repo/archive/refs/tags/{ref}.tar.gz" {
-//         renovate datasource="github-tags" depName="owner/repo"
-//         ref "module-name/v1.0.0"
-//         sha256 "..."
-//         path "modules/module-name"
-//     }
-// }
-modules {
-    module "core/bootloader"
-    module "core/signature-policy"
-    module "core/auto-updates"
-    module "core/system-just-scripts"
-    module "core/flatpak"
-    module "core/brew"
-    module "core/cli-tools"
-
-    module "kernel/cachyos-kernel"
-
-    module "hardening/coredumps"
-    module "hardening/login-policy"
-    module "hardening/hardened-malloc"
-    module "hardening/sudo-hardening"
-
-    module "backup/backup-tools"
-
-    module "hardware/intel-wifi"
-    module "hardware/gaming"
-    module "hardware/hardware-tools"
-    module "hardware/logitech"
-    module "hardware/yubikey"
-
-    module "de/kde-desktop"
-    module "de/bazaar"
-
-    module "media-codecs"
-    module "networking"
-
-    module "dev-tools"
-
-    module "virtualization/libvirt"
-    module "virtualization/incus"
-    module "virtualization/podman"
-
-    module "vpn/mullvad-vpn"
-    module "vpn/netbird"
-    module "vpn/tailscale"
-
-    module "apps/trivalent"
-    module "apps/vscodium"
-    module "apps/bitwarden"
-
-    // Everything below pins an asset by version and SHA256, so Renovate
-    // bumps one of them most weeks and every layer under it rebuilds.
-    // They sit behind the heavy stable installs (the kernel, the desktop,
-    // the codecs) so a routine bump re-runs a handful of cheap layers
-    // instead of most of the build. Nothing here provides a capability,
-    // which is why the graph is happy to leave them last.
-    module "core/goojust"
-    module "cli-customizations"
-    module "manage-dotfiles"
-    module "de/plasma-bootc-updates"
-    module "de/plasma-network-audio"
-    module "de/kde-theming"
-    module "apps/affinity"
-
-    flavor "desktop" {
-        module "virtualization/vfio-passthrough"
-        module "virtualization/looking-glass"
+    // The base image every layer builds on top of, and what it brings with
+    // it. This is the only place this image's base is named: the FROM in
+    // its generated Containerfile is emitted from here, so the two cannot
+    // drift. Declared per image, because two images are two things to
+    // build on and a server has no reason to follow a desktop's base.
+    //
+    // Use major version tags with quay.io/fedora as old untagged manifests
+    // are pruned within days. Pinned fedora-bootc digest tags break
+    // Renovate.
+    //
+    // - family        which distro's packaging and tooling the modules can
+    //                 assume; checked against every module's `supports`
+    // - provides      capabilities the base itself satisfies, which a
+    //                 module may `require` but no module can implement
+    //                 portably
+    // - provides-file binaries the base guarantees, checked on the finished
+    //                 image alongside the modules' own contract files
+    base "quay.io/fedora/fedora-bootc:44" {
+        family "fedora"
+        provides "rechunking" "initramfs-generation" "mac-policy"
+        provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
     }
 
-    flavor "laptop" {
-        module "hardware/laptop-tweaks"
+    // Optional build flavors: variants of this image, published as
+    // <image>-<flavor> and built as the target <image>/<flavor>.
+    // Flavors can have the following boolean properties:
+    // - default: what `just build` builds
+    // - pr-build: what builds during a pull request
+    flavors {
+        desktop default=#true pr-build=#true
+        laptop
     }
 
-    module "core/power-just-scripts" // last, so its recipes append last to the collected justfile
+    // Modules compile into one Containerfile RUN layer each in this image's
+    // generated Containerfile. The build order is resolved from the graph,
+    // and this list is what it falls back to:
+    // - A module that `requires` something builds after whatever provides
+    //   it, wherever the two sit here. Dependencies are declared, not
+    //   ordered by hand.
+    // - Ungated modules build before gated ones, so they stay above the
+    //   flavor gate and are shared by every flavor of this image.
+    // - Everything the graph says nothing about builds in the order below,
+    //   so this is still where "less frequently updated first, for caching"
+    //   is expressed.
+    // Flavor specific modules are defined with the following syntax:
+    // modules {
+    //     flavor "flavor-name" {
+    //        module "module-name"
+    //    }
+    // }
+    // A module from another repository is pinned on its entry, and fetched
+    // into modules/.remote/ at generate time:
+    // module "module-name" {
+    //     source "https://host/owner/repo/archive/refs/tags/{ref}.tar.gz" {
+    //         renovate datasource="github-tags" depName="owner/repo"
+    //         ref "module-name/v1.0.0"
+    //         sha256 "..."
+    //         path "modules/module-name"
+    //     }
+    // }
+    modules {
+        module "core/bootloader"
+        module "core/signature-policy"
+        module "core/auto-updates"
+        module "core/system-just-scripts"
+        module "core/flatpak"
+        module "core/brew"
+        module "core/cli-tools"
+
+        module "kernel/cachyos-kernel"
+
+        module "hardening/coredumps"
+        module "hardening/login-policy"
+        module "hardening/hardened-malloc"
+        module "hardening/sudo-hardening"
+
+        module "backup/backup-tools"
+
+        module "hardware/intel-wifi"
+        module "hardware/gaming"
+        module "hardware/hardware-tools"
+        module "hardware/logitech"
+        module "hardware/yubikey"
+
+        module "de/kde-desktop"
+        module "de/bazaar"
+
+        module "media-codecs"
+        module "networking"
+
+        module "dev-tools"
+
+        module "virtualization/libvirt"
+        module "virtualization/incus"
+        module "virtualization/podman"
+
+        module "vpn/mullvad-vpn"
+        module "vpn/netbird"
+        module "vpn/tailscale"
+
+        module "apps/trivalent"
+        module "apps/vscodium"
+        module "apps/bitwarden"
+
+        // Everything below pins an asset by version and SHA256, so Renovate
+        // bumps one of them most weeks and every layer under it rebuilds.
+        // They sit behind the heavy stable installs (the kernel, the
+        // desktop, the codecs) so a routine bump re-runs a handful of cheap
+        // layers instead of most of the build. Nothing here provides a
+        // capability, which is why the graph is happy to leave them last.
+        module "core/goojust"
+        module "cli-customizations"
+        module "manage-dotfiles"
+        module "de/plasma-bootc-updates"
+        module "de/plasma-network-audio"
+        module "de/kde-theming"
+        module "apps/affinity"
+
+        flavor "desktop" {
+            module "virtualization/vfio-passthrough"
+            module "virtualization/looking-glass"
+        }
+
+        flavor "laptop" {
+            module "hardware/laptop-tweaks"
+        }
+
+        module "core/power-just-scripts" // last, so its recipes append last to the collected justfile
+    }
 }

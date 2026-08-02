@@ -30,11 +30,11 @@ jobs:
       - name: Maximize build space
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
 
-      # The published name comes from image.kdl, like every other
+      # The published name comes from the image, like every other
       # reference to it, so a rename does not leave this workflow pulling
       # an image nobody publishes.
       - name: Resolve image name
-        run: echo "IMAGE_NAME=$(./scripts/flavors.sh image none)" >> "${GITHUB_ENV}"
+        run: echo "IMAGE_NAME=$(./scripts/targets.sh image "$(./scripts/targets.sh ungated)")" >> "${GITHUB_ENV}"
 
       - name: Pull published image
         run: |

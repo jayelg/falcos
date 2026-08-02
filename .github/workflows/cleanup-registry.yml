@@ -27,7 +27,7 @@ jobs:
     # (actions/delete-package-versions#120). Here signatures are kept or
     # dropped by matching their digest against the kept images.
     steps:
-      # Only for scripts/flavors.sh, which names the packages to prune
+      # Only for scripts/targets.sh, which names the packages to prune
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -67,7 +67,7 @@ jobs:
           # names them: keep the newest KEEP tagged builds plus whatever
           # holds `latest`, the cosign signature and SBOM attestation
           # belonging to each kept digest, and nothing else.
-          mapfile -t packages < <(./scripts/flavors.sh images)
+          mapfile -t packages < <(./scripts/targets.sh images)
           for pkg in "${packages[@]}"; do
             echo "== ${pkg}"
             versions="$(list_versions "${pkg}")" || continue
@@ -94,11 +94,14 @@ jobs:
           done
 
           # Cache package: BuildKit overwrites one tag per target, so only
-          # manifests tagged with a live target are live; anything else
-          # (untagged leftovers, tags of a removed flavor, content-keyed hex
-          # tags from the buildah era) is dead.
-          pkg="$(./scripts/flavors.sh cache-image)"
-          live="$(./scripts/flavors.sh targets | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          # manifests tagged with a live one are live; anything else
+          # (untagged leftovers, tags of a removed flavor or image,
+          # content-keyed hex tags from the buildah era) is dead. The tags
+          # are published image names, which is how scripts/build.sh writes
+          # a cache ref: a tag cannot hold the slash a target is spelled
+          # with.
+          pkg="$(./scripts/targets.sh cache-image)"
+          live="$(./scripts/targets.sh images | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "== ${pkg}"
           if versions="$(list_versions "${pkg}")"; then
             deletions="$(printf '%s' "${versions}" | jq -s 'add' | jq -r --argjson live "${live}" '

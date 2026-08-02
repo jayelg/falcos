@@ -29,7 +29,9 @@ usage() {
     cat >&2 <<'EOF'
 usage: scripts/render-iso-config.sh [options]
 
-  --flavor <name>   target the ISO installs (default: the ungated build)
+  --target <image/flavor>
+                    target the ISO installs (default: the default
+                    image's ungated build)
   --tag <tag>       tag it tracks (default: $DEFAULT_TAG, else latest)
 
 Environment:
@@ -37,14 +39,14 @@ Environment:
 EOF
 }
 
-flavor=""
+target=""
 tag="${DEFAULT_TAG:-latest}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --flavor)
-            [ "$#" -ge 2 ] || die "--flavor needs a value"
-            flavor="$2"
+        --target)
+            [ "$#" -ge 2 ] || die "--target needs a value"
+            target="$2"
             shift 2
             ;;
         --tag)
@@ -69,11 +71,11 @@ done
 # must be the set that gates on none of it: the desktop flavor's VFIO
 # kargs would bind devices to vfio-pci at boot on unknown hardware.
 # Moving to a device flavor afterwards is a `bootc switch`, made cheap by
-# rechunking. Pass --flavor to override deliberately.
-flavor="${flavor:-none}"
-./scripts/flavors.sh check "$flavor"
+# rechunking. Pass --target to override deliberately.
+target="${target:-$(./scripts/targets.sh ungated)}"
+./scripts/targets.sh check "$target"
 
-IMAGE_REF="$(./scripts/registry.sh ref "$(./scripts/flavors.sh image "$flavor")"):${tag}"
+IMAGE_REF="$(./scripts/registry.sh ref "$(./scripts/targets.sh image "$target")"):${tag}"
 export IMAGE_REF
 
 command -v envsubst > /dev/null 2>&1 \

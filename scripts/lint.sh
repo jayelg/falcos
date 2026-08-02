@@ -70,22 +70,41 @@ echo "lint: verify classes agree ($(echo "$shell_classes" | tr '\n' ' ' | sed 's
 # Then the splice itself, which is the part manifest.sh does not own:
 # skeleton marker damage would otherwise only surface at build time.
 #
-# Regenerating in place also checks the committed file, which is what a
+# Regenerating in place also checks the committed files, which are what a
 # reviewer reads and what a build of this commit produces. Those have to
-# be the same file, so a stale one is a diff here rather than a surprise
+# be the same files, so a stale one is a diff here rather than a surprise
 # in the next review.
 ./scripts/gen-containerfile.sh > /dev/null
+mapfile -t generated < <(./scripts/manifest.sh images \
+    | sed 's#^#containerfiles/#; s#$#.generated#')
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    echo "lint: the Containerfile generates (no checkout, so no drift check)"
-elif ! git ls-files --error-unmatch Containerfile.generated > /dev/null 2>&1; then
-    echo "lint: Containerfile.generated is untracked, so nothing reviews it" >&2
-    exit 1
-elif ! git diff --quiet -- Containerfile.generated; then
-    echo "lint: Containerfile.generated is stale, stage the regenerated file" >&2
-    git --no-pager diff --stat -- Containerfile.generated >&2
-    exit 1
+    echo "lint: the Containerfiles generate (no checkout, so no drift check)"
 else
-    echo "lint: the Containerfile generates and matches the committed one"
+    for file in "${generated[@]}"; do
+        if ! git ls-files --error-unmatch "$file" > /dev/null 2>&1; then
+            echo "lint: ${file} is untracked, so nothing reviews it" >&2
+            exit 1
+        elif ! git diff --quiet -- "$file"; then
+            echo "lint: ${file} is stale, stage the regenerated file" >&2
+            git --no-pager diff --stat -- "$file" >&2
+            exit 1
+        fi
+    done
+
+    # A tracked file no image produces any more is a leftover from a
+    # renamed or deleted image. It is not stale, so the loop above cannot
+    # see it, and it would sit there being reviewed as part of a build
+    # that no longer happens.
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        for want in "${generated[@]}"; do
+            [ "$file" != "$want" ] || continue 2
+        done
+        echo "lint: ${file} belongs to no declared image, remove it" >&2
+        exit 1
+    done < <(git ls-files 'containerfiles/*.generated')
+
+    echo "lint: ${#generated[@]} Containerfile(s) generate and match the committed ones"
 fi
 
 # Renders the installer config the way a disk build does, so a template

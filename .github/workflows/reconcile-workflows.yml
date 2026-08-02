@@ -1,4 +1,4 @@
-# Reconciles the `workflows` block in image.kdl against what GitHub
+# Reconciles the `workflows` block in repo.kdl against what GitHub
 # actually has enabled.
 #
 # Through the API, never by editing files under .github/workflows/:
@@ -15,7 +15,7 @@ on:
     paths:
       # The declaration itself, and the directory it names: a workflow
       # added while declared off has to be switched off once it exists.
-      - image.kdl
+      - repo.kdl
       - .github/workflows/**
   workflow_dispatch:
 
@@ -29,7 +29,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # `manifest workflows` is answered from image.kdl and the workflow
+      # `manifest workflows` is answered from repo.kdl and the workflow
       # directory alone, above the point where module manifests load, so
       # this needs no fetch of the out-of-tree modules and no module tree
       # on disk. Reading the declaration with anything else here would be

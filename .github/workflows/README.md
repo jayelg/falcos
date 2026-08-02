@@ -6,7 +6,7 @@ Which of them run is declared in the [`workflows` block in image.kdl](../../modu
 
 ### [Build Container Image](build.yml)
 
-Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `image.kdl`, for build testing, and do not push.
+Builds one image per target, a target being an image and a flavor of it (`falcos/none` publishes as falcos, `falcos/desktop` as falcos-desktop), rechunks them, then pushes and cosign signs them to ghcr.io. Every declared image contributes its own targets to the matrix. Runs on pushes to main and on a daily schedule. Pull requests build one target only, the image marked `pr-image` in `repo.kdl` at the flavor marked `pr-build`, for build testing, and do not push.
 
 Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a regeneration of the Containerfile checked against the committed one, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
@@ -48,13 +48,13 @@ It asks about existence, not trust: `cosign triangulate` names where a signature
 
 ### [Checksums](checksums.yml)
 
-The mechanical follow-up to a pin bump. Renovate can move an asset's `version` or an out-of-tree module's `ref` but cannot recompute the `sha256` either one is verified against, and both are baked into `Containerfile.generated`, which lint checks for drift. On a PR touching a module manifest or the module list this recomputes every stale checksum in one pass, regenerates the Containerfile, pushes a single fixup commit to the PR branch and dispatches a validation build. One workflow covers every pin so concurrent fixup pushes to the same branch cannot race.
+The mechanical follow-up to a pin bump. Renovate can move an asset's `version` or an out-of-tree module's `ref` but cannot recompute the `sha256` either one is verified against, and both are baked into the generated Containerfiles, which lint checks for drift. On a PR touching a module manifest or the module list this recomputes every stale checksum in one pass, regenerates the Containerfile, pushes a single fixup commit to the PR branch and dispatches a validation build. One workflow covers every pin so concurrent fixup pushes to the same branch cannot race.
 
 It carries no list of assets: `manifest.sh assets` and `manifest.sh remotes` report every pin with its resolved URL, which is the same resolution the build uses, so what this hashes and what the build fetches cannot disagree. Only the manifests the PR actually touched are checked, and a pin whose `sha256` is `from="manual"` is skipped — for an asset whose filename does not follow from its version, recomputing would hash whatever the old URL still serves. Module pins are recomputed first, since fetching an out-of-tree module verifies its archive against the hash in the list.
 
 ### [Clean up Registry](cleanup-registry.yml)
 
-Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
+Daily prune of old ghcr.io package versions: keeps the newest tagged builds per target plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
 
 ### [Reconcile workflow toggles](reconcile-workflows.yml)
 

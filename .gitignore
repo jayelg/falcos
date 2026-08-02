@@ -6,13 +6,13 @@ _build-*/**
 .claude/
 __pycache__/
 # Generated files nothing reviews: rendered disk configs, local image
-# exports, temporary build state. Containerfile.generated is the exception
-# and is tracked, because the expanded build is what a change to a module
-# has to be reviewed as.
+# exports, temporary build state. containerfiles/ is the exception and is
+# tracked, because the expanded build is what a change to a module has to
+# be reviewed as.
 build/
-# Out-of-tree modules, fetched from the pins in image.kdl. Inside the
-# module tree because the ctx stage copies it; the pin is what is
-# reviewed, and the expanded layer shows up in Containerfile.generated.
+# Out-of-tree modules, fetched from the pins in the image files. Inside
+# the module tree because the ctx stage copies it; the pin is what is
+# reviewed, and the expanded layer shows up in the generated Containerfile.
 modules/.remote/
 # Compiled host tooling
 tools/*/target/
