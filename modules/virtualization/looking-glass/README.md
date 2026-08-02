@@ -3,8 +3,17 @@
 Builds both halves of Looking Glass from one clone of the upstream tree at the pinned tag: the `kvmfr` DKMS module, the shared-memory transport between the host and a GPU-passthrough VM, and `looking-glass-client`, which displays the guest's frames. Desktop flavor only (gated by the `flavor "desktop"` block in [image.kdl](../../../image.kdl)); the matching VFIO kargs, modprobe config and rebind service ship in the `vfio-passthrough` module.
 
 - The `looking-glass` asset in `module.kdl` pins the upstream release tag; the module version is read from upstream's `dkms.conf` at that tag, so there is no second version to keep in sync.
-- `files/` ships the udev rule granting the `kvm` group access to `/dev/kvmfr0` (the user must be in the `kvm` group).
+- `files/` ships the udev rule granting the `kvm` group access to `/dev/kvmfr0`.
 - Signed with the MOK key when the build supplies one, like the kernel and xone modules.
+
+## Reaching the shared memory
+
+Both transports are owned by the `kvm` group, so everything here is about a desktop user being in it and the memory existing before QEMU decides who owns it.
+
+- `kvm-group-membership.service` adds every `wheel` member to `kvm` at boot, the same shape as `libvirt-group-membership.service` in the `libvirt` module. Its helper writes the group into `/etc/group` first, because `kvm` is one of the image's own groups and ships in `/usr/lib/group`: it resolves through `getent` but is invisible to `usermod`, which reads `/etc/group` and nothing else. Being in `kvm` grants nothing on `/dev/kvm` that the mode does not already give everyone (`0666 root:kvm`); it is what makes the two paths below reachable.
+- `tmpfiles.d` creates `/dev/shm/looking-glass` as `qemu:kvm 0660`. Left to QEMU the file appears as `qemu:qemu 0644`, and the client, which maps it read-write as the desktop user, gets `Permission denied`. `/dev/shm` is a tmpfs, so a one-off `chown` does not survive a boot and this has to be declared.
+
+`kvmfr` is the other transport and is not wired up: nothing loads the module, so `/dev/kvmfr0` never appears and the udev rule above never fires. Loading it wants `options kvmfr static_size_mb=<size>` and a `modules-load.d` entry here, and a domain XML that passes the device instead of a `<shmem>` file.
 
 ## The client
 

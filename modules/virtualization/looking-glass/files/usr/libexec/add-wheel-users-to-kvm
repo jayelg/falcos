@@ -1,0 +1,16 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+# usermod reads /etc/group and nothing else, and kvm is one of the image's
+# own groups: it ships in /usr/lib/group, where shadow-utils cannot see
+# it, so usermod -aG kvm fails on a fresh install with the group plainly
+# resolving through getent. Give /etc/group its own copy first. nsswitch
+# is `group: files [SUCCESS=merge] altfiles`, so the two entries merge
+# rather than the local one shadowing the image's.
+if ! grep -q '^kvm:' /etc/group; then
+    getent group kvm >> /etc/group
+fi
+
+for user in $(getent group wheel | cut -d: -f4 | tr ',' ' '); do
+    usermod -aG kvm "$user"
+done
