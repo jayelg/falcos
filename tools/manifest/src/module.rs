@@ -226,7 +226,7 @@ impl Module {
                     // The pin is fetched by generate and by lint, so the
                     // usual reason for this is a manifest run by hand
                     // before either has happened.
-                    Some(_) => "run ./scripts/fetch-modules.sh to fetch what image.kdl pins"
+                    Some(_) => "run ./scripts/fetch-modules.sh to fetch what the image pins"
                         .to_string(),
                     None => format!(
                         "create {file}; modules/_template/module-name/module.kdl is a copy-me reference"
@@ -1084,7 +1084,7 @@ pub fn check_graph(modules: &[Module], image: &Image, root: &Path, issues: &mut 
             let Some(providers) = offered.get(decl.name.as_str()) else {
                 let help = match on_disk.get(&decl.name) {
                     Some(candidates) => format!(
-                        "{} would satisfy it; add it to image.kdl. Nothing is included automatically, so the list stays the complete statement of what is in the image",
+                        "{} would satisfy it; add it to this image. Nothing is included automatically, so the list stays the complete statement of what is in the image",
                         candidates.join(" or ")
                     ),
                     None => format!(
@@ -1260,7 +1260,7 @@ pub fn resolve_collects(
                         &module.text,
                     )
                     .help(format!(
-                        "`{collector}` collects it; add it to image.kdl, or drop the {file}"
+                        "`{collector}` collects it; add it to this image, or drop the {file}"
                     )),
                 ),
             }

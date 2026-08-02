@@ -1,6 +1,6 @@
 #!/bin/bash
 # Applies the image's identity: os-release branding and the brand assets
-# declared in image.kdl. Flavor-specific files ship in flavor-gated
+# the image declares. Flavor-specific files ship in flavor-gated
 # modules (e.g. vfio-passthrough, laptop-tweaks), so there is no
 # per-flavor overlay to copy here, and the branding itself is the brand
 # rather than the flavor: a flavor is an image variant, not a machine

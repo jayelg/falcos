@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetches every out-of-tree module image.kdl pins into
+# Fetches every out-of-tree module the image files pin into
 # modules/.remote/<name>/, so the generator can emit the same RUN block
 # for it as for a module in this repository.
 #
@@ -54,7 +54,10 @@ tmp=""
 trap '[ -z "$tmp" ] || rm -rf "$tmp"' EXIT
 
 for pin in "${pins[@]}"; do
-    IFS='|' read -r name dir ref sha256 url path <<< "$pin"
+    # The declaring file is the last field, for the checksum workflow.
+    # Read into a name here so a seventh field cannot end up inside the
+    # sixth, which is a path this script acts on.
+    IFS='|' read -r name dir ref sha256 url path _file <<< "$pin"
     # The directory is replaced wholesale below, so it is checked to be
     # the one this script owns rather than trusted to be.
     [ "$dir" = "${remote_root}/${name}" ] || die "${name}: unexpected fetch directory ${dir}"

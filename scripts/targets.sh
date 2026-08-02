@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Image naming, over the build targets declared in image.kdl. Everything
+# Image naming, over the build targets the image files declare. Everything
 # that needs to know what can be built asks this script: the CI build
 # matrix, the per-target cache tags, the registry cleanup, the disk build
 # and the Justfile.
@@ -53,7 +53,7 @@ EOF
 }
 
 mapfile -t targets < <(./scripts/manifest.sh targets)
-[ "${#targets[@]}" -gt 0 ] || die "nothing is buildable; image.kdl declares no image"
+[ "${#targets[@]}" -gt 0 ] || die "nothing is buildable; no image is declared"
 
 declare -A buildable=()
 for name in "${targets[@]}"; do

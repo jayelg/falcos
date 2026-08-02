@@ -16,7 +16,7 @@ _build*
 # Generated files, not build-phases/ which the pattern does not match
 build
 # modules/.remote is deliberately absent: it holds the out-of-tree
-# modules image.kdl pins, fetched before the build, and their layers
+# modules the image files pin, fetched before the build, and their layers
 # mount it out of the ctx stage like any other module.
 # One generated Containerfile per image. Tracked, so a checkout has them,
 # and rewritten by every build. The frontend reads the one it is building

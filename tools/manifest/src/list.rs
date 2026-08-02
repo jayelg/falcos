@@ -1,12 +1,15 @@
-//! image.kdl: the image author's file.
+//! The image files: one `.kdl` at the repository root per image.
 //!
-//! Which modules are in the image, in what order, gated to which flavors,
-//! with which options set. Everything a module must not decide for itself.
+//! What an image builds on, which modules are in it, in what order, gated
+//! to which flavors, with which options set. Everything a module must not
+//! decide for itself. repo.kdl is the one root `.kdl` that is not an image:
+//! it holds what is true of the repository instead.
 
 use crate::diag::{Issue, Issues};
 use crate::remote::{self, Remote, REMOTE_DIR};
 use kdl::{KdlDocument, KdlNode, KdlValue};
 use miette::SourceSpan;
+use std::path::Path;
 
 /// The build target that carries no flavor: the ungated set, published
 /// unsuffixed. A reserved token rather than a flavor, because a cache tag
@@ -166,6 +169,15 @@ pub struct Entry {
     pub span: SourceSpan,
 }
 
+impl Image {
+    /// The declaring file's name, without the path it was found under.
+    /// What the generated Containerfile points a reader at, since a person
+    /// reading it is standing in the repository root already.
+    pub fn file_name(&self) -> &str {
+        self.file.rsplit('/').next().unwrap_or(&self.file)
+    }
+}
+
 impl Entry {
     /// Where the module's directory is, relative to `modules/`. The same
     /// as its list path in tree; under the fetch directory when it is
@@ -179,18 +191,34 @@ impl Entry {
     }
 }
 
+/// The repository's declarations: every image in it, and the handful of
+/// decisions that are about the repository rather than about any image.
 pub struct List {
-    pub file: String,
-    pub text: String,
-    /// Every image declared, in declaration order. Empty only when the
-    /// `image` node is missing or malformed, which is already an issue: an
-    /// image with no name is not one this can invent.
+    /// Every image, ordered by the file it was declared in, so the build
+    /// matrix and every list this produces are the same on every machine
+    /// whatever the files are called.
     pub images: Vec<Image>,
-    /// Only the workflows named here. Silence means the workflow runs, so
-    /// an absent block is the repository as it ships; `crate::workflow`
-    /// reconciles this against what is actually on disk.
+    /// Only the workflows named in repo.kdl. Silence means the workflow
+    /// runs, so an absent block is the repository as it ships;
+    /// `crate::workflow` reconciles this against what is on disk.
     pub workflows: Vec<WorkflowToggle>,
+    /// Which image a build with nothing named builds, and which one a pull
+    /// request builds. By id, since the file name means nothing. Both
+    /// optional: with one image there is nothing to choose between.
+    pub default_image_id: Option<String>,
+    pub pr_image_id: Option<String>,
+    /// repo.kdl and its source, for a diagnostic about either of the two
+    /// above. Named even when the file is absent, because "there are two
+    /// images and nothing says which is default" is a problem with the
+    /// file that is not there.
+    pub repo_file: String,
+    pub repo_text: String,
+    /// Every file read, in order, for the count line a failure ends with.
+    pub files: Vec<String>,
 }
+
+/// Repo context, not an image: the file every image file is not.
+pub const REPO_FILE: &str = "repo.kdl";
 
 /// Lowercase letters, digits and dashes, starting with a letter. What a
 /// flavor and the image id are both held to, because both reach an image
@@ -223,21 +251,95 @@ fn string_args(node: &KdlNode) -> Vec<&str> {
 }
 
 impl List {
-    pub fn load(path: &str) -> Result<(Self, Issues), Box<Issue>> {
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| Box::new(Issue::new(format!("cannot read {path}: {e}"), path, "")))?;
-        Ok(Self::parse(path, text))
-    }
-
-    pub fn parse(file: &str, text: String) -> (Self, Issues) {
+    /// Every `*.kdl` at the repository root: one image apiece, plus
+    /// repo.kdl, which is repo context and declares no image.
+    ///
+    /// The file name decides nothing. It is where a definition lives, not
+    /// what the image is called: every name the build and the artifact use
+    /// comes from inside, so image.kdl and falcos.kdl are the same
+    /// declaration and renaming one changes nothing. What the name is for
+    /// is the person opening the directory, and for `just create image`,
+    /// which writes one file and edits none.
+    ///
+    /// Sorted by file name so the order images come out in is the same on
+    /// every machine. Nothing about a build depends on that order; the
+    /// matrix being stable does.
+    pub fn load(root: &Path) -> (Self, Issues) {
         let mut issues = Issues::default();
         let mut list = List {
-            file: file.to_string(),
-            text: text.clone(),
             images: Vec::new(),
             workflows: Vec::new(),
+            default_image_id: None,
+            pr_image_id: None,
+            repo_file: root.join(REPO_FILE).display().to_string(),
+            repo_text: String::new(),
+            files: Vec::new(),
         };
 
+        let mut names: Vec<String> = Vec::new();
+        match std::fs::read_dir(root) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    if !entry.path().is_file() {
+                        continue;
+                    }
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if name.ends_with(".kdl") {
+                        names.push(name);
+                    }
+                }
+            }
+            Err(err) => {
+                issues.push(Issue::new(
+                    format!("cannot read {}: {err}", root.display()),
+                    &list.repo_file,
+                    "",
+                ));
+                return (list, issues);
+            }
+        }
+        names.sort();
+
+        for name in &names {
+            let path = root.join(name).display().to_string();
+            let text = match std::fs::read_to_string(root.join(name)) {
+                Ok(text) => text,
+                Err(err) => {
+                    issues.push(Issue::new(format!("cannot read {path}: {err}"), &path, ""));
+                    continue;
+                }
+            };
+            list.files.push(path.clone());
+            if name == REPO_FILE {
+                list.repo_file = path.clone();
+                list.repo_text = text.clone();
+            }
+            list.parse_file(&path, text, name == REPO_FILE, &mut issues);
+        }
+
+        // A repository with no image file declares no image, which is not
+        // a state anything below can work in. Reported once, against the
+        // root, since there is no file to point at.
+        if !names.iter().any(|n| n != REPO_FILE) {
+            issues.push(
+                Issue::new(
+                    format!("{} declares no image", root.display()),
+                    &list.repo_file,
+                    "",
+                )
+                .help(
+                    "an image is a `.kdl` file at the repository root holding one `image` \
+                     node; image.kdl is the name a repository with one image tends to use",
+                ),
+            );
+        }
+
+        list.check_images(&mut issues);
+        (list, issues)
+    }
+
+    /// One file, which is either an image or the repo context.
+    fn parse_file(&mut self, file: &str, text: String, is_repo: bool, issues: &mut Issues) {
         let doc: KdlDocument = match text.parse() {
             Ok(doc) => doc,
             Err(err) => {
@@ -246,43 +348,158 @@ impl List {
                 // rather than restated.
                 eprintln!("{:?}", miette::Report::new(err));
                 issues.push(Issue::new(format!("{file} is not valid KDL"), file, &text));
-                return (list, issues);
+                return;
             }
         };
 
         for node in doc.nodes() {
-            match node.name().value() {
-                "image" => list.parse_image(node, &mut issues),
-                "workflows" => list.parse_workflows(node, &mut issues),
-                other => issues.push(
-                    Issue::new(format!("unknown top-level node `{other}`"), file, &text)
+            match (is_repo, node.name().value()) {
+                (false, "image") => self.parse_image(node, file, &text, issues),
+                (true, "workflows") => self.parse_workflows(node, file, &text, issues),
+                (true, "default-image") => {
+                    self.default_image_id = string_arg(node).map(str::to_string);
+                }
+                (true, "pr-image") => {
+                    self.pr_image_id = string_arg(node).map(str::to_string);
+                }
+                (true, other) => issues.push(
+                    Issue::new(format!("unknown node `{other}` in {REPO_FILE}"), file, &text)
                         .at(node.name().span(), "not part of the schema")
                         .help(
-                            "an image file holds one `image` node; `base`, `flavors` and \
-                             `modules` are declared inside it, because they are what the \
-                             image is rather than what the repository is",
+                            "repo.kdl holds `default-image`, `pr-image` and a `workflows` \
+                             block: what is true of the repository rather than of any image \
+                             in it. An image goes in a file of its own",
                         ),
+                ),
+                (false, other) => issues.push(
+                    Issue::new(format!("unknown top-level node `{other}`"), file, &text)
+                        .at(node.name().span(), "not part of the schema")
+                        .help(format!(
+                            "every root .kdl but {REPO_FILE} is one `image` node; `base`, \
+                             `flavors` and `modules` are declared inside it, because they \
+                             are what the image is rather than what the repository is"
+                        )),
                 ),
             }
         }
 
-        // Required, with no default: every name the image answers to is
-        // derived from it, and a build that guessed one would publish and
-        // brand itself as something nobody declared.
-        if !doc.nodes().iter().any(|n| n.name().value() == "image") {
+        // A file that declares nothing is a file somebody meant to declare
+        // something in. Silence here would be a build missing an image
+        // whose definition is sitting right there.
+        if !is_repo && !doc.nodes().iter().any(|n| n.name().value() == "image") {
             issues.push(
-                Issue::new(format!("{file} declares no image"), file, &text).help(
-                    "`image { name \"Name\" }`, what the image calls itself in os-release \
-                     and what it publishes as",
-                ),
+                Issue::new(format!("{file} declares no image"), file, &text).help(format!(
+                    "every root .kdl but {REPO_FILE} holds one `image` node: \
+                     `image {{ name \"Name\" }}`, what the image calls itself in os-release \
+                     and what it publishes as"
+                )),
             );
         }
-
-        (list, issues)
     }
 
-    fn parse_image(&mut self, node: &KdlNode, issues: &mut Issues) {
-        let (file, text) = (self.file.clone(), self.text.clone());
+    /// What no single file can check: that two of them do not describe the
+    /// same image, and that something says which one a bare build builds.
+    ///
+    /// An `Issue` carries one source, so a problem spanning two files
+    /// points at the second and names the first in its message. The
+    /// alternative is two half diagnostics.
+    fn check_images(&self, issues: &mut Issues) {
+        for (index, image) in self.images.iter().enumerate() {
+            if image.id.is_empty() {
+                continue; // already reported as underivable
+            }
+            for other in &self.images[..index] {
+                if other.id == image.id {
+                    issues.push(
+                        Issue::new(
+                            format!("`{}` is declared by two files", image.id),
+                            &image.file,
+                            &image.text,
+                        )
+                        .at(image.span, format!("also declared in {}", other.file))
+                        .help("two images cannot publish under one name; declare `id` on one of them"),
+                    );
+                }
+            }
+            // The published names, which is where an image and another
+            // image's flavor can collide: `falcos` with a `server` flavor
+            // publishes what an image called `falcos-server` does.
+            for flavor in &image.flavors {
+                let published = format!("{}-{}", image.id, flavor.name);
+                for other in &self.images {
+                    if other.id == published {
+                        issues.push(
+                            Issue::new(
+                                format!("two builds would publish as `{published}`"),
+                                &image.file,
+                                &image.text,
+                            )
+                            .at(flavor.span, "this flavor")
+                            .at(image.span, "of this image")
+                            .help(format!(
+                                "the image declared in {} publishes under that name too; \
+                                 rename one of them",
+                                other.file
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Nothing to choose between with one image, so nothing to declare.
+        // With two, a build has to be told, and the tie-break that would
+        // avoid the declaration — first file alphabetically — would mean
+        // renaming a file changed what `just build` builds.
+        if self.images.len() > 1 {
+            match &self.default_image_id {
+                None => issues.push(
+                    Issue::new(
+                        format!("{} images are declared and none is the default", self.images.len()),
+                        &self.repo_file,
+                        &self.repo_text,
+                    )
+                    .help(format!(
+                        "`default-image \"{}\"` in {REPO_FILE}, naming which one a build \
+                         with no target builds",
+                        self.images[0].id
+                    )),
+                ),
+                Some(id) if !self.images.iter().any(|i| &i.id == id) => issues.push(
+                    Issue::new(
+                        format!("`default-image` names `{id}`, which is not a declared image"),
+                        &self.repo_file,
+                        &self.repo_text,
+                    )
+                    .help(format!(
+                        "images: {}",
+                        self.images
+                            .iter()
+                            .map(|i| i.id.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
+                ),
+                Some(_) => {}
+            }
+        }
+
+        if let Some(id) = &self.pr_image_id {
+            if !self.images.iter().any(|i| &i.id == id) {
+                issues.push(
+                    Issue::new(
+                        format!("`pr-image` names `{id}`, which is not a declared image"),
+                        &self.repo_file,
+                        &self.repo_text,
+                    )
+                    .help("a pull request builds one target, of one declared image"),
+                );
+            }
+        }
+    }
+
+    fn parse_image(&mut self, node: &KdlNode, file: &str, text: &str, issues: &mut Issues) {
+        let (file, text) = (file.to_string(), text.to_string());
 
         // The machine name used to be the node's argument. It is a labelled
         // child now, because there are three names in play — the file, the
@@ -845,8 +1062,8 @@ impl Image {
 }
 
 impl List {
-    fn parse_workflows(&mut self, block: &KdlNode, issues: &mut Issues) {
-        let (file, text) = (self.file.clone(), self.text.clone());
+    fn parse_workflows(&mut self, block: &KdlNode, file: &str, text: &str, issues: &mut Issues) {
+        let (file, text) = (file.to_string(), text.to_string());
         let Some(children) = block.children() else {
             issues.push(
                 Issue::new("`workflows` has no workflows in it", &file, &text)
@@ -941,7 +1158,24 @@ impl List {
     /// the one a bare build builds. The only one there is until a second
     /// is declared.
     pub fn default_image(&self) -> Option<&Image> {
-        self.images.first()
+        match &self.default_image_id {
+            Some(id) => self.images.iter().find(|i| &i.id == id),
+            // Undeclared is fine with one image and reported with two, so
+            // this is not silently picking one of several.
+            None => match self.images.len() {
+                1 => self.images.first(),
+                _ => None,
+            },
+        }
+    }
+
+    /// The image a pull request builds, which falls back to the default
+    /// the way `pr-build` falls back to `default` within an image.
+    pub fn pr_image(&self) -> Option<&Image> {
+        match &self.pr_image_id {
+            Some(id) => self.images.iter().find(|i| &i.id == id),
+            None => self.default_image(),
+        }
     }
 
     /// Every target: for each image, the ungated set and then its
@@ -979,7 +1213,7 @@ impl List {
 
     /// The one target a pull request builds, for half the runner time.
     pub fn pr_target(&self) -> Option<Target> {
-        self.default_image().map(|image| Target {
+        self.pr_image().map(|image| Target {
             image: image.id.clone(),
             flavor: image.pr_flavor().unwrap_or(NO_FLAVOR).to_string(),
         })

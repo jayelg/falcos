@@ -302,7 +302,7 @@ pub fn env_name(option: &str) -> String {
 }
 
 /// Single pass, in one order, with no merging: the module's default, then
-/// the selected variant, then the value in image.kdl. Only the image
+/// the selected variant, then the value in the image file. Only the image
 /// author sets options, and only on the owning module's own entry, so
 /// there are no priorities to reason about and setting one twice is an
 /// error rather than a merge.

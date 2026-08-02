@@ -1,7 +1,7 @@
 #!/bin/bash
 # os-release branding and the brand assets, sourced by 50-flavor.sh.
 #
-# Every value comes from image.kdl's `image` node, which the generator
+# Every value comes from the image's own declaration, which the generator
 # emits as the IMAGE_* ARGs this phase is passed. Nothing here has a
 # default for the brand: an unset name is a manifest that failed to
 # declare one, not something to guess at. The one default is PRETTY_NAME,
@@ -14,7 +14,7 @@
 # leave GRUB on the base image's name. The ln restores the symlink on
 # images where it was already a detached file.
 brand_os_release() {
-    local name="${IMAGE_NAME:?IMAGE_NAME is unset: image.kdl declares no name}"
+    local name="${IMAGE_NAME:?IMAGE_NAME is unset: the image declares no name}"
     local image_version="${IMAGE_VERSION:-dev}"
     local pretty_name="${IMAGE_PRETTY_NAME:-${name} ${image_version}}"
     # The brand, not the flavor. A flavor is an image variant, not a

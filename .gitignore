@@ -10,8 +10,8 @@ __pycache__/
 # tracked, because the expanded build is what a change to a module has to
 # be reviewed as.
 build/
-# Out-of-tree modules, fetched from the pins in image.kdl. Inside the
-# module tree because the ctx stage copies it; the pin is what is
+# Out-of-tree modules, fetched from the pins in the image files. Inside
+# the module tree because the ctx stage copies it; the pin is what is
 # reviewed, and the expanded layer shows up in the generated Containerfile.
 modules/.remote/
 # Compiled host tooling

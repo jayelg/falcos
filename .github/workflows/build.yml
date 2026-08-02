@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       # shellcheck over every Bash script in the repo, then a generator dry
-      # run that validates image.kdl without a full image build. The
+      # run that validates the image files without a full image build. The
       # script owns the file set, so `just lint` checks exactly what this
       # gate checks. shellcheck is preinstalled on the runner image.
       - name: Run lint
@@ -81,7 +81,7 @@ jobs:
             python3 -m unittest discover -s "$d" -v
           done
 
-  # Builds every target declared in image.kdl: for each image, the ungated
+  # Builds every declared target: for each image, the ungated
   # set published unsuffixed, then one per flavor. A separate job because
   # the matrix context isn't available in a job-level if.
   #
@@ -100,7 +100,7 @@ jobs:
       - id: set
         run: |
           # Pull requests build one target, for half the runner time.
-          # Which one is declared in image.kdl as pr-build rather than
+          # Which one is declared as pr-build rather than
           # inferred from list position, because covering the most build
           # surface and being the default are unrelated properties that
           # only happen to coincide.

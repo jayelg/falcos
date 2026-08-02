@@ -37,7 +37,7 @@ const IMAGE_VERSION_ARG: &str = "\
 # that RUN mentions it.
 ARG IMAGE_VERSION=dev";
 
-/// What the image calls itself, from image.kdl, plus the registry the
+/// What the image calls itself, from its own file, plus the registry the
 /// build was pointed at, as the ARGs the phases below the modules read.
 ///
 /// Declared down there with the version and for the same reason: an ARG
@@ -91,15 +91,16 @@ pub fn section(
 
     // The base image opens the section, because it is the first thing the
     // build does and because emitting it here is what stops the FROM and
-    // image.kdl from naming two different images.
+    // the declaration from naming two different images.
     if let Some(base) = &image.base {
         let _ = write!(
             out,
             "### Base Image\n\
-             # Declared in image.kdl, along with the family the modules build\n\
+             # Declared in {}, along with the family the modules build\n\
              # against and the guarantees the base carries. Emitted from there, so\n\
              # nothing has to read a FROM line back out of a Containerfile.\n\
              FROM {}\n\n",
+            image.file_name(),
             base.image
         );
     }
@@ -221,14 +222,15 @@ pub fn section(
     let _ = write!(
         out,
         "# ---- image identity ----\n\
-         # What the image calls itself, from image.kdl. os-release carries it,\n\
+         # What the image calls itself, from {}. os-release carries it,\n\
          # so the boot menu and the desktop read the same declaration. Below the\n\
          # modules for the same reason as the version: an ARG in scope is part of\n\
          # the cache key of every RUN under it.\n\
          #\n\
-         # IMAGE_REGISTRY is not declared in image.kdl. scripts/build.sh passes\n\
+         # IMAGE_REGISTRY is not declared there. scripts/build.sh passes\n\
          # it from scripts/registry.sh, which derives it from the git remote, so\n\
-         # a fork's signature policy names the fork's own namespace.\n"
+         # a fork's signature policy names the fork's own namespace.\n",
+        image.file_name()
     );
     for (name, value) in &identity {
         let _ = write!(out, "ARG {name}=\"{value}\"\n");
@@ -442,12 +444,13 @@ pub fn assets(image: &Image, modules: &[Module], target: Option<&str>) -> String
 
 /// Every out-of-tree pin, pipe separated, one per line:
 ///
-///     <name>|<dir>|<ref>|<sha256>|<url>|<subtree path>
+///     <name>|<dir>|<ref>|<sha256>|<url>|<subtree path>|<file>
 ///
 /// Two consumers: the fetch, which needs somewhere to put the archive it
 /// verifies, and the checksum workflow, which recomputes a hash a bumped
 /// ref made stale. Both get the resolved URL, so neither carries a copy
-/// of the template.
+/// of the template. The file is for the workflow, which rewrites the hash
+/// where it is written rather than guessing which image declared it.
 ///
 /// Read before any module directory exists, since it is what says which
 /// ones to create, so it reports the declarations alone.
@@ -460,24 +463,27 @@ pub fn remotes(list: &List) -> String {
     // A module listed under two flavors, or by two images, is several
     // entries pinning one tree, and it is fetched once.
     let mut seen: Vec<&str> = Vec::new();
-    for entry in list.images.iter().flat_map(|i| i.entries.iter()) {
-        let Some(remote) = &entry.remote else {
-            continue;
-        };
-        if seen.contains(&entry.path.as_str()) {
-            continue;
+    for image in &list.images {
+        for entry in &image.entries {
+            let Some(remote) = &entry.remote else {
+                continue;
+            };
+            if seen.contains(&entry.path.as_str()) {
+                continue;
+            }
+            seen.push(&entry.path);
+            let _ = writeln!(
+                out,
+                "{}|modules/{}|{}|{}|{}|{}|{}",
+                entry.path,
+                entry.dir(),
+                remote.git_ref,
+                remote.sha256,
+                remote.url_resolved(),
+                remote.path.clone().unwrap_or_default(),
+                image.file,
+            );
         }
-        seen.push(&entry.path);
-        let _ = writeln!(
-            out,
-            "{}|modules/{}|{}|{}|{}|{}",
-            entry.path,
-            entry.dir(),
-            remote.git_ref,
-            remote.sha256,
-            remote.url_resolved(),
-            remote.path.clone().unwrap_or_default(),
-        );
     }
     out
 }

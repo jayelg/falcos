@@ -17,7 +17,7 @@
 # files are tracked and lint fails when they are stale.
 #
 # The section itself comes from scripts/manifest.sh, the only thing that
-# reads image.kdl and build-phases/. What stays here is the part that is
+# reads the image files and build-phases/. What stays here is the part that is
 # about this file rather than about the manifest: finding the markers, and
 # keeping the parser directive on line one.
 #
@@ -53,7 +53,7 @@ if ! grep -qxF "$begin" "$skeleton" || ! grep -qxF "$end" "$skeleton"; then
 fi
 
 # Out-of-tree modules first: the section below emits a layer per module
-# directory, so anything image.kdl pins has to be on disk before the
+# directory, so anything an image pins has to be on disk before the
 # generator reads it. A no-op when nothing is pinned, and offline when
 # everything is already fetched.
 ./scripts/fetch-modules.sh

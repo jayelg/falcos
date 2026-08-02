@@ -1,6 +1,6 @@
 ### Looking Glass: the kvmfr kernel module (shared-memory transport between
 ### host and VM) and the client that displays the guest's frames.
-# Desktop flavor only (gated in image.kdl): pairs with
+# Desktop flavor only (gated in the image): pairs with
 # the VFIO GPU-passthrough setup in the vfio-passthrough module.
 source /ctx/lib/dkms-helpers.sh
 kernel_devel_install "${DKMS_BUILD_DEPS[@]}"

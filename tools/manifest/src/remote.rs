@@ -3,7 +3,7 @@
 //! A pin is a URL template, a ref, the hash of the archive that ref
 //! resolves to, and the subtree inside it that is the module. There is no
 //! version range, no lock file and no solver, so there is nothing to
-//! resolve and nothing to record separately: the pin in image.kdl is
+//! resolve and nothing to record separately: the pin in the image file is
 //! the whole statement.
 //!
 //! The hash is mandatory rather than optional, because what a remote

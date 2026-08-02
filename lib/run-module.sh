@@ -5,7 +5,7 @@
 # one place:
 #
 #   1. flavor gate    FLAVOR_GATE (set by the generated block from the
-#                     flavor the module is listed under in image.kdl)
+#                     flavor the module is listed under in the image)
 #                     skips the module on flavors it doesn't target
 #   2. repo           sourced if present, idempotent via its REPO_ID
 #   3. module.sh      the module's own install logic (sourced, so it

@@ -22,7 +22,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The checkout's default image, from image.kdl. The local daemon and its
+# The checkout's default image. The local daemon and its
 # cache volume are named after it so one checkout's build state is its
 # own, and so nothing here spells a name out. One daemon serves every
 # image: its state is a layer cache, which is shared, not per image.
@@ -162,7 +162,7 @@ if [ "$reset" = 1 ]; then
 fi
 
 # ---- resolved build inputs -----------------------------------------------
-# scripts/targets.sh derives both from what image.kdl declares; asking it
+# scripts/targets.sh derives both from what the image files declare; asking it
 # for the default and validating against it is what keeps a typo out of a
 # 50 minute build.
 target="${target:-$(./scripts/targets.sh default)}"
