@@ -1,12 +1,16 @@
 [root](../README.md) / [modules](README.md) / **manifest schema**
 
-The declared interface between a module and everything outside it. Two
-files, one parser ([tools/manifest](../tools/manifest), reached through
-[scripts/manifest.sh](../scripts/manifest.sh)), both KDL 2.0.
+The declared interface between a module and everything outside it. One
+parser ([tools/manifest](../tools/manifest), reached through
+[scripts/manifest.sh](../scripts/manifest.sh)), all KDL 2.0.
 
-- **[image.kdl](../image.kdl)** — the image author's file. Which
-  modules are in the image, in what order, gated to which flavors, with
-  which options set.
+- **`<anything>.kdl` at the repository root** — one image apiece, and the
+  image author's file. What it is called, what it builds on, which modules
+  are in it, in what order, gated to which flavors, with which options
+  set. [image.kdl](../image.kdl) is this repository's.
+- **[repo.kdl](../repo.kdl)** — repo context, and the one root `.kdl` that
+  is not an image. Which image a bare build builds, and which CI workflows
+  run.
 - **`modules/<path>/module.kdl`** — the module author's file, required
   for every module. What the module needs, what it offers, and what an
   image author may configure.
@@ -33,71 +37,134 @@ drift both ways.
 
 A manifest declares *facts*, not *file layout*.
 
-## image.kdl
+## The image files
 
-Five top-level nodes. `flavors` and `workflows` are optional; `image`,
-`base` and `modules` are required.
+Every `.kdl` at the repository root is one image, except `repo.kdl`. One
+`image` node per file, holding everything the image is: its name, its base,
+its flavors and its modules. `base` and `modules` are required; `flavors`
+is optional.
+
+**The file name decides nothing.** It is where a definition lives, not what
+the image is called: every name the build and the artifact use is declared
+inside, so `image.kdl` and `falcos.kdl` are the same image and renaming one
+changes nothing. Name it for what it builds, because the next person to
+open the directory reads the file list first. `just create image server`
+will write `server.kdl`, and `image.kdl` when given no name.
+
+Images are ordered by file name, so the build matrix is the same on every
+machine. Nothing about a build depends on that order.
 
 ```kdl
-image "falcos" {
+// image.kdl
+image {
     name "Falcos"
     url "https://github.com/jayelg/falcos"
     issues-url "https://github.com/jayelg/falcos/issues"
     logo "brand/distributor-logo-symbolic.svg"
     watermark "brand/watermark.png"
-}
 
-base "quay.io/fedora/fedora-bootc:44" {
-    family "fedora"
-    provides "rechunking" "initramfs-generation" "mac-policy"
-    provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
-}
-
-flavors {
-    // default marks the flavor `just build` and a bare scripts/build.sh
-    // produce. A build-order convenience and nothing more: it makes no
-    // claim about which image belongs on a machine.
-    //
-    // pr-build marks the single flavor a pull request builds, for half
-    // the runner time. desktop rather than laptop because its gated
-    // modules include the kvmfr DKMS build, so it covers more build
-    // surface. Unrelated to default; they coincide today by choice.
-    desktop default=#true pr-build=#true
-    laptop
-}
-
-workflows {
-    // Only the ones this repository has an opinion about. A workflow not
-    // named here runs, so an absent block is the repository as it ships.
-    smoke-test enabled=#false
-}
-
-modules {
-    module "core/bootloader"
-    module "core/auto-updates"
-    module "kernel/cachyos-kernel"
-
-    module "cli-customizations" {
-        fonts "JetBrainsMono" "FiraCode"
+    base "quay.io/fedora/fedora-bootc:44" {
+        family "fedora"
+        provides "rechunking" "initramfs-generation" "mac-policy"
+        provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
     }
 
-    module "apps/affinity" variant="wine-only"
-
-    // Inside a flavor block, every module is gated to that flavor.
-    flavor "desktop" {
-        module "virtualization/vfio-passthrough"
-        module "virtualization/looking-glass"
+    flavors {
+        // default marks the flavor `just build` and a bare scripts/build.sh
+        // produce. A build-order convenience and nothing more: it makes no
+        // claim about which image belongs on a machine.
+        //
+        // pr-build marks the single flavor a pull request builds, for half
+        // the runner time. desktop rather than laptop because its gated
+        // modules include the kvmfr DKMS build, so it covers more build
+        // surface. Unrelated to default; they coincide today by choice.
+        desktop default=#true pr-build=#true
+        laptop
     }
 
-    flavor "laptop" {
-        module "hardware/laptop-tweaks"
-    }
+    modules {
+        module "core/bootloader"
+        module "core/auto-updates"
+        module "kernel/cachyos-kernel"
 
-    // Back outside, so ungated again, and it still builds above every
-    // gated module: where a line sits only breaks ties.
-    module "core/power-just-scripts"
+        module "cli-customizations" {
+            fonts "JetBrainsMono" "FiraCode"
+        }
+
+        module "apps/affinity" variant="wine-only"
+
+        // Inside a flavor block, every module is gated to that flavor.
+        flavor "desktop" {
+            module "virtualization/vfio-passthrough"
+            module "virtualization/looking-glass"
+        }
+
+        flavor "laptop" {
+            module "hardware/laptop-tweaks"
+        }
+
+        // Back outside, so ungated again, and it still builds above every
+        // gated module: where a line sits only breaks ties.
+        module "core/power-just-scripts"
+    }
 }
 ```
+
+A second image is a second file. It shares nothing with the first: not the
+base, not the flavor set, not one line of the module list. A module both
+list is listed by both, and each gets its own layer in its own generated
+Containerfile.
+
+```kdl
+// server.kdl
+image {
+    name "Falcos Server"
+    id "falcos-server"
+
+    base "quay.io/centos-bootc/centos-bootc:stream10" {
+        family "centos"
+        provides "rechunking" "initramfs-generation" "mac-policy"
+        provides-file "/usr/bin/bootc" "/usr/bin/systemctl"
+    }
+
+    modules {
+        module "core/bootloader"
+        module "core/signature-policy"
+        module "hardening/login-policy"
+        module "virtualization/podman"
+    }
+}
+```
+
+```console
+$ manifest targets
+falcos/none
+falcos/desktop
+falcos/laptop
+falcos-server/none
+```
+
+With two images, [repo.kdl](#repokdl) has to say which one a bare build
+builds.
+
+### The three names
+
+There are three names in play and they are not the same name, so each is
+labelled.
+
+| | where it comes from | where it goes |
+| --- | --- | --- |
+| the file name | you | nowhere. Not the build, not the artifact |
+| `id` | `name` lowercased, or declared | published image name, cache tag, build target, os-release `DEFAULT_HOSTNAME`, MOK key directory |
+| `name` | declared | os-release `NAME`, and `PRETTY_NAME` through its default |
+
+`id` derives from `name` lowercased with spaces turned to dashes, so an
+image called `Falcos` publishes as `falcos` and never writes the second
+one down. Declare `id` when the two should differ, as `Falcos Server`
+does above. A `name` that does not derive a legal id is an error saying to
+declare one, never a silently mangled name nobody can search for.
+
+os-release `ID` is untouched by any of this and stays the base image's.
 
 One RUN layer per entry, in the order [Build order](#build-order)
 resolves, which is document order wherever the graph says nothing.
@@ -106,13 +173,14 @@ block means ungated" structural instead of positional.
 
 ### `image`
 
-What the image calls itself. The argument is its machine name, matching
-`^[a-z][a-z0-9-]*$` because it becomes an image tag, a cache tag and the
-default hostname.
+The one node in an image file, and it takes no argument: every name is a
+labelled child, because there are three of them and an unlabelled one in
+the middle said nothing about which it was.
 
 | Child | Meaning |
 | --- | --- |
 | `name` | os-release `NAME`, the human one. Required. |
+| `id` | the machine name, matching `^[a-z][a-z0-9-]*$` because it becomes an image tag, a cache tag and the default hostname. Derived from `name` when absent. |
 | `pretty-name` | os-release `PRETTY_NAME`. Defaults to `<name> <version>`. |
 | `url` | os-release `HOME_URL` and `DOCUMENTATION_URL`. |
 | `issues-url` | os-release `SUPPORT_URL` and `BUG_REPORT_URL`. |
@@ -121,8 +189,8 @@ default hostname.
 
 os-release is the carrier, so this one declaration also reaches the GRUB
 entry titles ostree writes and the desktop's about page. The published
-image name comes from here too: `<name>` for the ungated build and
-`<name>-<flavor>` for a flavor, which is what `scripts/targets.sh`
+image name comes from here too: `<id>` for the ungated build and
+`<id>-<flavor>` for a flavor, which is what `scripts/targets.sh`
 answers with.
 
 Asset paths are relative to the repository root and must be under
@@ -139,10 +207,12 @@ and the finalize phase receives it as `IMAGE_REGISTRY`.
 
 ### `base`
 
-The image every layer builds on, and what building on it may assume. The
-argument is the full reference, emitted verbatim as the `FROM` in
-the generated Containerfile: this file is the only place the base image is
-named, so the declaration and the build cannot drift.
+The image every layer builds on, and what building on it may assume.
+Declared inside the image, because two images are two things to build on
+and a server has no reason to follow a desktop's base. The argument is the
+full reference, emitted verbatim as the `FROM` in that image's generated
+Containerfile: the declaration is the only place its base is named, so the
+two cannot drift.
 
 | Child | Meaning |
 | --- | --- |
@@ -165,8 +235,12 @@ updates both in a single PR.
 
 ### `flavors`
 
-Each child node is one flavor name. Names match `^[a-z][a-z0-9-]*$`, must
-be unique, and may not be `none` (see [Build targets](#build-targets)).
+Variants of the image this block is inside, published as
+`<id>-<flavor>`. Each child node is one flavor name. Names match
+`^[a-z][a-z0-9-]*$`, must be unique within the image, and may not be
+`none` (see [Build targets](#build-targets)). Two images may declare the
+same flavor name; they are different flavors of different images, which is
+why a build target names both.
 
 | Property | Meaning |
 | --- | --- |
@@ -182,55 +256,6 @@ one positional accident stood in for all of them.
 gating, `FLAVOR` unset, an unsuffixed image name, a single-element build
 matrix, no sibling cache ref, one package to prune. That is the path a
 stripped-down fork hits first, so it is the path that must work.
-
-### `workflows`
-
-Which pipelines in [`.github/workflows/`](../.github/workflows) actually
-run. Each child node is a workflow's **file stem**: `smoke-test` for
-`smoke-test.yml`.
-
-| Property | Meaning |
-| --- | --- |
-| `enabled=#false` | the workflow does not run |
-| `enabled=#true` | the workflow runs, which is also what silence means |
-
-**The block is optional, and so is any given workflow.** A workflow not
-named here runs, so an absent block is the repository as it ships. Only
-the ones a fork has an opinion about are listed, which is why `enabled` is
-required on the ones that are: a bare name states nothing, and a line
-somebody wrote on purpose that changes nothing is worse than an error.
-
-The case this exists for: a fork wants the weekly smoke test off, or has
-no ghcr namespace to publish to and wants `build`, `checksums` and
-`cleanup-registry` quiet. Both are decisions about the repository that
-previously needed an edit to a file the next rebase overwrites.
-
-`manifest workflows` answers with every file in the directory and the
-state the declaration asks for, pipe separated. Every file, not only the
-declared ones: reconciliation has to be able to switch a workflow back
-*on* after somebody switched it off in the web UI, and it can only do that
-if it is told the declared state of one nobody has mentioned.
-
-**Reconciled through the API, never by editing the files.**
-[`reconcile-workflows.yml`](../.github/workflows/reconcile-workflows.yml)
-calls `PUT /repos/{owner}/{repo}/actions/workflows/{id}/{enable,disable}`
-on every push to `main` that touches this file or that directory.
-`GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`,
-so a reconciler that rewrote them would need a PAT or a GitHub App, and a
-template user would have to provision a secret before their fork worked at
-all. Nothing else in this repository needs elevated credentials, and the
-API does the same job with `actions: write`.
-
-Nothing here reaches a build, which is why changing a toggle does not
-regenerate the Containerfiles. The
-[generate-and-drift-check](#build-order) boundary earns its cost for what
-the build consumes, and a workflow is not consumed by the build.
-
-The reconciler is the one workflow that cannot be switched off from here.
-It skips itself, resolved from `GITHUB_WORKFLOW_REF` at run time rather
-than from a path written down anywhere, because disabling it would leave
-this block with nothing to act on it and no way back in. A fork that wants
-none of this deletes the file.
 
 ### `module`
 
@@ -352,6 +377,93 @@ error. Contains only `module` nodes. Flavor blocks may repeat, and a
 module may appear under more than one flavor.
 
 Flavor gating lives here and only here. A module never names a flavor.
+
+## repo.kdl
+
+What is true of the repository rather than of any image in it. The one root
+`.kdl` that is not an image, which is what makes "a file is an image" a
+rule with no exceptions to remember. Optional: a repository with one image
+and no opinion about its workflows needs none of it.
+
+```kdl
+// repo.kdl
+default-image "falcos"
+pr-image "falcos"
+
+workflows {
+    // Only the ones this repository has an opinion about. A workflow not
+    // named here runs, so an absent block is the repository as it ships.
+    smoke-test enabled=#false
+}
+```
+
+Nothing here reaches a build.
+
+### `default-image` and `pr-image`
+
+Which image a build with no target named builds, and which one a pull
+request builds, by `id` rather than by file name. `pr-image` falls back to
+`default-image`, the way `pr-build` falls back to `default` within an
+image.
+
+Both are pointless with one image, which is the default in every sense, and
+`default-image` is **required** as soon as a second exists. The tie-break
+that would avoid declaring it — first file alphabetically — would mean
+renaming a file changed what `just build` builds, and the file name is
+supposed to decide nothing.
+
+Which *flavor* of that image is still marked on the flavor, inside the
+image that declares it.
+
+### `workflows`
+
+Which pipelines in [`.github/workflows/`](../.github/workflows) actually
+run. Each child node is a workflow's **file stem**: `smoke-test` for
+`smoke-test.yml`.
+
+| Property | Meaning |
+| --- | --- |
+| `enabled=#false` | the workflow does not run |
+| `enabled=#true` | the workflow runs, which is also what silence means |
+
+**The block is optional, and so is any given workflow.** A workflow not
+named here runs, so an absent block is the repository as it ships. Only
+the ones a fork has an opinion about are listed, which is why `enabled` is
+required on the ones that are: a bare name states nothing, and a line
+somebody wrote on purpose that changes nothing is worse than an error.
+
+The case this exists for: a fork wants the weekly smoke test off, or has
+no ghcr namespace to publish to and wants `build`, `checksums` and
+`cleanup-registry` quiet. Both are decisions about the repository that
+previously needed an edit to a file the next rebase overwrites, which is
+also why they are declared here rather than in an image.
+
+`manifest workflows` answers with every file in the directory and the
+state the declaration asks for, pipe separated. Every file, not only the
+declared ones: reconciliation has to be able to switch a workflow back
+*on* after somebody switched it off in the web UI, and it can only do that
+if it is told the declared state of one nobody has mentioned.
+
+**Reconciled through the API, never by editing the files.**
+[`reconcile-workflows.yml`](../.github/workflows/reconcile-workflows.yml)
+calls `PUT /repos/{owner}/{repo}/actions/workflows/{id}/{enable,disable}`
+on every push to `main` that touches this file or that directory.
+`GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`,
+so a reconciler that rewrote them would need a PAT or a GitHub App, and a
+template user would have to provision a secret before their fork worked at
+all. Nothing else in this repository needs elevated credentials, and the
+API does the same job with `actions: write`.
+
+Nothing here reaches a build, which is why changing a toggle does not
+regenerate the Containerfiles. The
+[generate-and-drift-check](#build-order) boundary earns its cost for what
+the build consumes, and a workflow is not consumed by the build.
+
+The reconciler is the one workflow that cannot be switched off from here.
+It skips itself, resolved from `GITHUB_WORKFLOW_REF` at run time rather
+than from a path written down anywhere, because disabling it would leave
+this block with nothing to act on it and no way back in. A fork that wants
+none of this deletes the file.
 
 ## module.kdl
 
@@ -659,7 +771,7 @@ in disguise, which `requires` already expresses better.
 
 1. the module's declared `default`
 2. the selected `variant`'s `set`
-3. the value in `image.kdl`
+3. the value in the image file
 
 Only the image author sets options, and only on the owning module's own
 entry. A module cannot set another module's option, so there are no merge
@@ -914,7 +1026,7 @@ Constraints, in the order they bind:
 **Determinism is not negotiable**: the same list produces the same order
 on every machine, because a reshuffle is a full rebuild. That is also
 why there is no `weight` field. Declaration order is already the
-tie-break, and image.kdl is the image author's file, so wanting one
+tie-break, and the image file is the image author's, so wanting one
 module later is expressed by moving its line — a second knob for the
 same thing would only be a way for the two to disagree.
 
@@ -927,15 +1039,26 @@ shows, layer by layer, and what `manifest summary` prints.
 ## Build targets
 
 A **flavor** is an image build variant. A **target** is something the
-matrix builds, which is every flavor plus the ungated set.
-
-The image column is the [`image`](#image) name, suffixed per flavor:
+matrix builds: an image and a flavor of it, spelled `<image>/<flavor>`,
+which is every flavor of every image plus each image's ungated set.
 
 | Target | Image | Cache tag | `FLAVOR` |
 | --- | --- | --- | --- |
-| `none` | `<image>` | `none` | unset |
-| `desktop` | `<image>-desktop` | `desktop` | `desktop` |
-| `laptop` | `<image>-laptop` | `laptop` | `laptop` |
+| `falcos/none` | `falcos` | `falcos` | unset |
+| `falcos/desktop` | `falcos-desktop` | `falcos-desktop` | `desktop` |
+| `falcos/laptop` | `falcos-laptop` | `falcos-laptop` | `laptop` |
+| `falcos-server/none` | `falcos-server` | `falcos-server` | unset |
+
+Qualified always, never a bare flavor. A flavor name only means something
+inside the image that declares it, and two images may declare the same one,
+so `desktop` is refused rather than resolved against whichever image
+happens to exist. The published name is the other half and deliberately not
+the same string: a tag cannot hold a slash, which is also why it is what a
+cache ref is written with.
+
+Two builds cannot publish under one name, and the parser refuses a
+repository where they would: `falcos` with a `server` flavor collides with
+an image whose id is `falcos-server`.
 
 `none` is a reserved token, not a flavor, and is rejected as a flavor
 name. It exists because a cache tag and a matrix entry both need a
@@ -983,16 +1106,22 @@ Lint fails on all of these, in seconds, before anything builds.
 
 **Structure**
 
-- either file unparseable, or carrying a node or property this schema
+- any file unparseable, or carrying a node or property this schema
   does not define
-- an `image.kdl` entry that does not resolve to a module directory
+- an image file entry that does not resolve to a module directory
 - a module directory without a `module.kdl`, or one missing
   `description` or `supports`
-- no `image` node, an `image` declared twice, one with no name, no
-  `name` child, a name outside `^[a-z][a-z0-9-]*$`, or an asset path
-  outside `brand/` or naming a file that does not exist
-- no `base` node, a `base` declared twice, one with no image reference or
-  no `family`, or a `provides-file` on it that is not an absolute path
+- a repository declaring no image, or a root `.kdl` that declares none
+- an `image` node with an argument, no `name` child, an `id` outside
+  `^[a-z][a-z0-9-]*$`, a `name` that derives no usable `id`, or an asset
+  path outside `brand/` or naming a file that does not exist
+- two images declaring the same `id`, or two builds that would publish
+  under one name
+- `default-image` missing with more than one image declared, or either it
+  or `pr-image` naming an image that is not declared
+- an image with no `base`, a `base` declared twice, one with no image
+  reference or no `family`, or a `provides-file` on it that is not an
+  absolute path
 - an enabled module whose `supports` does not include the base `family`
 
 **Flavors**

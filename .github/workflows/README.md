@@ -6,7 +6,7 @@ Which of them run is declared in the [`workflows` block in image.kdl](../../modu
 
 ### [Build Container Image](build.yml)
 
-Builds one image per target (falcos for the ungated set, falcos-desktop and falcos-laptop for the flavors), rechunks them, then pushes and cosign signs them to ghcr.io. Runs on pushes to main and on a daily schedule. Pull requests build only the flavor marked `pr-build` in `image.kdl`, for build testing, and do not push.
+Builds one image per target, a target being an image and a flavor of it (`falcos/none` publishes as falcos, `falcos/desktop` as falcos-desktop), rechunks them, then pushes and cosign signs them to ghcr.io. Every declared image contributes its own targets to the matrix. Runs on pushes to main and on a daily schedule. Pull requests build one target only, the image marked `pr-image` in `repo.kdl` at the flavor marked `pr-build`, for build testing, and do not push.
 
 Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a regeneration of the Containerfile checked against the committed one, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
 
@@ -54,7 +54,7 @@ It carries no list of assets: `manifest.sh assets` and `manifest.sh remotes` rep
 
 ### [Clean up Registry](cleanup-registry.yml)
 
-Daily prune of old ghcr.io package versions: keeps the newest tagged builds per flavor plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
+Daily prune of old ghcr.io package versions: keeps the newest tagged builds per target plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
 
 ### [Reconcile workflow toggles](reconcile-workflows.yml)
 
