@@ -1,41 +1,18 @@
 [root](README.md) / **manifest schema**
 
-The declared interface between a module and everything outside it. One
-parser ([tools/manifest](tools/manifest), reached through
-[scripts/manifest.sh](scripts/manifest.sh)), all KDL 2.0.
+Every manifest in the repository. All KDL 2.0, all read by one parser
+([tools/manifest](tools/manifest), through
+[scripts/manifest.sh](scripts/manifest.sh)).
 
-- **`<anything>.kdl` at the repository root** — one image apiece, and the
-  image author's file. What it is called, what it builds on, which modules
-  are in it, in what order, gated to which flavors, with which options
-  set. [image.kdl](image.kdl) is this repository's.
-- **[repo.kdl](repo.kdl)** — repo context, and the one root `.kdl` that
-  is not an image. Which image a bare build builds, and which CI workflows
-  run.
-- **`modules/<path>/module.kdl`** — the module author's file, required
-  for every module. What the module needs, what it offers, and what an
-  image author may configure.
+| File | Declares |
+| --- | --- |
+| [`<name>.kdl`](image.kdl) at the root | One image: its name, its base, its flavors, and the modules in it |
+| [`repo.kdl`](repo.kdl) | The repository: which image a bare build builds, and which CI workflows run |
+| `modules/<path>/module.kdl` | One module: what it needs, what it offers, and what an image author may configure |
 
 The split is ownership. A module never names a flavor and never decides
 whether it is included; an image author never restates what a module
-needs. Anything one of them must know about the other goes in a manifest,
-because a shell script can only be read by running it.
-
-## What is not declared
-
-Mechanics stay presence driven. The runner checks for these and acts on
-them; declaring them beside an existing file would be redundant and could
-drift both ways.
-
-| Path | Effect |
-| --- | --- |
-| `module.sh` | sourced as the install logic |
-| `repo` | sourced once, idempotent via its `REPO_ID` |
-| `selinux/*.te` | compiled and installed at priority 200 |
-| `files/` | copied verbatim into the image |
-| `finalize.sh` | sourced by the finalize phase, in resolved order |
-| a file another module `collects` | handed to that module |
-
-A manifest declares *facts*, not *file layout*.
+needs.
 
 ## The image files
 
@@ -219,6 +196,16 @@ two cannot drift.
 | `family` | which distro's packaging and tooling modules may assume. Checked against every enabled module's `supports`. Required. |
 | `provides` | capabilities the base satisfies that no module could implement portably. A module may `require` one; nothing has to provide it. |
 | `provides-file` | absolute paths to binaries the base guarantees. Checked on the finished image alongside the modules' own [contract files](#contract-files). |
+| `signed` | whether the base image publishes a cosign signature. Optional, `#false` when absent. |
+
+`signed` records what the registry publishes and is maintained by [Base
+image signature probe](.github/workflows/base-sig-probe.yml), which checks
+daily and opens a PR if the base starts or stops publishing a signature.
+
+Nothing reads it at build time, so both values build identically. Gating
+the `FROM` pull needs a `policy.json` and a `registries.d` entry on the
+builder, which does not exist yet. It does not affect the cosign signing
+of the images this repository publishes.
 
 Declared rather than derived. The family used to be recovered by looking
 for the string `fedora` in the `FROM` line, which meant it could only
@@ -469,6 +456,19 @@ none of this deletes the file.
 
 Required for every module. Absent, unparseable, or missing `description`
 or `supports` is a lint failure.
+
+A manifest declares facts, not file layout. The rest of a module is
+presence driven: the runner checks for these and acts on them, so nothing
+here names them.
+
+| Path | Effect |
+| --- | --- |
+| `module.sh` | sourced as the install logic |
+| `repo` | sourced once, idempotent via its `REPO_ID` |
+| `selinux/*.te` | compiled and installed at priority 200 |
+| `files/` | copied verbatim into the image |
+| `finalize.sh` | sourced by the finalize phase, in resolved order |
+| a file another module `collects` | handed to that module |
 
 ```kdl
 description "kvmfr DKMS module for Looking Glass GPU passthrough"

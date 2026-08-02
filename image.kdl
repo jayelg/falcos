@@ -65,10 +65,15 @@ image {
     //                 portably
     // - provides-file binaries the base guarantees, checked on the finished
     //                 image alongside the modules' own contract files
+    // - signed        whether this base publishes a cosign signature.
+    //                 base-sig-probe.yml checks daily and opens a PR if the
+    //                 base starts or stops publishing one. Fedora images do
+    //                 not publish a signature or a signing key today
     base "quay.io/fedora/fedora-bootc:44" {
         family "fedora"
         provides "rechunking" "initramfs-generation" "mac-policy"
         provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
+        signed #false
     }
 
     // Optional build flavors: variants of this image, published as

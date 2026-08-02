@@ -69,15 +69,18 @@ Runs daily. A monthly run also builds the stock kernel path so the fallback can'
 
 ### [Base Image Signature Probe](base-sig-probe.yml)
 
-Checks whether the base image publishes a cosign signature. A signed base can have its `FROM` pull gated with a `policy.json`, so the base layer is verified rather than trusted.
+Keeps the `signed` field on each image's [`base` node](../../image.kdl) matching what the registry publishes, the way [Checksums](checksums.yml) keeps an asset's `sha256` current.
 
-- Reads the base image from the [`base` node](../../image.kdl) with `manifest base-image`
-- Asks whether a signature exists with `cosign triangulate` and `cosign download signature`, not whether one is valid
-- Opens a tracking issue when one appears, and does nothing otherwise
+- Probes every declared image's base, so a repository building on two bases tracks both
+- Asks whether a signature exists with `cosign download signature`, not whether one is valid
+- Opens a PR correcting the field when it is wrong, in either direction, and updates that PR rather than opening a second one
+- Does nothing when every base matches its declaration
 
 Runs daily.
 
-> Written for a base that is unsigned, which is the case for the default `quay.io/fedora/fedora-bootc`. It only alerts on a signature appearing, so a base that is already signed opens one issue on the first run. It also only checks the default image's base.
+A signed base can have its `FROM` pull gated with a `policy.json`, so the base layer is verified rather than trusted. Nothing does that yet, so a PR from here changes no build output.
+
+> `signed` describes the base image only. The images this repository publishes are cosign signed by [build.yml](build.yml) either way.
 
 ### [Checksums](checksums.yml)
 
