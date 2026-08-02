@@ -1,41 +1,18 @@
-[root](../README.md) / [modules](README.md) / **manifest schema**
+[root](README.md) / **manifest schema**
 
-The declared interface between a module and everything outside it. One
-parser ([tools/manifest](../tools/manifest), reached through
-[scripts/manifest.sh](../scripts/manifest.sh)), all KDL 2.0.
+Every manifest in the repository. All KDL 2.0, all read by one parser
+([tools/manifest](tools/manifest), through
+[scripts/manifest.sh](scripts/manifest.sh)).
 
-- **`<anything>.kdl` at the repository root** — one image apiece, and the
-  image author's file. What it is called, what it builds on, which modules
-  are in it, in what order, gated to which flavors, with which options
-  set. [image.kdl](../image.kdl) is this repository's.
-- **[repo.kdl](../repo.kdl)** — repo context, and the one root `.kdl` that
-  is not an image. Which image a bare build builds, and which CI workflows
-  run.
-- **`modules/<path>/module.kdl`** — the module author's file, required
-  for every module. What the module needs, what it offers, and what an
-  image author may configure.
+| File | Declares |
+| --- | --- |
+| [`<name>.kdl`](image.kdl) at the root | One image: its name, its base, its flavors, and the modules in it |
+| [`repo.kdl`](repo.kdl) | The repository: which image a bare build builds, and which CI workflows run |
+| `modules/<path>/module.kdl` | One module: what it needs, what it offers, and what an image author may configure |
 
 The split is ownership. A module never names a flavor and never decides
 whether it is included; an image author never restates what a module
-needs. Anything one of them must know about the other goes in a manifest,
-because a shell script can only be read by running it.
-
-## What is not declared
-
-Mechanics stay presence driven. The runner checks for these and acts on
-them; declaring them beside an existing file would be redundant and could
-drift both ways.
-
-| Path | Effect |
-| --- | --- |
-| `module.sh` | sourced as the install logic |
-| `repo` | sourced once, idempotent via its `REPO_ID` |
-| `selinux/*.te` | compiled and installed at priority 200 |
-| `files/` | copied verbatim into the image |
-| `finalize.sh` | sourced by the finalize phase, in resolved order |
-| a file another module `collects` | handed to that module |
-
-A manifest declares *facts*, not *file layout*.
+needs.
 
 ## The image files
 
@@ -219,6 +196,16 @@ two cannot drift.
 | `family` | which distro's packaging and tooling modules may assume. Checked against every enabled module's `supports`. Required. |
 | `provides` | capabilities the base satisfies that no module could implement portably. A module may `require` one; nothing has to provide it. |
 | `provides-file` | absolute paths to binaries the base guarantees. Checked on the finished image alongside the modules' own [contract files](#contract-files). |
+| `signed` | whether the base image publishes a cosign signature. Optional, `#false` when absent. |
+
+`signed` records what the registry publishes and is maintained by [Base
+image signature probe](.github/workflows/base-sig-probe.yml), which checks
+daily and opens a PR if the base starts or stops publishing a signature.
+
+Nothing reads it at build time, so both values build identically. Gating
+the `FROM` pull needs a `policy.json` and a `registries.d` entry on the
+builder, which does not exist yet. It does not affect the cosign signing
+of the images this repository publishes.
 
 Declared rather than derived. The family used to be recovered by looking
 for the string `fedora` in the `FROM` line, which meant it could only
@@ -326,7 +313,7 @@ value fails at generate time, before anything is extracted.
 
 `renovate` and `ref` follow the asset rules exactly: exactly one of
 `renovate` and `manual`, and `ref` on the line directly below
-`renovate`, because one regex in [renovate.json5](../.github/renovate.json5)
+`renovate`, because one regex in [renovate.json5](.github/renovate.json5)
 matches the two together. Only `github-tags` and `github-releases` are
 accepted here. `git-refs` tracks a branch head, which needs the branch
 name as well as the commit, and a module is published as a tag; a
@@ -338,7 +325,7 @@ for the ref, so `path` is relative to the repository root.
 
 **Fetching happens at generate time**, on the host, into
 `modules/.remote/<name>/`, which is gitignored.
-[scripts/fetch-modules.sh](../scripts/fetch-modules.sh) does it and both
+[scripts/fetch-modules.sh](scripts/fetch-modules.sh) does it and both
 `just generate` and `just lint` call it; nothing about a build knows a
 module came from elsewhere. The fetched tree lives under `modules/`
 rather than beside the other generated output in `build/` because the
@@ -417,7 +404,7 @@ image that declares it.
 
 ### `workflows`
 
-Which pipelines in [`.github/workflows/`](../.github/workflows) actually
+Which pipelines in [`.github/workflows/`](.github/workflows) actually
 run. Each child node is a workflow's **file stem**: `smoke-test` for
 `smoke-test.yml`.
 
@@ -445,7 +432,7 @@ declared ones: reconciliation has to be able to switch a workflow back
 if it is told the declared state of one nobody has mentioned.
 
 **Reconciled through the API, never by editing the files.**
-[`reconcile-workflows.yml`](../.github/workflows/reconcile-workflows.yml)
+[`reconcile-workflows.yml`](.github/workflows/reconcile-workflows.yml)
 calls `PUT /repos/{owner}/{repo}/actions/workflows/{id}/{enable,disable}`
 on every push to `main` that touches this file or that directory.
 `GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`,
@@ -469,6 +456,19 @@ none of this deletes the file.
 
 Required for every module. Absent, unparseable, or missing `description`
 or `supports` is a lint failure.
+
+A manifest declares facts, not file layout. The rest of a module is
+presence driven: the runner checks for these and acts on them, so nothing
+here names them.
+
+| Path | Effect |
+| --- | --- |
+| `module.sh` | sourced as the install logic |
+| `repo` | sourced once, idempotent via its `REPO_ID` |
+| `selinux/*.te` | compiled and installed at priority 200 |
+| `files/` | copied verbatim into the image |
+| `finalize.sh` | sourced by the finalize phase, in resolved order |
+| a file another module `collects` | handed to that module |
 
 ```kdl
 description "kvmfr DKMS module for Looking Glass GPU passthrough"
@@ -613,7 +613,7 @@ which is the file that survives into the image. Without a declared
 ### Verify exceptions
 
 Every system unit a preset enables passes through `systemd-analyze verify`
-in [validate-image.sh](../lib/validate-image.sh), and a complaint is
+in [validate-image.sh](lib/validate-image.sh), and a complaint is
 fatal. Some complaints are facts about where the build runs or about
 packaging rather than defects in the unit, and this is how a module says
 which of those it accepts, on which of its units.
@@ -839,7 +839,7 @@ downloaded, and `git checkout <commit>` cannot hand back other content.
 
 `from=` on `sha256` says where the expected hash comes from when a
 version bump makes the pinned one stale. Only the [checksum
-workflow](../.github/workflows/checksums.yml) reads it; the build always
+workflow](.github/workflows/checksums.yml) reads it; the build always
 verifies against whatever is pinned here.
 
 | `from=` | Where the hash comes from |
@@ -852,7 +852,7 @@ verifies against whatever is pinned here.
 
 `renovate` carries Renovate's own field names, and Renovate reads them out
 of this file directly through the custom managers in
-[renovate.json5](../.github/renovate.json5).
+[renovate.json5](.github/renovate.json5).
 
 | Property | Meaning |
 | --- | --- |

@@ -1,4 +1,4 @@
-[root](../../README.md) / [build-phases](../build-phases/README.md) / **lib**
+[root](../README.md) / [build-phases](../build-phases/README.md) / **lib**
 
 Shell helpers sourced by the build scripts, not run on their own (except `run-module.sh`, the entry point the generated Containerfile blocks call).
 

@@ -1,7 +1,7 @@
 // An image definition: what this image is called, what it builds on, and
 // every module it is made of.
 //
-// The schema is documented in modules/SCHEMA.md.
+// The schema is documented in SCHEMA.md.
 // scripts/manifest.sh reads from this file.
 //
 // One `image` node holds all of it, and this whole file is that one image.
@@ -65,10 +65,15 @@ image {
     //                 portably
     // - provides-file binaries the base guarantees, checked on the finished
     //                 image alongside the modules' own contract files
+    // - signed        whether this base publishes a cosign signature.
+    //                 base-sig-probe.yml checks daily and opens a PR if the
+    //                 base starts or stops publishing one. Fedora images do
+    //                 not publish a signature or a signing key today
     base "quay.io/fedora/fedora-bootc:44" {
         family "fedora"
         provides "rechunking" "initramfs-generation" "mac-policy"
         provides-file "/usr/bin/bootc" "/usr/bin/systemctl" "/usr/bin/rpm-ostree"
+        signed #false
     }
 
     // Optional build flavors: variants of this image, published as

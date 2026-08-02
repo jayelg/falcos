@@ -1,4 +1,4 @@
-[root](../../../README.md) / [build-phases](../../build-phases/README.md) / [modules](../README.md) / **_template**
+[root](../../README.md) / [build-phases](../../build-phases/README.md) / [modules](../README.md) / **_template**
 
 # _template
 
@@ -35,7 +35,7 @@ finalize layer.
 
 | File | Purpose |
 |---|---|
-| `module.kdl` | **Required.** The manifest: description, base families, capabilities, contract files, asset pins and options. See [SCHEMA.md](../SCHEMA.md). |
+| `module.kdl` | **Required.** The manifest: description, base families, capabilities, contract files, asset pins and options. See [SCHEMA.md](../../SCHEMA.md). |
 | `module.sh` | Install logic. Sourced under `set -euo pipefail` with `$MODDIR` set, `$ASSET_*` for every asset pin and `$OPT_*` for every option declared in `module.kdl`. Omit for a pure-file module. |
 | `repo` | Third-party repo setup, made idempotent by `REPO_ID`; use `add_disabled_repo`. |
 | `selinux/*.te` | Local SELinux policy modules, each auto-compiled + installed (priority 200). Declarative — no code in module.sh. |
