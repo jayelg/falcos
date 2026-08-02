@@ -244,7 +244,7 @@ for scope in system user; do
 							# rest of the repo already does: lint says to
 							# stage the regenerated file, manifest.sh
 							# prints install instructions when cargo is
-							# missing, flavors.sh prints the valid targets.
+							# missing, targets.sh prints the valid targets.
 							class="$(verify_classify "$line")"
 							if [ -n "$class" ]; then
 								echo "            this is the known class '${class}'. If it is expected here," >&2

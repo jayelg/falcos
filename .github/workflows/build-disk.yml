@@ -51,8 +51,8 @@ jobs:
           # kickstart is rendered from, so the installed system cannot
           # track an image other than the one it was installed from.
           # scripts/registry.sh owns the namespace and the lowercasing
-          # ghcr.io requires, scripts/flavors.sh owns the image name.
-          IMAGE_NAME="$(./scripts/flavors.sh image none)"
+          # ghcr.io requires, scripts/targets.sh owns the image name.
+          IMAGE_NAME="$(./scripts/targets.sh image "$(./scripts/targets.sh ungated)")"
           IMAGE_REF="$(./scripts/registry.sh ref "$IMAGE_NAME"):${DEFAULT_TAG}"
           {
             echo "IMAGE_REF=${IMAGE_REF}"

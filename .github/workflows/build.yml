@@ -81,9 +81,9 @@ jobs:
             python3 -m unittest discover -s "$d" -v
           done
 
-  # Builds every target: the ungated set published unsuffixed, then one
-  # per flavor declared in image.kdl. A separate job because the matrix
-  # context isn't available in a job-level if.
+  # Builds every target declared in image.kdl: for each image, the ungated
+  # set published unsuffixed, then one per flavor. A separate job because
+  # the matrix context isn't available in a job-level if.
   #
   # Renovate automerges are already validated by their PR build and are
   # skipped here; the daily scheduled build picks them up together with
@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: set
         run: |
-          # Pull requests build one flavor, for half the runner time.
+          # Pull requests build one target, for half the runner time.
           # Which one is declared in image.kdl as pr-build rather than
           # inferred from list position, because covering the most build
           # surface and being the default are unrelated properties that
@@ -109,7 +109,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             selection="pr"
           fi
-          targets="$(./scripts/flavors.sh "$selection" \
+          targets="$(./scripts/targets.sh "$selection" \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
@@ -142,7 +142,7 @@ jobs:
 
     steps:
       # These stage versions are pinned by https://github.com/renovatebot/renovate
-      # Checked out first because the steps below read scripts/flavors.sh.
+      # Checked out first because the steps below read scripts/targets.sh.
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -155,12 +155,12 @@ jobs:
         run: |
           {
             echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}"
-            echo "IMAGE_NAME=$(./scripts/flavors.sh image "$TARGET")"
+            echo "IMAGE_NAME=$(./scripts/targets.sh image "$TARGET")"
             # The expanded build for this image: one generated Containerfile
-            # per image, named for the image rather than for the target, so
-            # every flavor of it reads the same file. Resolved once here for
-            # the source label and the artifact upload below.
-            echo "CONTAINERFILE=containerfiles/$(./scripts/manifest.sh image-id).generated"
+            # per image, so every flavor of it reads the same file. The
+            # image is the half of the target before the slash. Resolved
+            # once here for the source label and the artifact upload below.
+            echo "CONTAINERFILE=containerfiles/${TARGET%%/*}.generated"
           } >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
@@ -365,7 +365,7 @@ jobs:
           TAGS: ${{ steps.metadata.outputs.tags }}
           LABELS: ${{ steps.metadata.outputs.labels }}
         run: |
-          args=(--backend buildx --flavor "$TARGET")
+          args=(--backend buildx --target "$TARGET")
           # Whatever the step above wrote, by the ID it named the file
           # with. Absent on a build that does not publish, and absent per
           # secret the repository does not hold.

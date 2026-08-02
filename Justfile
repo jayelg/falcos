@@ -1,4 +1,4 @@
-export image_name := env("IMAGE_NAME", `./scripts/flavors.sh image none`) # output image name, declared in image.kdl
+export image_name := env("IMAGE_NAME", `./scripts/targets.sh image "$(./scripts/targets.sh ungated)"`) # output image name, declared in image.kdl
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 
@@ -65,8 +65,8 @@ sudoif command *args:
 # runs in a podman container, so a RUN layer is invalidated by the files
 # it mounts rather than by any change to the build context.
 
-# Build the image with BuildKit, e.g. `just build falcos latest desktop stock`
-build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildkit" target_image tag flavor kernel)
+# Build the image with BuildKit, e.g. `just build falcos latest falcos/desktop stock`
+build $target_image=image_name $tag=default_tag $target=`./scripts/targets.sh default` $kernel="": (_build "buildkit" target_image tag target kernel)
 
 # Fallback for a host where the BuildKit container can't run. Caches on
 # the whole ctx stage, so it rebuilds every layer after any change under
@@ -74,14 +74,14 @@ build $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh de
 
 # Build the image with buildah instead of BuildKit
 [group('Utility')]
-build-buildah $target_image=image_name $tag=default_tag $flavor=`./scripts/flavors.sh default` $kernel="": (_build "buildah" target_image tag flavor kernel)
+build-buildah $target_image=image_name $tag=default_tag $target=`./scripts/targets.sh default` $kernel="": (_build "buildah" target_image tag target kernel)
 
 [private]
-_build backend $target_image $tag $flavor $kernel:
+_build backend $target_image $tag $target $kernel:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    args=(--backend "{{ backend }}" --flavor "${flavor}" --tag "${target_image}:${tag}")
+    args=(--backend "{{ backend }}" --target "${target}" --tag "${target_image}:${tag}")
     if [[ -n "${kernel}" ]]; then
         args+=(--kernel "${kernel}")
     fi
@@ -98,7 +98,7 @@ buildkit-reset:
 # Generate a one-time Secure Boot (MOK) module-signing key pair. Keep the
 # private key out of the repo; commit the public cert.
 [group('Secure Boot')]
-generate-mok-key dir=(env("HOME") + "/.local/share/" + `./scripts/manifest.sh image-id`):
+generate-mok-key dir=(env("HOME") + "/.local/share/" + `./scripts/manifest.sh default-image`):
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -214,17 +214,17 @@ build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build
 
 # Wraps whatever image target_image names, but renders the kickstart the
 # same way CI does, so the reference a local ISO installs is the one CI
-# ships. Pass a flavor to override it.
+# ships. Pass a target to override it.
 
 # Build an ISO installer image
 [group('Build Virtual Machine Image')]
-build-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor="":
+build-iso $target_image=("localhost/" + image_name) $tag=default_tag $target="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     args=()
-    if [[ -n "${flavor}" ]]; then
-        args+=(--flavor "${flavor}")
+    if [[ -n "${target}" ]]; then
+        args+=(--target "${target}")
     fi
     config="$(./scripts/render-iso-config.sh "${args[@]}")"
     just _build-bib "${target_image}" "${tag}" iso "${config}"
@@ -243,8 +243,8 @@ rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_reb
 
 # Rebuild an ISO installer image
 [group('Build Virtual Machine Image')]
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $flavor="none": (build target_image tag flavor)
-    just build-iso "${target_image}" "${tag}" "${flavor}"
+rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag $target=`./scripts/targets.sh ungated`: (build target_image tag target)
+    just build-iso "${target_image}" "${tag}" "${target}"
 
 # Run a virtual machine with the specified image type
 _run-vm $target_image $tag $type:

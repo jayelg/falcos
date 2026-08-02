@@ -15,6 +15,48 @@ use miette::SourceSpan;
 /// declaring it this way exists to avoid.
 pub const NO_FLAVOR: &str = "none";
 
+/// A build target: which image, and which flavor of it.
+///
+/// Spelled `<image>/<flavor>` wherever a person, a script or a workflow
+/// names one, with `<image>/none` for the ungated build. Qualified always,
+/// never a bare flavor: a flavor name only means anything inside the image
+/// that declares it, and two images may well declare the same one.
+///
+/// The published image name is the other half of this and deliberately not
+/// the same string: `<image>` for the ungated build and `<image>-<flavor>`
+/// otherwise. scripts/targets.sh owns that mapping, because it is about
+/// where an image is published rather than about what is being built.
+pub struct Target {
+    pub image: String,
+    /// A declared flavor, or `NO_FLAVOR` for the ungated build. The token
+    /// rather than an `Option`, because that is what the entry filters
+    /// compare a gate against: `none` matches no gate and so selects the
+    /// ungated set, where no target at all means every entry in the list.
+    pub flavor: String,
+}
+
+impl Target {
+    /// `<image>/<flavor>`. Nothing is inferred from a half: a bare name
+    /// could be either half, and guessing which would be wrong in a
+    /// repository with an image and a flavor sharing a name.
+    pub fn parse(text: &str) -> Option<Self> {
+        let (image, flavor) = text.split_once('/')?;
+        if image.is_empty() || flavor.is_empty() || flavor.contains('/') {
+            return None;
+        }
+        Some(Target {
+            image: image.to_string(),
+            flavor: flavor.to_string(),
+        })
+    }
+}
+
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.image, self.flavor)
+    }
+}
+
 /// What the image calls itself.
 ///
 /// os-release is the carrier, so one declaration reaches the GRUB entry
@@ -850,11 +892,47 @@ impl List {
             .or_else(|| self.default_flavor())
     }
 
-    /// Every flavor, plus the ungated set. The ungated set needs no
-    /// declaration: it exists because the layers above `ARG FLAVOR` do.
-    pub fn targets(&self) -> Vec<String> {
-        let mut out = vec![NO_FLAVOR.to_string()];
-        out.extend(self.flavors.iter().map(|f| f.name.clone()));
+    /// Every target: for each image, the ungated set and then its flavors.
+    /// The ungated set needs no declaration: it exists because the layers
+    /// above `ARG FLAVOR` do.
+    pub fn targets(&self) -> Vec<Target> {
+        let mut out = Vec::new();
+        for image in self.images() {
+            out.push(Target {
+                image: image.id.clone(),
+                flavor: NO_FLAVOR.to_string(),
+            });
+            out.extend(self.flavors.iter().map(|f| Target {
+                image: image.id.clone(),
+                flavor: f.name.clone(),
+            }));
+        }
         out
+    }
+
+    /// What a build with nothing named builds: the default image, at its
+    /// default flavor, or its ungated set when it declares no flavors.
+    ///
+    /// An image with no flavors used to answer nothing here, which left
+    /// `scripts/build.sh` validating the empty string against the target
+    /// list and dying on it. The ungated set is buildable whether or not
+    /// any flavor exists, so it is what a repository that declares none
+    /// gets.
+    pub fn default_target(&self) -> Option<Target> {
+        self.default_image().map(|image| Target {
+            image: image.id.clone(),
+            flavor: self
+                .default_flavor()
+                .unwrap_or(NO_FLAVOR)
+                .to_string(),
+        })
+    }
+
+    /// The one target a pull request builds, for half the runner time.
+    pub fn pr_target(&self) -> Option<Target> {
+        self.default_image().map(|image| Target {
+            image: image.id.clone(),
+            flavor: self.pr_flavor().unwrap_or(NO_FLAVOR).to_string(),
+        })
     }
 }

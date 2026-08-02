@@ -122,7 +122,7 @@ default hostname.
 os-release is the carrier, so this one declaration also reaches the GRUB
 entry titles ostree writes and the desktop's about page. The published
 image name comes from here too: `<name>` for the ungated build and
-`<name>-<flavor>` for a flavor, which is what `scripts/flavors.sh`
+`<name>-<flavor>` for a flavor, which is what `scripts/targets.sh`
 answers with.
 
 Asset paths are relative to the repository root and must be under
@@ -549,7 +549,7 @@ is the point of the change; the escape hatch is what keeps the two genuine
 cases working.
 
 When verify fails, the message names the declaration to add, the way
-`just lint` says to stage the regenerated file and `flavors.sh check`
+`just lint` says to stage the regenerated file and `targets.sh check`
 prints the valid targets:
 
 ```

@@ -19,7 +19,7 @@ mod remote;
 mod render;
 mod workflow;
 
-use list::List;
+use list::{List, Target};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -29,21 +29,24 @@ usage: manifest <command>
 Output is one item per line, in declaration order, except where a command
 says otherwise.
 
+A target is `<image>/<flavor>`, with `<image>/none` for the ungated build
+that publishes unsuffixed.
+
   images            every image the repository declares, by machine name,
                     which is what the generator writes one Containerfile
                     per
-  image-id          the image's machine name: what it publishes as, and
-                    what a flavor image is prefixed with
+  default-image     the image a build builds when none is named
   image-name        the image's human name, as os-release NAME
   base-image        the base image reference, which the generated FROM uses
   base-family       the base family every module's `supports` is checked
                     against
   base-provides     every capability the base image itself provides
   flavors           every declared flavor
-  default-flavor    the flavor marked default, which builds use when none
-                    is given; nothing when no flavors are declared
-  pr-flavor         the flavor a pull request builds
-  targets           every build target: the ungated `none`, then flavors
+  targets           every build target
+  default-target    what a build with no target named builds: the default
+                    image at its default flavor, or its ungated set when it
+                    declares no flavors
+  pr-target         the one target a pull request builds
   section [image]   the generated Containerfile module section for an
                     image; the default image when none is given
   summary [target]  what a target is made of, as markdown; every entry
@@ -198,17 +201,31 @@ fn main() -> ExitCode {
     let collected = module::resolve_collects(&modules, &root, &mut issues);
 
     // An unknown target is the same mistake whichever command was asked,
-    // so it is reported once here rather than in an arm apiece.
-    if let Some(unknown) = target.filter(|t| !list.targets().iter().any(|have| have == t)) {
-        issues.push(
-            diag::Issue::new(
-                format!("`{unknown}` is not a build target"),
-                &list_display,
-                &list.text,
-            )
-            .help(format!("targets: {}", list.targets().join(", "))),
-        );
-    }
+    // so it is parsed and checked once here rather than in an arm apiece.
+    // An unqualified name is refused rather than guessed at: `desktop`
+    // could be a flavor of any image, and `falcos` names an image rather
+    // than anything buildable.
+    let known: Vec<String> = list.targets().iter().map(Target::to_string).collect();
+    let target = target.and_then(|name| {
+        let parsed = Target::parse(name).filter(|t| known.iter().any(|have| have == &t.to_string()));
+        if parsed.is_none() {
+            issues.push(
+                diag::Issue::new(
+                    format!("`{name}` is not a build target"),
+                    &list_display,
+                    &list.text,
+                )
+                .help(format!("targets: {}", known.join(", "))),
+            );
+        }
+        parsed
+    });
+
+    // The flavor half is what the entry filters compare a gate against:
+    // `none` matches no gate and so selects the ungated set, where no
+    // target at all means every entry in the list. The image half selects
+    // which image's entries those are, which is one image today.
+    let flavor = target.as_ref().map(|t| t.flavor.as_str());
 
     // The same mistake, for the commands that name an image rather than a
     // target. Reported here for the same reason: which command was asked
@@ -229,7 +246,7 @@ fn main() -> ExitCode {
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
         "images" => lines(list.images().iter().map(|i| i.id.clone())),
-        "image-id" => lines(list.default_image().map(|i| i.id.clone())),
+        "default-image" => lines(list.default_image().map(|i| i.id.clone())),
         "image-name" => lines(list.default_image().map(|i| i.name.clone())),
         "base-image" => lines(list.base.as_ref().map(|b| b.image.clone())),
         "base-family" => lines(list.base.as_ref().map(|b| b.family.clone())),
@@ -240,9 +257,9 @@ fn main() -> ExitCode {
                 .map(|d| d.name.clone()),
         ),
         "flavors" => lines(list.flavors.iter().map(|f| f.name.clone())),
-        "default-flavor" => lines(list.default_flavor().map(str::to_string)),
-        "pr-flavor" => lines(list.pr_flavor().map(str::to_string)),
-        "targets" => lines(list.targets()),
+        "targets" => lines(list.targets().iter().map(Target::to_string)),
+        "default-target" => lines(list.default_target().map(|t| t.to_string())),
+        "pr-target" => lines(list.pr_target().map(|t| t.to_string())),
         "section" | "check" => {
             let section = render::section(&list, &modules, &collected, &root, &mut issues);
             if command == "check" {
@@ -256,20 +273,20 @@ fn main() -> ExitCode {
                 eprintln!("manifest: find-provider needs an absolute path");
                 return ExitCode::FAILURE;
             };
-            render::find_provider(&list, &modules, path, target)
+            render::find_provider(&list, &modules, path, flavor)
         }
         "owns" => {
             let Some(path) = args.get(1) else {
                 eprintln!("manifest: owns needs an absolute path");
                 return ExitCode::FAILURE;
             };
-            overlay::owns(&modules, &shipped, path, target)
+            overlay::owns(&modules, &shipped, path, flavor)
         }
-        "secrets" => render::secrets(&list, &modules, target),
-        "contract-files" => render::contract_files(&list, &modules, target),
-        "verify-exceptions" => render::verify_exceptions(&list, &modules, target),
-        "summary" => render::summary(&list, &modules, target),
-        "assets" => render::assets(&list, &modules, target),
+        "secrets" => render::secrets(&list, &modules, flavor),
+        "contract-files" => render::contract_files(&list, &modules, flavor),
+        "verify-exceptions" => render::verify_exceptions(&list, &modules, flavor),
+        "summary" => render::summary(&list, &modules, flavor),
+        "assets" => render::assets(&list, &modules, flavor),
         other => {
             eprintln!("manifest: unknown command `{other}`");
             eprint!("{USAGE}");

@@ -5,7 +5,7 @@
 # fork's own remote with no configuration and there is no second copy of
 # the remote parsing to drift.
 #
-# scripts/flavors.sh owns image *names* (<image>-<flavor>); this owns
+# scripts/targets.sh owns image *names* (<image>-<flavor>); this owns
 # where they live.
 set -euo pipefail
 cd "$(dirname "$0")/.."
