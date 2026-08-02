@@ -1,4 +1,4 @@
-description "kvmfr DKMS kernel module, for Looking Glass frame relay from a passed-through GPU"
+description "Looking Glass: the kvmfr DKMS kernel module and the client, for frame relay from a passed-through GPU"
 
 supports "fedora"
 
@@ -6,6 +6,11 @@ supports "fedora"
 requires "kernel-devel"
 requires-file "/usr/share/secureboot/sb_cert.der"
 requires-file "/usr/libexec/kernel-devel-helpers.sh"
+
+// The client is built from source in this layer, so the finished image is
+// where a silent build failure would otherwise surface: with no package to
+// depend on, nothing else asserts the binary exists.
+provides-file "/usr/bin/looking-glass-client"
 
 // kvmfr is built and signed exactly like xone.
 arg "KERNEL"
