@@ -94,7 +94,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.set.outputs.targets }}
-      base_provides: ${{ steps.set.outputs.base_provides }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -112,13 +111,6 @@ jobs:
           targets="$(./scripts/targets.sh "$selection" \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
-
-          # What the base image itself brings, declared in image.kdl.
-          # Resolved once here rather than per matrix leg, since it is a
-          # property of the base and not of the target being built.
-          provides="$(./scripts/manifest.sh base-provides \
-            | jq -Rsc 'split("\n") | map(select(length > 0))')"
-          echo "base_provides=${provides}" >> "$GITHUB_OUTPUT"
 
   build_push:
     needs: compute-matrix
@@ -161,6 +153,17 @@ jobs:
             # image is the half of the target before the slash. Resolved
             # once here for the source label and the artifact upload below.
             echo "CONTAINERFILE=containerfiles/${TARGET%%/*}.generated"
+            # Whether this image's base brings rechunking, which is a
+            # property of the base and so a per-image question: two images
+            # need not build on the same one. Resolved to a flag here
+            # rather than passed as a list, so the step below is a plain
+            # boolean rather than a substring match over a JSON blob.
+            rechunk=false
+            if ./scripts/manifest.sh base-provides "${TARGET%%/*}" \
+               | grep -qx rechunking; then
+              rechunk=true
+            fi
+            echo "RECHUNK=${rechunk}"
           } >> "${GITHUB_ENV}"
           # Publish gate for the export/rechunk/push/sign steps below
           if [ "${{ github.event_name }}" != "pull_request" ] \
@@ -567,7 +570,7 @@ jobs:
       # first pull, not a failed build.
       - name: Rechunk image
         id: rechunk
-        if: env.PUBLISH == 'true' && contains(fromJSON(needs.compute-matrix.outputs.base_provides), 'rechunking')
+        if: env.PUBLISH == 'true' && env.RECHUNK == 'true'
         run: |
           sudo podman run --rm --privileged ${{ steps.runtime.outputs.flag }} \
             --volume /var/lib/containers:/var/lib/containers \

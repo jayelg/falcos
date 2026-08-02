@@ -49,21 +49,19 @@ ARG IMAGE_VERSION=dev";
 /// overriding it. IMAGE_REGISTRY is the one that is not declared at all:
 /// scripts/build.sh passes it from scripts/registry.sh, so a fork's
 /// signature policy names the fork's own namespace.
-fn identity(image: Option<&Image>) -> Vec<(&'static str, String)> {
+fn identity(image: &Image) -> Vec<(&'static str, String)> {
     let mut vars: Vec<(&'static str, String)> = Vec::new();
-    if let Some(image) = image {
-        for (name, value) in [
-            ("IMAGE_ID", &image.id),
-            ("IMAGE_NAME", &image.name),
-            ("IMAGE_PRETTY_NAME", &image.pretty_name),
-            ("IMAGE_URL", &image.url),
-            ("IMAGE_ISSUES_URL", &image.issues_url),
-            ("IMAGE_LOGO", &image.logo),
-            ("IMAGE_WATERMARK", &image.watermark),
-        ] {
-            if !value.is_empty() {
-                vars.push((name, value.clone()));
-            }
+    for (name, value) in [
+        ("IMAGE_ID", &image.id),
+        ("IMAGE_NAME", &image.name),
+        ("IMAGE_PRETTY_NAME", &image.pretty_name),
+        ("IMAGE_URL", &image.url),
+        ("IMAGE_ISSUES_URL", &image.issues_url),
+        ("IMAGE_LOGO", &image.logo),
+        ("IMAGE_WATERMARK", &image.watermark),
+    ] {
+        if !value.is_empty() {
+            vars.push((name, value.clone()));
         }
     }
     vars.push(("IMAGE_REGISTRY", String::new()));
@@ -77,7 +75,7 @@ fn identity(image: Option<&Image>) -> Vec<(&'static str, String)> {
 const MODULE_SLOT: u32 = 50;
 
 pub fn section(
-    list: &List,
+    image: &Image,
     modules: &[Module],
     collected: &BTreeMap<String, Vec<(String, String)>>,
     root: &Path,
@@ -89,12 +87,12 @@ pub fn section(
 
     // An absent base is already reported; the family it would have named
     // matches nothing, which is what an unresolved base should select.
-    let base_family = list.base.as_ref().map_or("", |b| b.family.as_str());
+    let base_family = image.base.as_ref().map_or("", |b| b.family.as_str());
 
     // The base image opens the section, because it is the first thing the
     // build does and because emitting it here is what stops the FROM and
     // image.kdl from naming two different images.
-    if let Some(base) = &list.base {
+    if let Some(base) = &image.base {
         let _ = write!(
             out,
             "### Base Image\n\
@@ -120,14 +118,14 @@ pub fn section(
         let _ = write!(out, "{}\n\n", phase(file, false, ""));
     }
 
-    for entry in &list.entries {
+    for entry in &image.entries {
         let dir = root.join("modules").join(entry.dir());
         if !dir.is_dir() {
             issues.push(
                 Issue::new(
                     format!("`{}` does not resolve to a module directory", entry.path),
-                    &list.file,
-                    &list.text,
+                    &image.file,
+                    &image.text,
                 )
                 .at(entry.span, "no such module")
                 .help(format!("expected {}", dir.display())),
@@ -154,7 +152,7 @@ pub fn section(
         let mut blocks: Vec<String> = Vec::new();
         let fragment_after = module.is_some_and(|m| m.fragment_after);
         if inc.is_file() && !fragment_after {
-            blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
+            blocks.push(fragment(entry, &inc, flavor_arg_emitted, image, issues));
         }
         if module.is_none_or(|m| m.standard_layer) {
             blocks.push(standard(
@@ -165,7 +163,7 @@ pub fn section(
             ));
         }
         if inc.is_file() && fragment_after {
-            blocks.push(fragment(entry, &inc, flavor_arg_emitted, list, issues));
+            blocks.push(fragment(entry, &inc, flavor_arg_emitted, image, issues));
         }
 
         // One banner per entry, never one per block: two of them under
@@ -209,19 +207,17 @@ pub fn section(
 
     // The declared brand assets are opened by a phase three minutes into
     // a build, so a path that names nothing is caught here instead.
-    if let Some(image) = &list.image {
-        for path in [&image.logo, &image.watermark] {
-            if !path.is_empty() && !root.join(path).is_file() {
-                issues.push(
-                    Issue::new(format!("`{path}` does not exist"), &list.file, &list.text)
-                        .at(image.span, "declared brand asset")
-                        .help("the path is relative to the repository root"),
-                );
-            }
+    for path in [&image.logo, &image.watermark] {
+        if !path.is_empty() && !root.join(path).is_file() {
+            issues.push(
+                Issue::new(format!("`{path}` does not exist"), &image.file, &image.text)
+                    .at(image.span, "declared brand asset")
+                    .help("the path is relative to the repository root"),
+            );
         }
     }
 
-    let identity = identity(list.image.as_ref());
+    let identity = identity(image);
     let _ = write!(
         out,
         "# ---- image identity ----\n\
@@ -332,8 +328,8 @@ fn phase(file: &str, below_modules: bool, identity_env: &str) -> String {
 ///
 /// No target means every entry, which is the whole list rather than any
 /// image that gets built.
-pub fn summary(list: &List, modules: &[Module], target: Option<&str>) -> String {
-    let included: Vec<&Entry> = list.entries.iter().filter(|e| in_target(e, target)).collect();
+pub fn summary(image: &Image, modules: &[Module], target: Option<&str>) -> String {
+    let included: Vec<&Entry> = image.entries.iter().filter(|e| in_target(e, target)).collect();
     let gated = included.iter().filter(|e| e.flavor.is_some()).count();
 
     let mut out = String::new();
@@ -410,13 +406,13 @@ fn in_target(entry: &Entry, target: Option<&str>) -> bool {
 /// Delimited with | rather than a tab because bash `read` collapses
 /// consecutive IFS whitespace characters (including tab), which shifts
 /// columns when a field is empty.
-pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
+pub fn assets(image: &Image, modules: &[Module], target: Option<&str>) -> String {
     let mut out = String::new();
     // A module listed under two flavors is two entries carrying the same
     // pins, and a pin is recomputed and reported once however many images
     // it lands in.
     let mut seen: Vec<(&str, &str)> = Vec::new();
-    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+    for entry in image.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor)
@@ -454,13 +450,17 @@ pub fn assets(list: &List, modules: &[Module], target: Option<&str>) -> String {
 /// of the template.
 ///
 /// Read before any module directory exists, since it is what says which
-/// ones to create, so it reports the list alone.
+/// ones to create, so it reports the declarations alone.
+///
+/// Across every image, because there is one fetch directory: a module two
+/// images pin is one tree on disk, fetched once. Whether they pin it to
+/// the same ref is checked in `crate::remote`, not here.
 pub fn remotes(list: &List) -> String {
     let mut out = String::new();
-    // A module listed under two flavors is two entries pinning one tree,
-    // and it is fetched once.
+    // A module listed under two flavors, or by two images, is several
+    // entries pinning one tree, and it is fetched once.
     let mut seen: Vec<&str> = Vec::new();
-    for entry in &list.entries {
+    for entry in list.images.iter().flat_map(|i| i.entries.iter()) {
         let Some(remote) = &entry.remote else {
             continue;
         };
@@ -498,12 +498,12 @@ pub fn remotes(list: &List) -> String {
 /// module to name, and the callers of this want a module directory to put
 /// a file in.
 pub fn find_provider(
-    list: &List,
+    image: &Image,
     modules: &[Module],
     file_path: &str,
     target: Option<&str>,
 ) -> String {
-    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+    for entry in image.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor)
@@ -520,10 +520,10 @@ pub fn find_provider(
 /// Unique secret IDs the enabled modules declare, one per line. When a
 /// target is given, only modules that land in that target's image are
 /// included.
-pub fn secrets(list: &List, modules: &[Module], target: Option<&str>) -> String {
+pub fn secrets(image: &Image, modules: &[Module], target: Option<&str>) -> String {
     let mut seen: Vec<&str> = Vec::new();
     let mut out = String::new();
-    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+    for entry in image.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor)
@@ -552,17 +552,17 @@ pub fn secrets(list: &List, modules: &[Module], target: Option<&str>) -> String 
 /// they are true of every image built on it. They used to be a hardcoded
 /// list of three binaries inside lib/validate-image.sh, which meant the
 /// checker knew paths of its own.
-pub fn contract_files(list: &List, modules: &[Module], target: Option<&str>) -> String {
+pub fn contract_files(image: &Image, modules: &[Module], target: Option<&str>) -> String {
     let mut seen: Vec<&str> = Vec::new();
     let mut out = String::new();
-    for decl in list.base.iter().flat_map(|b| b.provides_files.iter()) {
+    for decl in image.base.iter().flat_map(|b| b.provides_files.iter()) {
         if seen.contains(&decl.name.as_str()) {
             continue;
         }
         seen.push(&decl.name);
         let _ = writeln!(out, "{}", decl.name);
     }
-    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+    for entry in image.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor)
@@ -597,10 +597,10 @@ pub fn contract_files(list: &List, modules: &[Module], target: Option<&str>) -> 
 /// hold `$`, backslashes and brackets, none of which would survive a
 /// build arg, and lib/validate-image.sh is the side that has to apply
 /// them anyway.
-pub fn verify_exceptions(list: &List, modules: &[Module], target: Option<&str>) -> String {
+pub fn verify_exceptions(image: &Image, modules: &[Module], target: Option<&str>) -> String {
     let mut seen: Vec<(&str, &str)> = Vec::new();
     let mut out = String::new();
-    for entry in list.entries.iter().filter(|e| in_target(e, target)) {
+    for entry in image.entries.iter().filter(|e| in_target(e, target)) {
         let Some(module) = modules
             .iter()
             .find(|m| m.path == entry.path && m.flavor == entry.flavor)
@@ -746,7 +746,7 @@ fn fragment(
     entry: &Entry,
     inc: &Path,
     flavor_arg_emitted: bool,
-    list: &List,
+    image: &Image,
     issues: &mut Issues,
 ) -> String {
     let body = std::fs::read_to_string(inc).unwrap_or_default();
@@ -759,8 +759,8 @@ fn fragment(
         issues.push(
             Issue::new(
                 format!("`{path}` expands FLAVOR above the flavor gate"),
-                &list.file,
-                &list.text,
+                &image.file,
+                &image.text,
             )
             .at(entry.span, "listed above the first flavor-gated module")
             .help("ARG FLAVOR is declared directly above the first gated entry, so a fragment before it would expand to an empty string"),
@@ -782,8 +782,8 @@ fn fragment(
             Some(d) => issues.push(
                 Issue::new(
                     format!("`{path}` is listed under `{flavor}` but its fragment gates on `{d}`"),
-                    &list.file,
-                    &list.text,
+                    &image.file,
+                    &image.text,
                 )
                 .at(entry.span, "listed here"),
             ),
@@ -792,8 +792,8 @@ fn fragment(
                     format!(
                         "`{path}` is listed under `{flavor}` but its fragment sets no FLAVOR_GATE"
                     ),
-                    &list.file,
-                    &list.text,
+                    &image.file,
+                    &image.text,
                 )
                 .at(entry.span, "the flavor gate would be silently ignored")
                 .help(
