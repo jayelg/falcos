@@ -1,69 +1,115 @@
 [root](../../README.md) / **workflows**
 
-The GitHub Actions pipelines.
+#### How to disable workflows
 
-Which of them run is declared in the [`workflows` block in image.kdl](../../modules/SCHEMA.md#workflows) and reconciled by [Reconcile workflow toggles](reconcile-workflows.yml). A workflow not named there runs, so nothing below is off today.
+Workflows are enabled by default however they can be disabled in the worflow node of [repo.kdl](../../repo.kdl).
+The [Reconcile workflow toggles](reconcile-workflows.yml) runs when changes are committed to [repo.kdl](../../repo.kdl) and disables workflows through the github API. 
 
 ### [Build Container Image](build.yml)
 
-Builds one image per target, a target being an image and a flavor of it (`falcos/none` publishes as falcos, `falcos/desktop` as falcos-desktop), rechunks them, then pushes and cosign signs them to ghcr.io. Every declared image contributes its own targets to the matrix. Runs on pushes to main and on a daily schedule. Pull requests build one target only, the image marked `pr-image` in `repo.kdl` at the flavor marked `pr-build`, for build testing, and do not push.
+This workflow builds an image defined in an image file eg. [image.kdl](../../image.kdl).
+The build script that runs is [build.sh](../../scripts/build.sh).
 
-Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh) (shellcheck over every Bash script in the repo, including the module scripts, a regeneration of the Containerfile checked against the committed one, and a render of the installer config), actionlint over the workflows, and the kernel freshness unit tests. `just lint` runs the same script, so the local check and the gate cannot drift. A lint failure stops the matrix before any image is built.
+- Lint runs first and gates the build: [lint.sh](../../scripts/lint.sh)
+- The parser generates the containerfiles for each image definition eg. [image.kdl](../../image.kdl): [gen-containerfile.sh](../../scripts/gen-containerfile.sh).
+- The compute matrix stage computes what image flavors need to be built
+- Rechunk to reduce the size of update downloads: (`rpm-ostree compose build-chunked-oci`)
+- creates a syft SPDX SBOM
+- Cosign signs the images to ghcr.io.
+- Uploads the generated containerfile and the full file level SBOM as run artifacts
 
-The build itself is [build.sh](../../scripts/build.sh), which `just build` also runs. It owns the Containerfile generation, the build args, the registry cache refs and the Secure Boot secret, so a local build and a CI build of the same commit differ only in the backend that reaches BuildKit. The workflow keeps the policy around it: which events may read and write the cache, and which produce a publishable artifact.
+This workflow runs on a daily schedule and on merges to main.
 
-Each build job writes the resolved module set for its target to the run summary, taken from the same parser that generates the Containerfile, and uploads the generated Containerfile as the `containerfile-falcos-<flavor>` artifact.
+Pull requests build 1 target only which can be selected in `repo.kdl`.
 
-Rechunking (`rpm-ostree compose build-chunked-oci`, the Bazzite/ublue pattern) repacks the built image into content-stable layers chunked by package group, so `bootc upgrade` downloads only the packages that actually changed rather than every layer above the first drifted `RUN`. The buildx registry cache is unaffected — it caches the build stages, while the chunked repack is what gets published.
+To verify the SBOM attestation on a published image:
 
-Each published digest also carries a syft SPDX SBOM as a cosign in-toto attestation, verifiable with `cosign verify-attestation --key modules/core/signature-policy/files/etc/pki/containers/cosign.pub --type spdxjson --insecure-ignore-tlog=true <image>` (the flag skips the Rekor transparency-log check, which this key-based flow doesn't use — trust comes from the key). The key lives in the module that owns the signing policy rather than at the repo root; on an installed machine the same file is at `/etc/pki/containers/cosign.pub`.
+```bash
+cosign verify-attestation --key modules/core/signature-policy/files/etc/pki/containers/cosign.pub --type spdxjson --insecure-ignore-tlog=true <image>
+```
 
-The attested document is the package inventory. The full file-level SBOM, which also records which package owns each path, is 148MB and cannot be attested: cosign refuses an attestation layer over 128MiB, and raising `COSIGN_MAX_ATTACHMENT_SIZE` would only move the problem to every consumer. It is uploaded as the `sbom-falcos-<flavor>` build artifact instead.
+The same public key is on an installed system at `/etc/pki/containers/cosign.pub`.
 
 ### [Build Disk Images](build-disk.yml)
 
-Turns a published image into installable disk images (qcow2 and Anaconda ISO) via bootc-image-builder, using the configs in [Disk Config](../../disk_config). Both the payload and the image the ISO switches the installed system to are the ungated `falcos` build, by rule rather than by a configured value: kargs under `/usr/lib/bootc/kargs.d/` are static, so a payload for an uninspected machine has to be the set that gates on no hardware. The kickstart reference is rendered from that rather than written down.
+Turns a published image into installable disk images with bootc-image-builder, using the configs in [disk_config](../../disk_config).
 
-> **This workflow builds from a *published* image, so one has to exist.** An image package is created by a push to the default branch, and GitHub makes a new package private on first publish — and ghcr answers an unauthorised request with 403 rather than 404, so "never pushed" and "private" look identical. Both fail the same way. The workflow checks for this up front and says which it is, rather than letting the failure surface as a bare 403 from the pull. Flip a new package to public after its first push.
+- Builds a qcow2 disk image and an Anaconda installer ISO, downloadable from the run artifacts
+- Both use the ungated image because flavor kargs are static and can't be made conditional on unknown hardware
+- The ISO's kickstart reference is rendered by [render-iso-config.sh](../../scripts/render-iso-config.sh)
+
+Run it manually with workflow dispatch. It also runs on pull requests touching the disk configs.
+
+> The image has to already be published for this to work, so a newly added target needs a push to main first. Image packages are also private on first publish, which won't stop this workflow but will stop anyone installing the image with bootc switch, so ensure they are public after the first build.
 
 ### [VM Boot Smoke Test](smoke-test.yml)
 
-Weekly proof that the published image boots, which nothing else in the pipeline establishes: the pre-publish validation in [validate-image.sh](../../lib/validate-image.sh) reads a filesystem, and a filesystem that passes every assertion can still fail to reach a login. Pulls the published image, turns it into a qcow2 with bootc-image-builder using the committed [Disk Config](../../disk_config), injects a throwaway SSH key with `virt-customize`, boots it headless under qemu and asserts over SSH that `bootc status` parses, that `systemctl is-system-running` reports `running`, and that no unit has failed.
+Boots the published image in a VM to prove it starts. The pre-publish checks in [validate-image.sh](../../lib/validate-image.sh) only inspect the filesystem, which can pass on an image that never reaches a login.
 
-`/dev/kvm` is the first step, ahead of the pull and the disk build, because the boot uses `-enable-kvm` and `-cpu host` and a runner without KVM should cost a second rather than the whole job. The serial console is written to a file and dumped when the job fails, since qemu runs in the background and a VM that never reaches sshd leaves nothing else to read.
+- Pulls the published image and converts it to a qcow2 with bootc-image-builder
+- Injects a throwaway SSH key with `virt-customize` and boots it headless under qemu
+- Asserts over SSH that `bootc status` parses, that `systemctl is-system-running` reports `running` and that no unit has failed
+- Dumps the serial console when the job fails
 
-Scheduled after the daily build so the image under test is the one users are getting, and it runs on `workflow_dispatch` too. Not a pre-publish gate yet: it is promoted to one once it has been stable for long enough to trust a red run.
+Runs weekly after the daily build, and on workflow dispatch. Needs a runner with `/dev/kvm`.
 
 ### [Kernel Freshness](kernel-freshness.yml)
 
-Watches the CachyOS kernel COPR against upstream stable releases and CISA's KEV catalog (logic and thresholds in [kernel_freshness.py](../../modules/kernel/cachyos-kernel/kernel_freshness.py)). Escalates from a tracking issue to a pre-validated PR flipping the image to the stock Fedora kernel, and opens the restore PR when the COPR catches up. Also validates the stock-kernel build path monthly so the fallback can't rot.
+Checks that a custom kernel isn't stale and temporarily falls back to the stock Fedora kernel if it is.
+
+A kernel module opts in by shipping a `kernel_freshness.py` that knows how to check its own upstream.
+
+| Result | Action |
+| --- | --- |
+| More than 7 days behind | Opens or updates a tracking issue |
+| More than 14 days behind, EOL, or an unpatched KEV CVE | Also opens a PR setting `ARG KERNEL` to stock in the module's `Containerfile.inc` |
+| Upstream catches up | Closes the issue, and opens a restore PR if the fallback was merged |
+
+Runs daily. A monthly run also builds the stock kernel path so the fallback can't break unnoticed.
 
 ### [Base Image Signature Probe](base-sig-probe.yml)
 
-Daily watch for the day `quay.io/fedora/fedora-bootc` starts publishing cosign signatures, which is the precondition for gating the `FROM` pull with a `policy.json` and a `registries.d` entry on the builder. Until then the build pulls its base unverified, and the point of a probe is that nobody has to keep checking by hand. Opens one tracking issue when the answer changes, and does nothing on every other run.
+Checks whether the base image publishes a cosign signature. A signed base can have its `FROM` pull gated with a `policy.json`, so the base layer is verified rather than trusted.
 
-The base image reference is read out of the [`base` node in image.kdl](../../image.kdl) via `manifest base-image` rather than written down here, so the probe cannot drift from what the build actually pulls.
+- Reads the base image from the [`base` node](../../image.kdl) with `manifest base-image`
+- Asks whether a signature exists with `cosign triangulate` and `cosign download signature`, not whether one is valid
+- Opens a tracking issue when one appears, and does nothing otherwise
 
-It asks about existence, not trust: `cosign triangulate` names where a signature would live and `cosign download signature` says whether one is there. Verifying properly would need a key or a certificate identity, and fedora publishes neither for this image, which is the very fact being waited on. Nothing is verified against the result, an issue is opened for a human to act on. This finds a signature published the way `cosign sign` publishes one by default, as a `.sig` tag beside the image; a referrers-only signature would go unnoticed, which is the trade for not depending on the referrers API.
+Runs daily.
+
+> Written for a base that is unsigned, which is the case for the default `quay.io/fedora/fedora-bootc`. It only alerts on a signature appearing, so a base that is already signed opens one issue on the first run. It also only checks the default image's base.
 
 ### [Checksums](checksums.yml)
 
-The mechanical follow-up to a pin bump. Renovate can move an asset's `version` or an out-of-tree module's `ref` but cannot recompute the `sha256` either one is verified against, and both are baked into the generated Containerfiles, which lint checks for drift. On a PR touching a module manifest or the module list this recomputes every stale checksum in one pass, regenerates the Containerfile, pushes a single fixup commit to the PR branch and dispatches a validation build. One workflow covers every pin so concurrent fixup pushes to the same branch cannot race.
+This workflow recomputes the `sha256` for pinned assets for Renovate when it bumps an asset's `version` or an out-of-tree module's `ref`.
 
-It carries no list of assets: `manifest.sh assets` and `manifest.sh remotes` report every pin with its resolved URL, which is the same resolution the build uses, so what this hashes and what the build fetches cannot disagree. Only the manifests the PR actually touched are checked, and a pin whose `sha256` is `from="manual"` is skipped — for an asset whose filename does not follow from its version, recomputing would hash whatever the old URL still serves. Module pins are recomputed first, since fetching an out-of-tree module verifies its archive against the hash in the list.
+- Recomputes every stale checksum, regenerates the containerfiles and pushes one fixup commit to the PR branch
+- Reads every pin from `manifest.sh assets` and `manifest.sh remotes`, so it hashes the same URL the build fetches
+- Out-of-tree module pins are recomputed first, since fetching one of those verifies its archive against the hash
+- A pin declared `sha256 from="manual"` is skipped
+- Dispatches a validation build, as a fixup commit pushed with `GITHUB_TOKEN` doesn't trigger one
+
+Runs on pull requests touching a `module.kdl` or a root `.kdl`.
 
 ### [Clean up Registry](cleanup-registry.yml)
 
-Daily prune of old ghcr.io package versions: keeps the newest tagged builds per target plus their cosign signatures and SBOM attestations, and drops stale build-cache manifests.
+Prunes old ghcr.io package versions.
+
+- Keeps the newest 3 tagged builds per image, with their cosign signatures and SBOM attestations
+- Drops stale build cache manifests
+- Workflow dispatch takes a `dry-run` input that logs what would be deleted without deleting it
+
+Runs daily, after the image build.
 
 ### [Reconcile workflow toggles](reconcile-workflows.yml)
 
-Applies the [`workflows` block in image.kdl](../../modules/SCHEMA.md#workflows) to what GitHub actually has enabled, on every push to main touching that file or this directory. Reads the declaration through `manifest workflows`, which answers with every file here and the state declared for it, so this workflow carries no list of its own and cannot drift from the block.
+Applies the `workflows` node in [repo.kdl](../../repo.kdl) to what GitHub has enabled, through the Actions API rather than by editing the files here.
 
-Through `PUT /actions/workflows/{id}/{enable,disable}`, never by editing the files here. `GITHUB_TOKEN` cannot push a change to a path under `.github/workflows/`, so a reconciler that rewrote them would need a PAT or a GitHub App, and a fork of this repository would have to provision a secret before it worked at all. Nothing else in the repo needs elevated credentials, and the API does the same job with `actions: write`, leaving no commit and nothing for the drift check to notice.
+- Reads the declared state with `manifest workflows`, so it holds no list of its own
+- A workflow that has never been on the default branch isn't registered with Actions, and is skipped rather than treated as disabled
+- A scheduled workflow GitHub switched off after 60 days of repository inactivity is switched back on
+- It skips itself and so can't be disabled. Delete the file instead
 
-A workflow that has never been on the default branch is not registered with Actions and is skipped rather than treated as disabled. `disabled_inactivity`, which is GitHub switching a scheduled workflow off after 60 days of repository quiet, reconciles back to active like any other difference.
-
-It never disables itself: that would leave the declaration with nothing to act on it and no way back in from the file. The check resolves this workflow's own filename from `GITHUB_WORKFLOW_REF` at run time, so no path to it is written down. A fork that wants none of this deletes the file.
+Runs on pushes to main that touch [repo.kdl](../../repo.kdl) or this directory.
 
 ## Notes / Todo

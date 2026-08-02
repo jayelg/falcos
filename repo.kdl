@@ -1,45 +1,23 @@
-// Repo context: what is true of this repository rather than of any image
-// in it.
+// Repo config.
 //
-// Every other `.kdl` at the root is an image. This file is the one that is
-// not, which is what makes "a file is an image" a rule with no exceptions
-// to remember.
+// This files doesn't reach the build. Schema: SCHEMA.md
 //
-// The schema is documented in modules/SCHEMA.md.
-// Nothing here reaches a build.
-
-// Which image a build with no target named builds, and which one a pull
-// request builds, by id rather than by file name. Both optional, and both
-// pointless with one image: there is nothing to choose between. Declare
-// `default-image` as soon as a second image exists, because a build has to
-// be told, and the tie-break that would avoid saying so — first file
-// alphabetically — would mean renaming a file changed what `just build`
-// builds.
+// default-image defines what image builds when no target is named.
+// This is required once a second image exists.
+// Named by the image id, not by file name.
+// eg.
+// default-image "image-name"
 //
-// default-image "falcos"
-// pr-image "falcos"
-
-// Optional. Which workflows in .github/workflows/ actually run, named by
-// file stem, for a fork that wants the weekly smoke test off or has no
-// registry to publish to.
+// Which image a pull request builds.
+// eg.
+// pr-image "image-name"
 //
-// - enabled: #false switches the workflow off, #true switches it back on
-//
-// A workflow not named here runs, so an absent block is this repository as
-// it ships, which is why nothing is declared below. Uncomment to turn one
-// off:
-//
+// Workflows turn workflows in .github/workflows/ on or off, named by filename stem.
+// A reconcile workflow (.github/workflows/reconcile-workflows.yml) runs when updates
+// to this file are commited and enables/disabled workflows through the Github API.
+// Therefore reconcile-workflow cannot be disabled here and will skip itself.
+// Any workflow not listed runs by default.
+// eg.
 // workflows {
 //     smoke-test enabled=#false
 // }
-//
-// Reconciled by .github/workflows/reconcile-workflows.yml through the
-// GitHub API on every push to main that touches this file. Not by
-// rewriting the workflow files: GITHUB_TOKEN cannot push under that path,
-// so anything that edited them would need a PAT or a GitHub App, and a
-// fork would have to provision a secret before it built at all. Nothing
-// here reaches a build, so changing it does not regenerate a Containerfile.
-//
-// The reconciler is the one workflow that cannot be switched off from
-// here: it skips itself, because disabling it would leave this block with
-// nothing to act on it. Delete the file instead.

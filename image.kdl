@@ -1,7 +1,7 @@
 // An image definition: what this image is called, what it builds on, and
 // every module it is made of.
 //
-// The schema is documented in modules/SCHEMA.md.
+// The schema is documented in SCHEMA.md.
 // scripts/manifest.sh reads from this file.
 //
 // One `image` node holds all of it, and this whole file is that one image.
