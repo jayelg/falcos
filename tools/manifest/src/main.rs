@@ -29,6 +29,9 @@ usage: manifest <command>
 Output is one item per line, in declaration order, except where a command
 says otherwise.
 
+  images            every image the repository declares, by machine name,
+                    which is what the generator writes one Containerfile
+                    per
   image-id          the image's machine name: what it publishes as, and
                     what a flavor image is prefixed with
   image-name        the image's human name, as os-release NAME
@@ -41,7 +44,8 @@ says otherwise.
                     is given; nothing when no flavors are declared
   pr-flavor         the flavor a pull request builds
   targets           every build target: the ungated `none`, then flavors
-  section           the generated Containerfile module section
+  section [image]   the generated Containerfile module section for an
+                    image; the default image when none is given
   summary [target]  what a target is made of, as markdown; every entry
                     when no target is given
   assets [target]   every pinned asset, pipe separated: module, name,
@@ -105,8 +109,14 @@ fn main() -> ExitCode {
         "contract-files",
         "verify-exceptions",
     ];
+    // Commands answering about one image rather than one build target.
+    // The argument lands in the same slot; what differs is what it is
+    // checked against, so the two lists are kept apart rather than one
+    // list with a flag.
+    const PER_IMAGE: [&str; 1] = ["section"];
     let path_first = matches!(command, "find-provider" | "owns");
-    let max_args = usize::from(path_first) + usize::from(path_first || PER_TARGET.contains(&command));
+    let takes_name = path_first || PER_TARGET.contains(&command) || PER_IMAGE.contains(&command);
+    let max_args = usize::from(path_first) + usize::from(takes_name);
     if args.len() - 1 > max_args {
         eprintln!(
             "manifest: `{command}` takes {}",
@@ -118,9 +128,13 @@ fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    // Always a build target, whichever position it arrived in, so one
-    // check below covers every command that accepts one.
-    let target = args.get(1 + usize::from(path_first)).map(String::as_str);
+    // One slot, whichever position it arrived in, holding a build target
+    // for most commands and an image for the few that answer per image.
+    // Split here so each is checked against the right set below.
+    let named = args.get(1 + usize::from(path_first)).map(String::as_str);
+    let per_image = PER_IMAGE.contains(&command);
+    let target = if per_image { None } else { named };
+    let image_arg = if per_image { named } else { None };
 
     let root = PathBuf::from(std::env::var("MANIFEST_ROOT").unwrap_or_else(|_| ".".into()));
     let list_path = root.join("image.kdl");
@@ -196,11 +210,27 @@ fn main() -> ExitCode {
         );
     }
 
+    // The same mistake, for the commands that name an image rather than a
+    // target. Reported here for the same reason: which command was asked
+    // does not change what is wrong.
+    if let Some(unknown) = image_arg.filter(|id| !list.images().iter().any(|i| i.id == *id)) {
+        let known: Vec<&str> = list.images().iter().map(|i| i.id.as_str()).collect();
+        issues.push(
+            diag::Issue::new(
+                format!("`{unknown}` is not a declared image"),
+                &list_display,
+                &list.text,
+            )
+            .help(format!("images: {}", known.join(", "))),
+        );
+    }
+
     // Rendering is where the module directories and fragments are
     // checked, so `check` runs it too and throws the output away.
     let output = match command {
-        "image-id" => lines(list.image.as_ref().map(|i| i.id.clone())),
-        "image-name" => lines(list.image.as_ref().map(|i| i.name.clone())),
+        "images" => lines(list.images().iter().map(|i| i.id.clone())),
+        "image-id" => lines(list.default_image().map(|i| i.id.clone())),
+        "image-name" => lines(list.default_image().map(|i| i.name.clone())),
         "base-image" => lines(list.base.as_ref().map(|b| b.image.clone())),
         "base-family" => lines(list.base.as_ref().map(|b| b.family.clone())),
         "base-provides" => lines(

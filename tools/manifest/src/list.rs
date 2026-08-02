@@ -816,6 +816,23 @@ impl List {
         }
     }
 
+    /// Every image the repository declares, in declaration order.
+    ///
+    /// One, today, and the plural is the whole point: the generator emits
+    /// a Containerfile per image, so it asks for the set rather than for
+    /// the image. What the set is read out of is this type's business and
+    /// changes without the generator noticing.
+    pub fn images(&self) -> Vec<&Image> {
+        self.image.iter().collect()
+    }
+
+    /// The image a command answers about when it is given no image, and
+    /// the one a bare build builds. The only one there is until a second
+    /// is declared.
+    pub fn default_image(&self) -> Option<&Image> {
+        self.image.as_ref()
+    }
+
     pub fn default_flavor(&self) -> Option<&str> {
         self.flavors
             .iter()

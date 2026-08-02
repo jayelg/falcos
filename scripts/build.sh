@@ -22,12 +22,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-containerfile=Containerfile.generated
-
 # What the image calls itself, from image.kdl. The local daemon and its
 # cache volume are named after it so one checkout's build state is its
 # own, and so nothing here spells the image name out.
 image_id="$(./scripts/manifest.sh image-id)"
+
+# One generated Containerfile per image, named for the image. Derived
+# rather than fixed: images build on different bases, so which file this
+# build uses follows from which image it is building.
+containerfile="containerfiles/${image_id}.generated"
 
 # renovate: datasource=docker depName=docker.io/moby/buildkit
 buildkit_image="docker.io/moby/buildkit:v0.31.2"
@@ -244,7 +247,7 @@ fi
 
 # ---- the Containerfile the build actually uses ---------------------------
 # Regenerated here rather than by each caller: a build against a stale
-# Containerfile.generated is a build of the wrong image.
+# generated Containerfile is a build of the wrong image.
 ./scripts/gen-containerfile.sh
 
 # The contract file paths the validation layer asserts, and the verify

@@ -102,7 +102,7 @@ jobs:
                 echo "expected 'ARG KERNEL=${from}' in ${part_file}" >&2
                 exit 1
               fi
-              # Containerfile.generated is committed and inlines this
+              # The generated Containerfiles are committed and inline this
               # fragment, so flipping the fragment alone opens a PR that
               # fails the drift check in lint. Staged by the -a below.
               ./scripts/gen-containerfile.sh

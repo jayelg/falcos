@@ -34,8 +34,8 @@ image "falcos" {
 }
 
 // The base image every layer builds on top of, and what it brings with
-// it. This is the only place the base image is named: the FROM in
-// Containerfile.generated is emitted from here, so the two cannot drift.
+// it. This is the only place the base image is named: the FROM in the
+// generated Containerfile is emitted from here, so the two cannot drift.
 //
 // Use major version tags with quay.io/fedora as old untagged manifests are
 // pruned within days. Pinned fedora-bootc digest tags break Renovate.
@@ -87,8 +87,8 @@ flavors {
 // here: it skips itself, because disabling it would leave this block with
 // nothing to act on it. Delete the file instead.
 
-// Modules compile into one Containerfile RUN layer each in the build
-// Containerfile (Containerfile.generated). The build order is resolved
+// Modules compile into one Containerfile RUN layer each in the image's
+// generated Containerfile. The build order is resolved
 // from the graph, and this list is what it falls back to:
 // - A module that `requires` something builds after whatever provides it,
 //   wherever the two sit here. Dependencies are declared, not ordered by

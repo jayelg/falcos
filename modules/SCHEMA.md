@@ -141,7 +141,7 @@ and the finalize phase receives it as `IMAGE_REGISTRY`.
 
 The image every layer builds on, and what building on it may assume. The
 argument is the full reference, emitted verbatim as the `FROM` in
-`Containerfile.generated`: this file is the only place the base image is
+the generated Containerfile: this file is the only place the base image is
 named, so the declaration and the build cannot drift.
 
 | Child | Meaning |
@@ -159,7 +159,7 @@ names shadowed the base with no duplicate-provider warning. Both are
 decisions about the image, so both are made in the image author's file.
 
 Renovate tracks the reference here through a custom manager, and the
-`FROM` it produces in `Containerfile.generated` through the built-in
+`FROM` it produces in the generated Containerfile through the built-in
 Dockerfile one; the two carry the same name and version, so a bump
 updates both in a single PR.
 
@@ -222,7 +222,7 @@ all. Nothing else in this repository needs elevated credentials, and the
 API does the same job with `actions: write`.
 
 Nothing here reaches a build, which is why changing a toggle does not
-regenerate `Containerfile.generated`. The
+regenerate the Containerfiles. The
 [generate-and-drift-check](#build-order) boundary earns its cost for what
 the build consumes, and a workflow is not consumed by the build.
 
@@ -325,7 +325,7 @@ What that buys, in order:
 - the generator emits the same RUN block as for an in-tree module, so
   layer shape and cache behaviour are identical. The mount names
   `modules/.remote/<name>`, so which layers are third-party is visible in
-  the committed `Containerfile.generated`.
+  the committed Containerfile.
 - a remote module ships the same required `module.kdl` and is validated
   against the same schema before anything executes. Its `requires`,
   `secrets`, `packages`, options and collectors are data, reviewable
@@ -921,7 +921,7 @@ same thing would only be a way for the two to disagree.
 A cycle has no build order at all, so it is a lint failure naming the
 edges that close it.
 
-The resolved order is what the committed `Containerfile.generated`
+The resolved order is what the committed Containerfile
 shows, layer by layer, and what `manifest summary` prints.
 
 ## Build targets

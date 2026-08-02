@@ -18,10 +18,11 @@ build
 # modules/.remote is deliberately absent: it holds the out-of-tree
 # modules image.kdl pins, fetched before the build, and their layers
 # mount it out of the ctx stage like any other module.
-# Tracked, so a checkout has it, and rewritten by every build. The
-# frontend reads it as the dockerfile rather than out of the context, so
-# excluding it costs nothing and keeps a regeneration off the ctx stage.
-Containerfile.generated
+# One generated Containerfile per image. Tracked, so a checkout has them,
+# and rewritten by every build. The frontend reads the one it is building
+# as the dockerfile rather than out of the context, so excluding them
+# costs nothing and keeps a regeneration off the ctx stage.
+containerfiles
 # Host build tooling. Never copied into the image, and target/ is
 # large enough that shipping it to the daemon is worth avoiding.
 tools

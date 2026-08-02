@@ -35,7 +35,7 @@ To start a new module, copy [`_template/module-name/`](_template/module-name) â€
 
 A module does not have to live here. An entry in [image.kdl](../image.kdl) carrying a `source` block pins one from another repository by archive URL, ref and SHA256; it is fetched and verified on the host before the build, into a gitignored `modules/.remote/<name>/`, and the generator emits the same layer it would for a module in this tree. The pin format is in [SCHEMA.md](SCHEMA.md#out-of-tree-modules).
 
-Three things keep that reviewable rather than a hole. The content hash is mandatory, so what runs as root in the build is what was reviewed. The module ships the same required `module.kdl`, so its requirements, secrets, packages and options are data you can read before it executes. And its expanded layer lands in the committed `Containerfile.generated`, so a third party module shows up in an ordinary diff. Nothing is fetched transitively: a remote module may `requires` a capability like any other, and whatever provides it is added to the list by hand.
+Three things keep that reviewable rather than a hole. The content hash is mandatory, so what runs as root in the build is what was reviewed. The module ships the same required `module.kdl`, so its requirements, secrets, packages and options are data you can read before it executes. And its expanded layer lands in the committed Containerfile, so a third party module shows up in an ordinary diff. Nothing is fetched transitively: a remote module may `requires` a capability like any other, and whatever provides it is added to the list by hand.
 
 ### Publishing modules
 

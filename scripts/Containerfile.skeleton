@@ -20,7 +20,7 @@ COPY brand/ /brand/
 # Empty here on purpose. The base image FROM, one RUN layer per
 # build-phases/*.sh and one per image.kdl entry are spliced in between
 # these markers, along with the ARGs they read, and the result is written
-# to Containerfile.generated at the repository root, which is what
+# to containerfiles/<image>.generated, one per image, which is what
 # actually builds and is committed. To change what the image contains or
 # what it builds on, edit image.kdl or drop a script in build-phases/,
 # not this file.

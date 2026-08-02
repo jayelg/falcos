@@ -3,7 +3,7 @@
 #
 # Every `asset` block in a module.kdl carries a version, a download URL and
 # a SHA256. Renovate can bump the version but cannot recompute the hash,
-# and the resolved URL and hash are baked into Containerfile.generated,
+# and the resolved URL and hash are baked into the generated Containerfiles,
 # which lint checks for drift. Both of those are mechanical, so this
 # workflow does them: on a PR touching a module manifest it recomputes each
 # stale checksum, regenerates the Containerfile and pushes a single fixup
