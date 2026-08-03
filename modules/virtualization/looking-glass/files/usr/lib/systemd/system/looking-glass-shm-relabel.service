@@ -1,0 +1,21 @@
+[Unit]
+Description=Label the Looking Glass shared memory file for svirt
+# tmpfiles.d creates the file with the default context for /dev/shm,
+# which is tmpfs_t, and svirt_t has no access to that: QEMU fails to open
+# it and the domain does not start. Policy ships no file context for any
+# path under /dev/shm, so restorecon cannot help and the type is set
+# here. A file QEMU creates itself is labelled by svirt, which is why
+# this only became necessary once the file was declared.
+After=systemd-tmpfiles-setup.service
+Requires=systemd-tmpfiles-setup.service
+Before=libvirtd.service
+ConditionSecurity=selinux
+ConditionPathExists=/dev/shm/looking-glass
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chcon -t svirt_tmpfs_t /dev/shm/looking-glass
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
