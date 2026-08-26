@@ -7,4 +7,4 @@
 # the one thing the declared fields cannot express. Everything else this
 # module needs is declared in module.kdl and lands on the generated block
 # below this fragment.
-ARG KERNEL=cachyos
+ARG KERNEL=stock
