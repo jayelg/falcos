@@ -102,6 +102,7 @@ For a repository that publishes modules for others to pin:
 - `virtualization/libvirt` -- libvirt, qemu, virt-manager, virt-viewer
 - `virtualization/incus` -- incus, lxc, systemd-container
 - `virtualization/podman` -- podman-compose, podman-machine, podman-tui
+- `virtualization/distrobox` -- Distrobox containers integrated with the host desktop
 - `virtualization/vfio-passthrough` -- VFIO kargs, modprobe binds, dracut + GPU/USB rebind service (desktop flavor only)
 - `virtualization/looking-glass` -- kvmfr DKMS module for GPU passthrough (desktop flavor only)
 
@@ -118,6 +119,7 @@ For a repository that publishes modules for others to pin:
 - `apps/affinity` -- Affinity Photo/Designer/Publisher via Wine
 - `apps/trivalent` -- secureblue's hardened Chromium fork
 - `apps/vscodium` -- VSCodium (telemetry-free VS Code), hardened_malloc-exempt wrapped
+- `apps/webex` -- Cisco Webex collaboration client
 
 ### VPN (`vpn/`)
 - `vpn/mullvad-vpn` -- Mullvad VPN daemon

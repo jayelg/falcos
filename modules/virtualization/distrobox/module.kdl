@@ -1,0 +1,7 @@
+description "Distrobox containers integrated with the host desktop"
+
+supports "fedora"
+
+packages {
+    fedora "distrobox"
+}

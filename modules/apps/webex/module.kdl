@@ -1,0 +1,13 @@
+description "Cisco Webex collaboration client"
+
+supports "fedora"
+
+// Cisco publishes the RPM at a stable "latest" URL but no versioned archive
+// or release feed. Keep the installed bytes reproducible by pinning the
+// version and hash; update both deliberately when Cisco releases a client.
+asset "webex" {
+    manual "Cisco publishes only a moving latest RPM URL and no versioned release feed"
+    version "46.10.0.36042"
+    url "https://binaries.webex.com/WebexDesktop-CentOS-Official-Package/Webex.rpm"
+    sha256 "8b0583c52c386a85d14a59acbca607772b3f37cd96c9ee424944f3fd2186ea87" from="manual"
+}
