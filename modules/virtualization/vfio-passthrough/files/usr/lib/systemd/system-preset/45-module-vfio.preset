@@ -1,2 +1,0 @@
-# vfio-rebind-gpu-usb pairs with the VFIO passthrough config in this overlay.
-enable vfio-rebind-gpu-usb.service

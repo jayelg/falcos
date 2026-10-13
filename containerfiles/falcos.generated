@@ -432,6 +432,17 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/vfio-passthrough,t
     --mount=type=tmpfs,target=/tmp \
     FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/virtualization/vfio-passthrough
 
+# ---- [desktop] ----
+# ---- virtualization/virtio-nvgpu ----
+RUN --mount=type=bind,from=ctx,source=/modules/virtualization/virtio-nvgpu,target=/ctx/modules/virtualization/virtio-nvgpu \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    ASSET_VIRTIO_NVGPU_VERSION="21a4f075d5c01c0865c809a8592e40b860435768" \
+    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
+
 # ---- [laptop] ----
 # ---- hardware/laptop-tweaks ----
 RUN --mount=type=bind,from=ctx,source=/modules/hardware/laptop-tweaks,target=/ctx/modules/hardware/laptop-tweaks \

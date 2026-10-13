@@ -1,0 +1,17 @@
+# Two third-party repos, both left disabled: nothing else in the image
+# may resolve from them, and this module opts in per install.
+#
+# - negativo17's multimedia repo carries the NVIDIA driver packages the
+#   akmod builds from.
+# - virt-preview tracks newer upstream QEMU releases for the current
+#   Fedora. Fedora 44's QEMU predates the vhost-user shared-memory
+#   protocol the device needs; see module.sh.
+source /ctx/lib/repo-helpers.sh
+
+REPO_ID="fedora-multimedia"
+add_disabled_repo https://negativo17.org/repos/fedora-multimedia.repo
+
+# Not $releasever: the shell has no such variable, only dnf does.
+FEDORA_VER="$(rpm -E %fedora)"
+REPO_ID="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
+add_disabled_repo "https://copr.fedorainfracloud.org/coprs/g/virtmaint-sig/virt-preview/repo/fedora-${FEDORA_VER}/virtmaint-sig-virt-preview-fedora-${FEDORA_VER}.repo"

@@ -170,6 +170,7 @@ image {
 
         flavor "desktop" {
             module "virtualization/vfio-passthrough"
+            module "virtualization/virtio-nvgpu"
         }
 
         flavor "laptop" {

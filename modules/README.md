@@ -103,7 +103,8 @@ For a repository that publishes modules for others to pin:
 - `virtualization/incus` -- incus, lxc, systemd-container
 - `virtualization/podman` -- podman-compose, podman-machine, podman-tui
 - `virtualization/distrobox` -- Distrobox containers integrated with the host desktop
-- `virtualization/vfio-passthrough` -- VFIO kargs, modprobe binds, dracut + GPU/USB rebind service (desktop flavor only)
+- `virtualization/vfio-passthrough` -- VFIO `iommu=pt` only; binding is per VM via libvirt managed hostdev (desktop flavor only)
+- `virtualization/virtio-nvgpu` -- share the NVIDIA GPU across VMs: host driver, vhost-user backend, SHMEM-capable QEMU (desktop flavor only)
 - `virtualization/looking-glass` -- kvmfr DKMS module for GPU passthrough (desktop flavor only)
 
 ### Backup (`backup/`)
