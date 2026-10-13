@@ -10,16 +10,22 @@ Type=simple
 User=nvgpu
 Group=nvgpu
 SupplementaryGroups=render
-# QEMU connects to the socket this creates from outside its own user, so
-# the mode comes from here rather than from the default umask.
-UMask=0000
 # No --vram-limit-mib: the flag needs a video-memory table for the exact
 # host release, and 615.78.08 has none (the backend refuses rather than
 # guess), so per-guest VRAM caps return when a driver release the backend
 # knows is in the image.
 ExecStart=/usr/libexec/nvgpu/vhost-user-nvgpu \
-    --socket /run/nvgpu/%i.sock \
-    --caps graphics,compute,video,utility
+	--socket /run/nvgpu/%i.sock \
+	--caps graphics,compute,video,utility
+# The backend binds the socket 0700 and QEMU runs as its own user under
+# svirt_t, which needs both a writable mode and the one label it may
+# connect to. chmod by the owner and chcon from an unconfined context are
+# both allowed here; the libvirt hook cannot relabel (it runs as virtd_t,
+# "avc: denied { relabelto } ... tclass=sock_file", measured), which is
+# why this is not in the hook. The wait covers this racing the process's
+# own bind; a socket that never appears fails the unit, and the hook
+# passes that failure on.
+ExecStartPost=/bin/sh -c 's=/run/nvgpu/%i.sock; i=0; while [ ! -S "$s" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; chmod 0777 "$s" && chcon -t svirt_socket_t "$s"'
 # The libvirt hook owns this unit's lifetime. No auto-restart: a backend
 # that died mid-VM must not come back serving a VM it no longer knows.
 Restart=no

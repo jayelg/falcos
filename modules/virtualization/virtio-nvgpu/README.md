@@ -34,11 +34,14 @@ other.
   device on. Upstream a fix here removes the patch.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
-  serving every instance. No `--vram-limit-mib` is passed: the flag needs
-  a video-memory table for the exact host release, and the image's
-  615.78.08 has none, so the backend refuses it rather than guess. Guests
-  share the card's full memory; per-guest caps return when a driver the
-  backend knows is in the image.
+  serving every instance. The unit opens its own socket's mode and
+  labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
+  it runs as `virtd_t`, which has no `relabelto` for it (measured). No
+  `--vram-limit-mib` is passed: the flag needs a video-memory table for
+  the exact host release, and the image's 615.78.08 has none, so the
+  backend refuses it rather than guess. Guests share the card's full
+  memory; per-guest caps return when a driver the backend knows is in
+  the image.
 
 ## How a VM uses it
 
@@ -63,10 +66,10 @@ as QEMU's generic vhost-user device. The fragments that matter:
 ```
 
 `GUEST` is the domain name: the hook starts `nvgpu@GUEST.service` for any
-domain whose config contains `vhost-user-test-device`, waits for
-`/run/nvgpu/GUEST.sock`, and relabels it `svirt_socket_t` so QEMU's
-`svirt_t` may connect. On `stopped`/`release` the backend is stopped
-again.
+domain whose config contains `vhost-user-test-device`, and the start
+returns only once the unit's `ExecStartPost` has made the socket mode
+0777 and labelled it `svirt_socket_t` -- the one type QEMU's `svirt_t`
+may connect to. On `stopped`/`release` the backend is stopped again.
 
 The **guest** side is not in this image: the guest runs the
 `virtio_gpu_nv` kernel module (built from the upstream tree against the
