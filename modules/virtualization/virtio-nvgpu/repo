@@ -1,17 +1,25 @@
-# Two third-party repos, both left disabled: nothing else in the image
-# may resolve from them, and this module opts in per install.
-#
-# - negativo17's multimedia repo carries the NVIDIA driver packages the
-#   akmod builds from.
-# - virt-preview tracks newer upstream QEMU releases for the current
-#   Fedora. Fedora 44's QEMU predates the vhost-user shared-memory
-#   protocol the device needs; see module.sh.
+# This file is sourced by run-module.sh unless a repo named by the first
+# REPO_ID line already exists. Naming the COPR id, whose .repo file never
+# carries that name, leaves the guards below as the only idempotency --
+# which they have to be anyway: media-codecs adds fedora-multimedia too,
+# and an unconditional addrepo fails on the existing file.
+REPO_ID="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
 source /ctx/lib/repo-helpers.sh
 
-REPO_ID="fedora-multimedia"
-add_disabled_repo https://negativo17.org/repos/fedora-multimedia.repo
+# negativo17's multimedia repo carries the NVIDIA driver packages. It is
+# where media-codecs gets its codecs as well, so it may already be
+# configured (and enabled) by that module; only add it when absent, and
+# disabled, so this module opts in per install either way.
+if [ ! -f /etc/yum.repos.d/fedora-multimedia.repo ]; then
+	REPO_ID="fedora-multimedia"
+	add_disabled_repo https://negativo17.org/repos/fedora-multimedia.repo
+fi
 
-# Not $releasever: the shell has no such variable, only dnf does.
+# virt-preview tracks newer upstream QEMU releases for the current
+# Fedora. Fedora 44's QEMU predates the vhost-user shared-memory protocol
+# the device needs; see module.sh.
 FEDORA_VER="$(rpm -E %fedora)"
-REPO_ID="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
-add_disabled_repo "https://copr.fedorainfracloud.org/coprs/g/virtmaint-sig/virt-preview/repo/fedora-${FEDORA_VER}/virtmaint-sig-virt-preview-fedora-${FEDORA_VER}.repo"
+if [ ! -f "/etc/yum.repos.d/virtmaint-sig-virt-preview-fedora-${FEDORA_VER}.repo" ]; then
+	REPO_ID="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
+	add_disabled_repo "https://copr.fedoraproject.org/coprs/g/virtmaint-sig/virt-preview/repo/fedora-${FEDORA_VER}/virtmaint-sig-virt-preview-fedora-${FEDORA_VER}.repo"
+fi
