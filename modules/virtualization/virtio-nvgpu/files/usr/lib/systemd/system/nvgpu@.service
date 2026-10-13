@@ -13,12 +13,13 @@ SupplementaryGroups=render
 # QEMU connects to the socket this creates from outside its own user, so
 # the mode comes from here rather than from the default umask.
 UMask=0000
-EnvironmentFile=-/usr/lib/nvgpu/backend.env
-EnvironmentFile=-/etc/nvgpu/backend.env
+# No --vram-limit-mib: the flag needs a video-memory table for the exact
+# host release, and 615.78.08 has none (the backend refuses rather than
+# guess), so per-guest VRAM caps return when a driver release the backend
+# knows is in the image.
 ExecStart=/usr/libexec/nvgpu/vhost-user-nvgpu \
     --socket /run/nvgpu/%i.sock \
-    --caps graphics,compute,video,utility \
-    --vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB}
+    --caps graphics,compute,video,utility
 # The libvirt hook owns this unit's lifetime. No auto-restart: a backend
 # that died mid-VM must not come back serving a VM it no longer knows.
 Restart=no
