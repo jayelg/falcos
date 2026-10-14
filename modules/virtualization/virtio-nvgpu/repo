@@ -1,18 +1,18 @@
-# This file is sourced by run-module.sh unless a repo named by the first
-# REPO_ID line already exists. Naming the COPR id, whose .repo file never
-# carries that name, leaves the guards below as the only idempotency --
-# which they have to be anyway: media-codecs adds fedora-multimedia too,
-# and an unconditional addrepo fails on the existing file.
-REPO_ID="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
+# Third-party repos, all left disabled: nothing else in the image may
+# resolve from them, and this module opts in per install.
+#
+# The first REPO_ID names an id whose .repo file never carries that name,
+# so run-module.sh's exists-check stays false and the guards below are the
+# only idempotency -- which is what they are for.
+REPO_ID="cuda-fedora44-x86_64"
 source /ctx/lib/repo-helpers.sh
 
-# negativo17's multimedia repo carries the NVIDIA driver packages. It is
-# where media-codecs gets its codecs as well, so it may already be
-# configured (and enabled) by that module; only add it when absent, and
-# disabled, so this module opts in per install either way.
-if [ ! -f /etc/yum.repos.d/fedora-multimedia.repo ]; then
-	REPO_ID="fedora-multimedia"
-	add_disabled_repo https://negativo17.org/repos/fedora-multimedia.repo
+# NVIDIA's CUDA repo carries the driver at the one release the backend has
+# an exact ABI and video-memory profile for. The multimedia repo's newer
+# 615.78.08 has neither and oopses in nv_audio_dynamic_power when a
+# display attached to the card goes through a modeset; see module.sh.
+if [ ! -f /etc/yum.repos.d/cuda-fedora44.repo ]; then
+	add_disabled_repo https://developer.download.nvidia.com/compute/cuda/repos/fedora44/x86_64/cuda-fedora44.repo
 fi
 
 # virt-preview tracks newer upstream QEMU releases for the current

@@ -10,13 +10,14 @@ Type=simple
 User=nvgpu
 Group=nvgpu
 SupplementaryGroups=render
-# No --vram-limit-mib: the flag needs a video-memory table for the exact
-# host release, and 615.78.08 has none (the backend refuses rather than
-# guess), so per-guest VRAM caps return when a driver release the backend
-# knows is in the image.
+# 615.71.09 has a video-memory table of its own, so the per-guest VRAM cap
+# works: each backend admits at most this much GPU memory for its VM.
+EnvironmentFile=-/usr/lib/nvgpu/backend.env
+EnvironmentFile=-/etc/nvgpu/backend.env
 ExecStart=/usr/libexec/nvgpu/vhost-user-nvgpu \
 	--socket /run/nvgpu/%i.sock \
-	--caps graphics,compute,video,utility
+	--caps graphics,compute,video,utility \
+	--vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB}
 # The backend binds the socket 0700 and QEMU runs as its own user under
 # svirt_t, which needs both a writable mode and the one label it may
 # connect to. chmod by the owner and chcon from an unconfined context are

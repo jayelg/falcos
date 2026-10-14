@@ -1,14 +1,15 @@
 ### virtio-nvgpu: the host keeps the GPU, many VMs share it.
 #
-# Three pieces: the NVIDIA driver (akmods, built for the image kernel and
-# MOK-signed), QEMU with the vhost-user shared-memory protocol the device
-# needs, and the vhost-user-nvgpu backend at a pinned commit.
+# Three pieces: the NVIDIA driver (615.71.09, built for the image kernel
+# and MOK-signed), QEMU with the vhost-user shared-memory protocol the
+# device needs, and the vhost-user-nvgpu backend at a pinned commit.
 
 source /ctx/lib/kernel-helpers.sh
 source /ctx/lib/sign-helpers.sh
 
+CUDA_REPO="cuda-fedora44-x86_64"
+NVVER="615.71.09"
 VIRT_PREVIEW="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
-FEDORA_MULTIMEDIA="fedora-multimedia"
 
 ### QEMU with vhost-user shared memory
 #
@@ -30,55 +31,78 @@ fi
 	exit 1
 }
 
-### The NVIDIA driver
+### The NVIDIA driver, 615.71.09
 #
-# kernel-devel-matched matches the kernel the image ships, and --kernels
-# names that kernel explicitly: uname inside a build container reports the
-# build host's kernel, not the image's, and akmods defaults to uname.
-dnf5 --enablerepo="$FEDORA_MULTIMEDIA" install -y \
-	kernel-devel-matched akmods kmodtool gcc-c++ elfutils-libelf-devel make \
-	akmod-nvidia nvidia-kmod-common nvidia-driver-common nvidia-driver-cuda
+# NVIDIA's CUDA repo, not the multimedia one. 615.71.09 is the newest
+# release the backend has an exact ABI and video-memory profile for --
+# the per-VM VRAM limit works, and no RM control falls back to an older
+# release's table. The multimedia repo's newer 615.78.08 also oopses in
+# nv_audio_dynamic_power when a display attached to the card goes through
+# a modeset (measured on this machine, twice: the RTX's HDMI monitor,
+# with and without nvidia-drm KMS); 615.71.09 was verified live on the
+# same machine to load, initialize, and drive the display cleanly.
+#
+# The repo key is imported explicitly: dnf5 in a build layer has no one
+# to answer its key prompt.
+rpm --import https://developer.download.nvidia.com/compute/cuda/repos/fedora44/x86_64/73CD9B30.pub
+dnf5 --enablerepo="$CUDA_REPO" install -y \
+	"nvidia-kmod-common-${NVVER}" \
+	"nvidia-driver-common-${NVVER}" \
+	"nvidia-driver-cuda-${NVVER}"
 
+# The shipped config enables S0ix audio power management, which a desktop
+# has no use for and which gates the audio-power path involved in the
+# 615.78.08 crash. Deterministically off, in the file this layer now
+# owns.
+sed -i 's/^options nvidia NVreg_EnableS0ixPowerManagement=1$/options nvidia NVreg_EnableS0ixPowerManagement=0/' \
+	/usr/lib/modprobe.d/nvidia.conf
+grep -q '^options nvidia NVreg_EnableS0ixPowerManagement=0$' /usr/lib/modprobe.d/nvidia.conf || {
+	echo "nvidia.conf: the S0ix line moved; fix the sed" >&2
+	exit 1
+}
+
+# Kernel modules: built from the DKMS package's source for the image
+# kernel. uname inside a build container reports the build host's kernel,
+# not the image's, so KERNEL_UNAME names the kernel explicitly -- which
+# is also exactly how the package's own dkms.conf builds it.
 KVER="$(kver)"
-# The cert has to exist before sign-helpers.sh is asked whether signing is
-# possible: its files/ overlay copy lands after this script runs, so it is
-# installed from the module directory first, the same shape as the kernel
-# module's install of the same file.
+dnf5 install -y kernel-devel-matched gcc make elfutils-libelf-devel cpio
+dnf5 --enablerepo="$CUDA_REPO" download --destdir=/tmp/nvsdk "kmod-nvidia-open-dkms-${NVVER}"
+(
+	cd /tmp/nvsdk || exit 1
+	rpm2cpio ./*.rpm | cpio -idm --quiet
+)
+srcdir="$(find /tmp/nvsdk -maxdepth 4 -type d -name 'nvidia-*' | head -1)"
+[ -n "$srcdir" ] || {
+	echo "no driver source tree in the downloaded package" >&2
+	exit 1
+}
+make -C "$srcdir" modules -j"$(nproc)" KERNEL_UNAME="$KVER"
+
+install -d "/usr/lib/modules/${KVER}/extra/nvidia"
+install -m 0644 "$srcdir"/kernel-open/*.ko "/usr/lib/modules/${KVER}/extra/nvidia/"
+depmod -a "$KVER"
+rm -rf /tmp/nvsdk
+
+# The signing cert has to exist before sign-helpers.sh is asked whether
+# signing is possible: its files/ overlay copy lands after this script
+# runs, so it is installed from the module directory first, the same
+# shape as the kernel module's install of the same file.
 install -Dm644 "$MODDIR/files/usr/share/nvgpu/sb_cert.der" /usr/share/secureboot/sb_cert.der
-if mok_signing_available; then
-	# akmodsbuild runs as the akmods user (akmods' own runuser call), so
-	# the key material is group-readable by akmods -- the shape kmodgenca
-	# produces, which is also why without it the build fails outright
-	# rather than producing unsigned modules. Removed again below so the
-	# private key never reaches the image.
-	install -d -m 0750 /etc/pki/akmods/private /etc/pki/akmods/certs
-	install -m 0640 -o root -g akmods "$MOK_KEY" /etc/pki/akmods/private/private_key.priv
-	install -m 0644 -o root -g akmods "$MOK_CERT_DER" /etc/pki/akmods/certs/public_key.der
-	chown root:akmods /etc/pki/akmods/private /etc/pki/akmods/certs
-else
-	echo "No MOK key supplied: NVIDIA modules will be unsigned and will not load under Secure Boot."
-fi
-
-akmods --force --kernels "$KVER"
-
-# Belt for an akmods that does not sign on its own: sign whatever came out
-# unsigned. A missing signature only shows at boot, as a module that never
-# loads.
 if mok_signing_available; then
 	while IFS= read -r ko; do
 		[ -n "$(modinfo -F signer "$ko" 2>/dev/null)" ] && continue
 		sign_kernel_module "$ko" "/usr/src/kernels/${KVER}/scripts/sign-file"
 	done < <(find "/usr/lib/modules/${KVER}/extra" -name "nvidia*.ko*" 2>/dev/null)
+else
+	echo "No MOK key supplied: NVIDIA modules will be unsigned and will not load under Secure Boot."
 fi
-rm -rf /etc/pki/akmods
 
 # The driver is built; none of this can run again on a bootc image, where
-# the next kernel arrives in a next image and rebuilds this layer.
-# --noautoremove keeps nvidia-kmod-common: it is where the udev rules,
-# modprobe config and firmware blobs live.
-dnf5 remove -y --noautoremove \
-	kernel-devel-matched akmods kmodtool gcc-c++ elfutils-libelf-devel make akmod-nvidia
-rm -rf /var/cache/akmods
+# the next kernel arrives in a next image and rebuilds this layer. The
+# kmod-common package stays: it is where the udev rules, the modprobe
+# config and the firmware live.
+dnf5 remove -y --noautoremove kernel-devel-matched gcc make elfutils-libelf-devel cpio
 
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git

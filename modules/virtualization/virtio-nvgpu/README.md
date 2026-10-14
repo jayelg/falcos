@@ -18,11 +18,16 @@ other.
 
 ## What this module installs
 
-- **The NVIDIA host driver** (`akmod-nvidia`) built for the image kernel
-  and MOK-signed with the same key the DKMS modules use, plus
-  `nvidia-driver-cuda` for `nvidia-smi`. The kmod's `nvidia-kmod-common`
-  carries the udev rules that create `/dev/nvidia*`, the modprobe config
-  and the firmware blobs.
+- **The NVIDIA host driver at 615.71.09**, from NVIDIA's CUDA repo. It is
+  the newest release with an exact backend ABI and video-memory profile,
+  and the release verified to survive a display-attached modeset on this
+  machine; the multimedia repo's 615.78.08 oopses there, in
+  `nv_audio_dynamic_power` (see `module.sh`). Kernel modules are built
+  for the image kernel from the DKMS package's source and MOK-signed with
+  the same key the DKMS modules use. `nvidia-kmod-common` carries the
+  udev rules that create `/dev/nvidia*`, the modprobe config (S0ix audio
+  power management forced off) and the firmware; `nvidia-driver-cuda`
+  brings `nvidia-smi`.
 - **QEMU with vhost-user shared memory.** Fedora 44's QEMU predates
   `VHOST_USER_PROTOCOL_F_SHMEM`; the device's memory window is built on
   it. Installed from the virt-preview COPR, version-floored at 11.1.2 in
@@ -36,12 +41,11 @@ other.
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
   serving every instance. The unit opens its own socket's mode and
   labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
-  it runs as `virtd_t`, which has no `relabelto` for it (measured). No
-  `--vram-limit-mib` is passed: the flag needs a video-memory table for
-  the exact host release, and the image's 615.78.08 has none, so the
-  backend refuses it rather than guess. Guests share the card's full
-  memory; per-guest caps return when a driver the backend knows is in
-  the image.
+  it runs as `virtd_t`, which has no `relabelto` for it (measured).
+  `--vram-limit-mib` caps each guest (default 4096 MiB of the card, set
+  in `/usr/lib/nvgpu/backend.env`, overridable per host in
+  `/etc/nvgpu/backend.env`): 615.71.09 is a release the backend's
+  video-memory table covers.
 
 ## How a VM uses it
 
