@@ -24,7 +24,10 @@ other.
   machine; the multimedia repo's 615.78.08 oopses there, in
   `nv_audio_dynamic_power` (see `module.sh`). Kernel modules are built
   for the image kernel from the DKMS package's source and MOK-signed with
-  the same key the DKMS modules use. `nvidia-kmod-common` carries the
+  the same key the DKMS modules use; a fileless `nvidia-kmod` stub
+  (`nvidia-kmod-stub.rpm`, spec in its description) keeps the DKMS source
+  package and its toolchain out of the image.
+  `nvidia-kmod-common` carries the
   udev rules that create `/dev/nvidia*`, the modprobe config (S0ix audio
   power management forced off) and the firmware; `nvidia-driver-cuda`
   brings `nvidia-smi`.

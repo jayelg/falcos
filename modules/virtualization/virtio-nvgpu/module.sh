@@ -45,7 +45,16 @@ fi
 # The repo key is imported explicitly: dnf5 in a build layer has no one
 # to answer its key prompt.
 rpm --import https://developer.download.nvidia.com/compute/cuda/repos/fedora44/x86_64/73CD9B30.pub
-dnf5 --enablerepo="$CUDA_REPO" install -y \
+
+# nvidia-kmod-common -- the udev rules, modprobe config and firmware --
+# requires nvidia-kmod, and the repo's only provider is the DKMS package:
+# a multi-gigabyte source tree plus dkms plus a compiler toolchain, none
+# of which belongs in an image that builds its own modules from that
+# source. The fileless stub beside this script -- same name, same EVR --
+# satisfies the requirement, so the userspace resolves without it. Its
+# spec travels in the stub's description.
+dnf5 install -y "$MODDIR/nvidia-kmod-stub.rpm"
+dnf5 --enablerepo="$CUDA_REPO" install -y --setopt=install_weak_deps=False \
 	"nvidia-kmod-common-${NVVER}" \
 	"nvidia-driver-common-${NVVER}" \
 	"nvidia-driver-cuda-${NVVER}"
@@ -98,11 +107,13 @@ else
 	echo "No MOK key supplied: NVIDIA modules will be unsigned and will not load under Secure Boot."
 fi
 
-# The driver is built; none of this can run again on a bootc image, where
-# the next kernel arrives in a next image and rebuilds this layer. The
-# kmod-common package stays: it is where the udev rules, the modprobe
-# config and the firmware live.
-dnf5 remove -y --noautoremove kernel-devel-matched gcc make elfutils-libelf-devel cpio
+# The driver is built; the build toolchain goes back out. Safe now that
+# nothing else depends on it: dkms never entered the image (the stub kept
+# it out), and cpio deliberately stays -- it is a dracut dependency and
+# removing it once uninstalled dracut, bootc and rpm-ostree in one
+# cascade. The kmod-common package stays: it is where the udev rules, the
+# modprobe config and the firmware live.
+dnf5 remove -y --noautoremove kernel-devel-matched kernel-devel gcc make elfutils-libelf-devel
 
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git
