@@ -80,8 +80,17 @@ fi
 # kernel. uname inside a build container reports the build host's kernel,
 # not the image's, so KERNEL_UNAME names the kernel explicitly -- which
 # is also exactly how the package's own dkms.conf builds it.
+#
+# The devel tree is pinned to the *installed* kernel's version, not
+# kernel-devel-matched: matched tracks the repositories' newest kernel,
+# which moves ahead of the base image's within a day of a Fedora release
+# (measured: matched pulled 7.2.10 and upgraded the kernel inside this
+# layer, whose %post runs the rpm-ostree kernel-install hook -- dracut in
+# a build container, "Invalid cross-device link" -- and removed the
+# 7.2.9 trees KERNEL_UNAME was about to build against). The exact version
+# lives on in updates-archive.
 KVER="$(kver)"
-dnf5 install -y kernel-devel-matched gcc gcc-c++ make elfutils-libelf-devel cpio
+dnf5 install -y "kernel-devel-${KVER}" gcc gcc-c++ make elfutils-libelf-devel cpio
 dnf5 --enablerepo="$CUDA_REPO" download --destdir=/tmp/nvsdk "kmod-nvidia-open-dkms-${NVVER}"
 (
 	cd /tmp/nvsdk || exit 1
@@ -119,7 +128,7 @@ fi
 # removing it once uninstalled dracut, bootc and rpm-ostree in one
 # cascade. The kmod-common package stays: it is where the udev rules, the
 # modprobe config and the firmware live.
-dnf5 remove -y --noautoremove kernel-devel-matched kernel-devel gcc gcc-c++ make elfutils-libelf-devel
+dnf5 remove -y --noautoremove kernel-devel gcc gcc-c++ make elfutils-libelf-devel
 
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git
