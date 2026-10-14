@@ -75,7 +75,7 @@ grep -q '^options nvidia NVreg_EnableS0ixPowerManagement=0$' /usr/lib/modprobe.d
 # not the image's, so KERNEL_UNAME names the kernel explicitly -- which
 # is also exactly how the package's own dkms.conf builds it.
 KVER="$(kver)"
-dnf5 install -y kernel-devel-matched gcc make elfutils-libelf-devel cpio
+dnf5 install -y kernel-devel-matched gcc gcc-c++ make elfutils-libelf-devel cpio
 dnf5 --enablerepo="$CUDA_REPO" download --destdir=/tmp/nvsdk "kmod-nvidia-open-dkms-${NVVER}"
 (
 	cd /tmp/nvsdk || exit 1
@@ -113,7 +113,7 @@ fi
 # removing it once uninstalled dracut, bootc and rpm-ostree in one
 # cascade. The kmod-common package stays: it is where the udev rules, the
 # modprobe config and the firmware live.
-dnf5 remove -y --noautoremove kernel-devel-matched kernel-devel gcc make elfutils-libelf-devel
+dnf5 remove -y --noautoremove kernel-devel-matched kernel-devel gcc gcc-c++ make elfutils-libelf-devel
 
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git
