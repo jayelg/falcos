@@ -33,14 +33,13 @@ fi
 
 ### The NVIDIA driver, 615.71.09
 #
-# NVIDIA's CUDA repo, not the multimedia one. 615.71.09 is the newest
+# NVIDIA's CUDA repo, not the multimedia one: 615.71.09 is the newest
 # release the backend has an exact ABI and video-memory profile for --
 # the per-VM VRAM limit works, and no RM control falls back to an older
-# release's table. The multimedia repo's newer 615.78.08 also oopses in
-# nv_audio_dynamic_power when a display attached to the card goes through
-# a modeset (measured on this machine, twice: the RTX's HDMI monitor,
-# with and without nvidia-drm KMS); 615.71.09 was verified live on the
-# same machine to load, initialize, and drive the display cleanly.
+# release's table. (The display-attach oops that first motivated chasing
+# releases turned out to live in the PreserveVideoMemoryAllocations
+# option below, not in any one version; the exact profiles are the why
+# this release.)
 #
 # The repo key is imported explicitly: dnf5 in a build layer has no one
 # to answer its key prompt.
@@ -59,16 +58,23 @@ dnf5 --enablerepo="$CUDA_REPO" install -y --setopt=install_weak_deps=False \
 	"nvidia-driver-common-${NVVER}" \
 	"nvidia-driver-cuda-${NVVER}"
 
-# The shipped config enables S0ix audio power management, which a desktop
-# has no use for and which gates the audio-power path involved in the
-# 615.78.08 crash. Deterministically off, in the file this layer now
-# owns.
+# Two shipped options are changed. PreserveVideoMemoryAllocations=1 is the
+# display-attach crash: with exactly that option set, and only it, loading
+# the driver with the RTX's display attached oopses in
+# nv_audio_dynamic_power within seconds -- measured on this machine on
+# both kernels, while every option-free load is clean. The option only
+# serves suspend-to-RAM with live GPU allocations; that trade comes back
+# when NVIDIA fixes the driver. S0ix power management goes off beside it
+# for the desktop rationale; it was innocent of the crash.
 sed -i 's/^options nvidia NVreg_EnableS0ixPowerManagement=1$/options nvidia NVreg_EnableS0ixPowerManagement=0/' \
 	/usr/lib/modprobe.d/nvidia.conf
-grep -q '^options nvidia NVreg_EnableS0ixPowerManagement=0$' /usr/lib/modprobe.d/nvidia.conf || {
-	echo "nvidia.conf: the S0ix line moved; fix the sed" >&2
+sed -i 's/^options nvidia NVreg_PreserveVideoMemoryAllocations=1$/options nvidia NVreg_PreserveVideoMemoryAllocations=0/' \
+	/usr/lib/modprobe.d/nvidia.conf
+if ! grep -q '^options nvidia NVreg_EnableS0ixPowerManagement=0$' /usr/lib/modprobe.d/nvidia.conf ||
+	! grep -q '^options nvidia NVreg_PreserveVideoMemoryAllocations=0$' /usr/lib/modprobe.d/nvidia.conf; then
+	echo "nvidia.conf: a sed target moved" >&2
 	exit 1
-}
+fi
 
 # Kernel modules: built from the DKMS package's source for the image
 # kernel. uname inside a build container reports the build host's kernel,
