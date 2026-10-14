@@ -37,9 +37,9 @@ fi
 # release the backend has an exact ABI and video-memory profile for --
 # the per-VM VRAM limit works, and no RM control falls back to an older
 # release's table. (The display-attach oops that first motivated chasing
-# releases turned out to live in the PreserveVideoMemoryAllocations
-# option below, not in any one version; the exact profiles are the why
-# this release.)
+# releases turned out to be a foreign driver on the GPU's audio function,
+# not the release -- see the guard patch below; the exact ABI and memory
+# profiles are the why this release.)
 #
 # The repo key is imported explicitly: dnf5 in a build layer has no one
 # to answer its key prompt.
@@ -58,24 +58,6 @@ dnf5 --enablerepo="$CUDA_REPO" install -y --setopt=install_weak_deps=False \
 	"nvidia-driver-common-${NVVER}" \
 	"nvidia-driver-cuda-${NVVER}"
 
-# Two shipped options are changed. PreserveVideoMemoryAllocations=1 is the
-# display-attach crash: with exactly that option set, and only it, loading
-# the driver with the RTX's display attached oopses in
-# nv_audio_dynamic_power within seconds -- measured on this machine on
-# both kernels, while every option-free load is clean. The option only
-# serves suspend-to-RAM with live GPU allocations; that trade comes back
-# when NVIDIA fixes the driver. S0ix power management goes off beside it
-# for the desktop rationale; it was innocent of the crash.
-sed -i 's/^options nvidia NVreg_EnableS0ixPowerManagement=1$/options nvidia NVreg_EnableS0ixPowerManagement=0/' \
-	/usr/lib/modprobe.d/nvidia.conf
-sed -i 's/^options nvidia NVreg_PreserveVideoMemoryAllocations=1$/options nvidia NVreg_PreserveVideoMemoryAllocations=0/' \
-	/usr/lib/modprobe.d/nvidia.conf
-if ! grep -q '^options nvidia NVreg_EnableS0ixPowerManagement=0$' /usr/lib/modprobe.d/nvidia.conf ||
-	! grep -q '^options nvidia NVreg_PreserveVideoMemoryAllocations=0$' /usr/lib/modprobe.d/nvidia.conf; then
-	echo "nvidia.conf: a sed target moved" >&2
-	exit 1
-fi
-
 # Kernel modules: built from the DKMS package's source for the image
 # kernel. uname inside a build container reports the build host's kernel,
 # not the image's, so KERNEL_UNAME names the kernel explicitly -- which
@@ -90,7 +72,7 @@ fi
 # 7.2.9 trees KERNEL_UNAME was about to build against). The exact version
 # lives on in updates-archive.
 KVER="$(kver)"
-dnf5 install -y "kernel-devel-${KVER}" gcc gcc-c++ make elfutils-libelf-devel cpio
+dnf5 install -y "kernel-devel-${KVER}" gcc gcc-c++ make elfutils-libelf-devel cpio git
 dnf5 --enablerepo="$CUDA_REPO" download --destdir=/tmp/nvsdk "kmod-nvidia-open-dkms-${NVVER}"
 (
 	cd /tmp/nvsdk || exit 1
@@ -101,6 +83,18 @@ srcdir="$(find /tmp/nvsdk -maxdepth 4 -type d -name 'nvidia-*' | head -1)"
 	echo "no driver source tree in the downloaded package" >&2
 	exit 1
 }
+
+# The one local patch: upstream's guard for the crash this module spent
+# its investigation chasing. nv_audio_dynamic_power() casts the GPU
+# audio function's pci_get_drvdata() to an snd_card * without checking
+# the bound driver, so a foreign driver there -- vfio-pci, which a
+# passthrough domain leaves on it -- turns the audio enable of a display
+# modeset into a NULL dereference (upstream #1365, #1141, #1410; the
+# NVreg option and uvm bisects on this machine were confounded by
+# exactly that driver state). It is PR #1404, unmerged upstream, carried
+# until it lands.
+git -C "$srcdir" apply "$MODDIR/patches/0002-kernel-open-guard-nv_audio_dynamic_power.patch"
+
 make -C "$srcdir" modules -j"$(nproc)" KERNEL_UNAME="$KVER"
 
 install -d "/usr/lib/modules/${KVER}/extra/nvidia"

@@ -21,18 +21,19 @@ other.
 - **The NVIDIA host driver at 615.71.09**, from NVIDIA's CUDA repo: the
   newest release with an exact backend ABI and video-memory profile, so
   the per-VM VRAM limit works and no RM control falls back to an older
-  release's table. The display-attach oops this module documents is not
-  the release -- it is NVIDIA's `PreserveVideoMemoryAllocations=1`
-  modprobe option (measured, on both kernels), turned off below. Kernel
+  release's table. The display-attach oops this module carries a patch
+  for is not the release: `nv_audio_dynamic_power()` assumes the GPU's
+  audio function is driven by `snd_hda_intel`, and a foreign driver
+  there (vfio-pci, as a passthrough domain leaves it) turns a display
+  modeset into a NULL dereference (upstream #1365, #1141, #1410); the
+  patch is the unmerged PR #1404. Kernel
   modules are built
   for the image kernel from the DKMS package's source and MOK-signed with
   the same key the DKMS modules use; a fileless `nvidia-kmod` stub
   (`nvidia-kmod-stub.rpm`, spec in its description) keeps the DKMS source
   package and its toolchain out of the image. `nvidia-kmod-common`
   carries the udev rules that create `/dev/nvidia*`, the modprobe config
-  (S0ix off; `PreserveVideoMemoryAllocations` off -- the suspend-time
-  option is what triggers the display-attach oops, measured) and the
-  firmware; `nvidia-driver-cuda` brings `nvidia-smi`.
+  and the firmware; `nvidia-driver-cuda` brings `nvidia-smi`.
 - **QEMU with vhost-user shared memory.** Fedora 44's QEMU predates
   `VHOST_USER_PROTOCOL_F_SHMEM`; the device's memory window is built on
   it. Installed from the virt-preview COPR, version-floored at 11.1.2 in

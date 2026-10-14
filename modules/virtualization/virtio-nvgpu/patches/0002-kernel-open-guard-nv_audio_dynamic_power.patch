@@ -1,0 +1,41 @@
+From ba36ed5c00bb50ec327ec29091916998d4617125 Mon Sep 17 00:00:00 2001
+From: bodapatisaikrishna <saikrishnabodapati@gmail.com>
+Date: Sat, 26 Sep 2026 19:23:26 +0530
+Subject: [PATCH] kernel-open: guard nv_audio_dynamic_power against non-HDA
+ drivers
+
+nv_audio_dynamic_power() calls pci_get_drvdata() on the GPU audio
+function and casts the result to struct snd_card * without checking
+the bound driver. When a non-HDA driver like vfio-pci is bound, the
+drvdata is not a snd_card, and dereferencing it panics the kernel.
+
+Add a check that the audio PCI device is actually bound to snd_hda_intel
+before accessing its driver data.
+
+Fixes: NVIDIA/open-gpu-kernel-modules#1365
+Signed-off-by: bodapatisaikrishna <saikrishnabodapati@gmail.com>
+---
+ kernel-open/nvidia/nv.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/kernel-open/nvidia/nv.c b/kernel-open/nvidia/nv.c
+index df5a5e0e5..94223cb87 100644
+--- a/kernel-open/nvidia/nv.c
++++ b/kernel-open/nvidia/nv.c
+@@ -5952,6 +5952,16 @@ void NV_API_CALL nv_audio_dynamic_power(
+     if (audio_pci_dev->dev.power.is_suspended)
+         return;
+ 
++    /*
++     * Verify the audio function is bound to the HDA driver before accessing
++     * its driver data. When a different driver (e.g. vfio-pci) is bound,
++     * pci_get_drvdata() returns unrelated data and interpreting it as
++     * struct snd_card causes a kernel panic.
++     */
++    if (audio_pci_dev->driver == NULL ||
++        strcmp(audio_pci_dev->driver->name, "snd_hda_intel") != 0)
++        return;
++
+     card = pci_get_drvdata(audio_pci_dev);
+     if (card == NULL)
+         return;
