@@ -42,7 +42,7 @@ other.
   one 256-byte message and serves the larger tables over the control
   queue, and a host that still runs a patched build works unchanged.
 - **The `vhost-user-nvgpu` backend** built from a pinned commit
-  [7d74e9a](https://github.com/johngrantdev/virtio-nvgpu/tree/7d74e9a7593a8b423d52bec48c5d5bf59c6af1ee),
+  [2bd07c4](https://github.com/johngrantdev/virtio-nvgpu/tree/2bd07c474bec7b8e3ed58bb720d0398b8d2c9114),
   currently on the johngrantdev fork until the branch is merged upstream.
   The commit carries everything this module used to patch: it answers
   QEMU's `GET_SHMEM_CONFIG`, which the `vhost-user-backend` trait default
@@ -51,7 +51,9 @@ other.
   frontend's 256-byte message limit made them unreadable.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
-  serving every instance. The unit opens its own socket's mode and
+  serving every instance. It creates `/dev/nvidia*` with `nvidia-modprobe`
+  before starting: the udev rule that normally does it fires on a module
+  event that a boot can miss. The unit opens its own socket's mode and
   labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
   it runs as `virtd_t`, which has no `relabelto` for it (measured).
   `--vram-limit-mib` caps each guest (default 4096 MiB of the card, set

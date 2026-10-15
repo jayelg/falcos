@@ -23,5 +23,5 @@ secret "mok_privkey"
 // same fork. No local patch remains: the commit answers GET_SHMEM_CONFIG.
 asset "virtio-nvgpu" {
     manual "upstream publishes no releases; pinned to a dev-branch commit"
-    version "7d74e9a7593a8b423d52bec48c5d5bf59c6af1ee"
+    version "2bd07c474bec7b8e3ed58bb720d0398b8d2c9114"
 }

@@ -2,14 +2,18 @@
 Description=virtio-nvgpu backend for %i
 Documentation=https://github.com/nestrilabs/virtio-nvgpu
 After=systemd-user-sessions.service
-# Nothing to serve until the host driver owns the card.
-ConditionPathExists=/dev/nvidiactl
 
 [Service]
 Type=simple
 User=nvgpu
 Group=nvgpu
 SupplementaryGroups=render
+# The device nodes can be missing after a boot: the udev rule that calls
+# nvidia-modprobe runs on the NVIDIA module event, and that event is missed
+# when the modules load before udev is listening. nvidia-modprobe is setuid,
+# so the nvgpu user can create them here, and a failure stops the unit
+# instead of letting QEMU attach to a socket with no backend.
+ExecStartPre=/usr/bin/nvidia-modprobe
 # 615.71.09 has a video-memory table of its own, so the per-guest VRAM cap
 # works: each backend admits at most this much GPU memory for its VM.
 EnvironmentFile=-/usr/lib/nvgpu/backend.env
