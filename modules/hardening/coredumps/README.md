@@ -10,7 +10,12 @@ Pure-file overlay, no install step.
 - `etc/systemd/coredump.conf.d/99-disable.conf` -- `Storage=none`,
   `ProcessSizeMax=0`, so systemd-coredump keeps nothing
 - `etc/systemd/system.conf.d/99-coredump.conf` and
-  `etc/systemd/user.conf.d/99-coredump.conf` -- `DefaultLimitCORE=0` for
-  both managers
-- `etc/security/limits.d/99-disable-coredumps.conf` -- the same limit for
-  sessions that come up through PAM rather than systemd
+  `etc/systemd/user.conf.d/99-coredump.conf` -- a zero soft `RLIMIT_CORE`
+  for both managers
+- `etc/security/limits.d/99-disable-coredumps.conf` -- the same soft limit
+  for sessions that come up through PAM rather than systemd
+
+The limit is soft on purpose. A hard limit of zero cannot be raised by any
+process, and libvirt raises the core limit of the emulator it starts, so a
+hard zero stopped every VM from booting. `Storage=none` already keeps the
+dump off disk, which is the outcome this module is for.
