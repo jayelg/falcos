@@ -18,9 +18,10 @@ secret "mok_privkey"
 
 // Upstream publishes no releases or tags, so the pin is a commit, cloned
 // and checked out: the commit is its own integrity, and there is no url or
-// sha256 to declare. The pin is currently on the johngrantdev fork until
-// the branch is merged upstream, and the clone URL in module.sh names the
-// same fork. No local patch remains: the commit answers GET_SHMEM_CONFIG.
+// sha256 to declare. The pin is the tip of stock-qemu, the combined branch
+// on the johngrantdev fork, with one branch per fix beside it until the
+// series merges upstream; module.sh clones that branch. No local patch
+// remains: the commit answers GET_SHMEM_CONFIG.
 asset "virtio-nvgpu" {
     manual "upstream publishes no releases; pinned to a dev-branch commit"
     version "8908cd6e31e3c0609b4866b8fb122ebf357f9894"

@@ -43,7 +43,8 @@ other.
   queue, and a host that still runs a patched build works unchanged.
 - **The `vhost-user-nvgpu` backend** built from a pinned commit
   [8908cd6](https://github.com/johngrantdev/virtio-nvgpu/tree/8908cd6e31e3c0609b4866b8fb122ebf357f9894),
-  currently on the johngrantdev fork until the branch is merged upstream.
+  currently on the johngrantdev fork's stock-qemu branch until the series
+  is merged upstream.
   The commit carries everything this module used to patch: it answers
   QEMU's `GET_SHMEM_CONFIG`, which the `vhost-user-backend` trait default
   refuses and QEMU fails the device on, and it no longer places the

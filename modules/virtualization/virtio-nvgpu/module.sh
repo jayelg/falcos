@@ -127,9 +127,10 @@ dnf5 remove -y --noautoremove kernel-devel gcc gcc-c++ make elfutils-libelf-deve
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git
 
-# The pin is on the johngrantdev fork until the branch is merged
-# upstream; switch this URL back to nestrilabs with that merge.
-git clone --quiet https://github.com/johngrantdev/virtio-nvgpu.git /tmp/virtio-nvgpu
+# The pin is on the johngrantdev fork's stock-qemu branch until the
+# branch merges upstream; switch this URL back to nestrilabs with that
+# merge.
+git clone --quiet --branch stock-qemu https://github.com/johngrantdev/virtio-nvgpu.git /tmp/virtio-nvgpu
 git -C /tmp/virtio-nvgpu checkout --quiet "$ASSET_VIRTIO_NVGPU_VERSION"
 if [ "$(git -C /tmp/virtio-nvgpu rev-parse HEAD)" != "$ASSET_VIRTIO_NVGPU_VERSION" ]; then
 	echo "virtio-nvgpu checkout did not land on the pinned commit" >&2
