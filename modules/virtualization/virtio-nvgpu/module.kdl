@@ -1,20 +1,14 @@
-description "NVIDIA GPU sharing across VMs: host driver, virtio-nvgpu backend and SHMEM-capable QEMU"
+description "NVIDIA GPU sharing across VMs: the vhost-user-nvgpu backend and a SHMEM-capable QEMU"
 
 supports "fedora"
+
+// The host driver is hardware/nvidia: this module shares the card that
+// driver owns, and needs the backend to open the nodes it created.
+requires-file "/usr/share/secureboot/sb_cert.der"
 
 // The backend is built here because upstream ships source only. The path
 // is the contract with nvgpu@.service in this module's files/ overlay.
 provides-file "/usr/libexec/nvgpu/vhost-user-nvgpu"
-
-// The enrolled Secure Boot cert, installed where lib/sign-helpers.sh
-// looks for it so the driver modules can be signed at build time. The
-// same path kernel/cachyos-kernel provides; only one of the two can be
-// in an image.
-provides-file "/usr/share/secureboot/sb_cert.der"
-
-// The driver modules are MOK-signed so they load under Secure Boot, the
-// same material the DKMS modules sign with. The cert ships in files/.
-secret "mok_privkey"
 
 // Upstream publishes no releases or tags, so the pin is a commit, cloned
 // and checked out: the commit is its own integrity, and there is no url or

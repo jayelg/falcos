@@ -1,0 +1,25 @@
+description "NVIDIA host driver: the proprietary userspace, the kernel modules built for the image kernel, and the /dev/nvidia* nodes"
+
+supports "fedora"
+
+// The host driver owns the card. It is the trust boundary virtio-nvgpu
+// shares and the driver a passthrough domain detaches. Kept as a module
+// of its own so a GPU consumer requires the driver rather than the
+// sharing backend.
+//
+// The udev rules, modprobe config and firmware come from nvidia-kmod-common
+// below; the kernel modules are built here from the DKMS package's source
+// for the image kernel, which this module installs with the toolchain, so
+// nothing about that kernel has to be declared here. The kernel version
+// comes from lib/kernel-helpers.sh, which answers "kernel-core" on this
+// base.
+
+// The enrolled Secure Boot cert, installed where lib/sign-helpers.sh
+// looks for it so the driver modules can be signed at build time. The
+// same path kernel/cachyos-kernel provides; only one of the two can be
+// in an image.
+provides-file "/usr/share/secureboot/sb_cert.der"
+
+// The driver modules are MOK-signed so they load under Secure Boot, the
+// same material the DKMS modules sign with. The cert ships in files/.
+secret "mok_privkey"

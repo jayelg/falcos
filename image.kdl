@@ -169,6 +169,7 @@ image {
         module "apps/affinity"
 
         flavor "desktop" {
+            module "hardware/nvidia"
             module "virtualization/vfio-passthrough"
             module "virtualization/virtio-nvgpu"
         }

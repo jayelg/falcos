@@ -79,6 +79,7 @@ For a repository that publishes modules for others to pin:
 
 ### Hardware (`hardware/`)
 - `hardware/intel-wifi` -- Intel WiFi firmware (iwlwifi)
+- `hardware/nvidia` -- NVIDIA host driver, built for the image kernel and MOK-signed (desktop flavor only)
 - `hardware/gaming` -- xone driver + gamemode
 - `hardware/hardware-tools` -- alsa-ucm, dmidecode, intel-lpmd, lm_sensors, etc.
 - `hardware/logitech` -- Solaar udev rules for Logitech wireless peripherals
@@ -104,7 +105,7 @@ For a repository that publishes modules for others to pin:
 - `virtualization/podman` -- podman-compose, podman-machine, podman-tui
 - `virtualization/distrobox` -- Distrobox containers integrated with the host desktop
 - `virtualization/vfio-passthrough` -- VFIO `iommu=pt` only; binding is per VM via libvirt managed hostdev (desktop flavor only)
-- `virtualization/virtio-nvgpu` -- share the NVIDIA GPU across VMs: host driver, vhost-user backend, SHMEM-capable QEMU (desktop flavor only)
+- `virtualization/virtio-nvgpu` -- share the NVIDIA GPU across VMs: vhost-user backend and SHMEM-capable QEMU (desktop flavor only)
 - `virtualization/looking-glass` -- kvmfr DKMS module for GPU passthrough (desktop flavor only)
 
 ### Backup (`backup/`)

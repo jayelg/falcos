@@ -1,15 +1,9 @@
 ### virtio-nvgpu: the host keeps the GPU, many VMs share it.
 #
-# Three pieces: the NVIDIA driver (615.71.09, built for the image kernel
-# and MOK-signed), QEMU with the vhost-user shared-memory protocol the
-# device needs, and the vhost-user-nvgpu backend at a pinned commit.
-
-source /ctx/lib/kernel-helpers.sh
-source /ctx/lib/sign-helpers.sh
-
-CUDA_REPO="cuda-fedora44-x86_64"
-NVVER="615.71.09"
-VIRT_PREVIEW="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
+# Two pieces: a QEMU with the vhost-user shared-memory protocol the
+# device needs, and the vhost-user-nvgpu backend at a pinned commit. The
+# NVIDIA host driver is hardware/nvidia, built for the image kernel and
+# MOK-signed; this module shares it.
 
 ### QEMU with vhost-user shared memory
 #
@@ -19,6 +13,7 @@ VIRT_PREVIEW="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
 # VM start, long after this build. virt-preview carries the newer QEMU;
 # the version floor is asserted below so a silent downgrade stops the
 # build here instead.
+VIRT_PREVIEW="copr:copr.fedorainfracloud.org:group_virtmaint-sig:virt-preview"
 dnf5 --enablerepo="$VIRT_PREVIEW" upgrade -y "qemu*"
 
 installed_qemu="$(rpm -q --qf '%{VERSION}' qemu-system-x86-core)"
@@ -30,99 +25,6 @@ fi
 	echo "qemu has no generic vhost-user device; the backend cannot attach" >&2
 	exit 1
 }
-
-### The NVIDIA driver, 615.71.09
-#
-# NVIDIA's CUDA repo, not the multimedia one: 615.71.09 is the newest
-# release the backend has an exact ABI and video-memory profile for --
-# the per-VM VRAM limit works, and no RM control falls back to an older
-# release's table. (The display-attach oops that first motivated chasing
-# releases turned out to be a foreign driver on the GPU's audio function,
-# not the release -- see the guard patch below; the exact ABI and memory
-# profiles are the why this release.)
-#
-# The repo key is imported explicitly: dnf5 in a build layer has no one
-# to answer its key prompt.
-rpm --import https://developer.download.nvidia.com/compute/cuda/repos/fedora44/x86_64/73CD9B30.pub
-
-# nvidia-kmod-common -- the udev rules, modprobe config and firmware --
-# requires nvidia-kmod, and the repo's only provider is the DKMS package:
-# a multi-gigabyte source tree plus dkms plus a compiler toolchain, none
-# of which belongs in an image that builds its own modules from that
-# source. The fileless stub beside this script -- same name, same EVR --
-# satisfies the requirement, so the userspace resolves without it. Its
-# spec travels in the stub's description.
-dnf5 install -y "$MODDIR/nvidia-kmod-stub.rpm"
-dnf5 --enablerepo="$CUDA_REPO" install -y --setopt=install_weak_deps=False \
-	"nvidia-kmod-common-${NVVER}" \
-	"nvidia-driver-common-${NVVER}" \
-	"nvidia-driver-cuda-${NVVER}"
-
-# Kernel modules: built from the DKMS package's source for the image
-# kernel. uname inside a build container reports the build host's kernel,
-# not the image's, so KERNEL_UNAME names the kernel explicitly -- which
-# is also exactly how the package's own dkms.conf builds it.
-#
-# The devel tree is pinned to the *installed* kernel's version, not
-# kernel-devel-matched: matched tracks the repositories' newest kernel,
-# which moves ahead of the base image's within a day of a Fedora release
-# (measured: matched pulled 7.2.10 and upgraded the kernel inside this
-# layer, whose %post runs the rpm-ostree kernel-install hook -- dracut in
-# a build container, "Invalid cross-device link" -- and removed the
-# 7.2.9 trees KERNEL_UNAME was about to build against). The exact version
-# lives on in updates-archive.
-KVER="$(kver)"
-dnf5 install -y "kernel-devel-${KVER}" gcc gcc-c++ make elfutils-libelf-devel cpio git
-dnf5 --enablerepo="$CUDA_REPO" download --destdir=/tmp/nvsdk "kmod-nvidia-open-dkms-${NVVER}"
-(
-	cd /tmp/nvsdk || exit 1
-	rpm2cpio ./*.rpm | cpio -idm --quiet
-)
-srcdir="$(find /tmp/nvsdk -maxdepth 4 -type d -name 'nvidia-*' | head -1)"
-[ -n "$srcdir" ] || {
-	echo "no driver source tree in the downloaded package" >&2
-	exit 1
-}
-
-# The one local patch: upstream's guard for the crash this module spent
-# its investigation chasing. nv_audio_dynamic_power() casts the GPU
-# audio function's pci_get_drvdata() to an snd_card * without checking
-# the bound driver, so a foreign driver there -- vfio-pci, which a
-# passthrough domain leaves on it -- turns the audio enable of a display
-# modeset into a NULL dereference (upstream #1365, #1141, #1410; the
-# NVreg option and uvm bisects on this machine were confounded by
-# exactly that driver state). It is PR #1404, unmerged upstream, carried
-# until it lands.
-git -C "$srcdir" apply "$MODDIR/patches/0002-kernel-open-guard-nv_audio_dynamic_power.patch"
-
-make -C "$srcdir" modules -j"$(nproc)" KERNEL_UNAME="$KVER"
-
-install -d "/usr/lib/modules/${KVER}/extra/nvidia"
-install -m 0644 "$srcdir"/kernel-open/*.ko "/usr/lib/modules/${KVER}/extra/nvidia/"
-depmod -a "$KVER"
-rm -rf /tmp/nvsdk
-
-# The signing cert has to exist before sign-helpers.sh is asked whether
-# signing is possible: its files/ overlay copy lands after this script
-# runs, so it is installed from the module directory first, the same
-# shape as the kernel module's install of the same file.
-install -Dm644 "$MODDIR/files/usr/share/nvgpu/sb_cert.der" /usr/share/secureboot/sb_cert.der
-if mok_signing_available; then
-	while IFS= read -r ko; do
-		[ -n "$(modinfo -F signer "$ko" 2>/dev/null)" ] && continue
-		sign_kernel_module "$ko" "/usr/src/kernels/${KVER}/scripts/sign-file"
-	done < <(find "/usr/lib/modules/${KVER}/extra" -name "nvidia*.ko*" 2>/dev/null)
-else
-	echo "No MOK key supplied: NVIDIA modules will be unsigned and will not load under Secure Boot."
-fi
-
-# The driver is built; the build toolchain goes back out. Safe now that
-# nothing else depends on it: dkms never entered the image (the stub kept
-# it out), and cpio deliberately stays -- it is a dracut dependency and
-# removing it once uninstalled dracut, bootc and rpm-ostree in one
-# cascade. The kmod-common package stays: it is where the udev rules, the
-# modprobe config and the firmware live.
-dnf5 remove -y --noautoremove kernel-devel gcc gcc-c++ make elfutils-libelf-devel
 
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git

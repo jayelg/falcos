@@ -424,6 +424,16 @@ RUN --mount=type=bind,from=ctx,source=/modules/core/power-just-scripts,target=/c
 ARG FLAVOR
 
 # ---- [desktop] ----
+# ---- hardware/nvidia ----
+RUN --mount=type=bind,from=ctx,source=/modules/hardware/nvidia,target=/ctx/modules/hardware/nvidia \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
+    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/nvidia
+
+# ---- [desktop] ----
 # ---- virtualization/vfio-passthrough ----
 RUN --mount=type=bind,from=ctx,source=/modules/virtualization/vfio-passthrough,target=/ctx/modules/virtualization/vfio-passthrough \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
@@ -439,7 +449,6 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/virtio-nvgpu,targe
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
     ASSET_VIRTIO_NVGPU_VERSION="8908cd6e31e3c0609b4866b8fb122ebf357f9894" \
     FLAVOR_GATE=desktop MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
 

@@ -18,22 +18,6 @@ other.
 
 ## What this module installs
 
-- **The NVIDIA host driver at 615.71.09**, from NVIDIA's CUDA repo: the
-  newest release with an exact backend ABI and video-memory profile, so
-  the per-VM VRAM limit works and no RM control falls back to an older
-  release's table. The display-attach oops this module carries a patch
-  for is not the release: `nv_audio_dynamic_power()` assumes the GPU's
-  audio function is driven by `snd_hda_intel`, and a foreign driver
-  there (vfio-pci, as a passthrough domain leaves it) turns a display
-  modeset into a NULL dereference (upstream #1365, #1141, #1410); the
-  patch is the unmerged PR #1404. Kernel
-  modules are built
-  for the image kernel from the DKMS package's source and MOK-signed with
-  the same key the DKMS modules use; a fileless `nvidia-kmod` stub
-  (`nvidia-kmod-stub.rpm`, spec in its description) keeps the DKMS source
-  package and its toolchain out of the image. `nvidia-kmod-common`
-  carries the udev rules that create `/dev/nvidia*`, the modprobe config
-  and the firmware; `nvidia-driver-cuda` brings `nvidia-smi`.
 - **QEMU with vhost-user shared memory.** Fedora 44's QEMU predates
   `VHOST_USER_PROTOCOL_F_SHMEM`; the device's memory window is built on
   it. Installed from the virt-preview COPR, version-floored at 11.1.2 in
@@ -44,17 +28,16 @@ other.
 - **The `vhost-user-nvgpu` backend** built from a pinned commit
   [8908cd6](https://github.com/johngrantdev/virtio-nvgpu/tree/8908cd6e31e3c0609b4866b8fb122ebf357f9894),
   currently on the johngrantdev fork's stock-qemu branch until the series
-  is merged upstream.
-  The commit carries everything this module used to patch: it answers
-  QEMU's `GET_SHMEM_CONFIG`, which the `vhost-user-backend` trait default
-  refuses and QEMU fails the device on, and it no longer places the
-  GPU and fd-translation tables in device config, where a vhost-user
-  frontend's 256-byte message limit made them unreadable. It also serves
-  UVM pool slots from `--pool-backing`: UVM maps its own file only at the
-  address equal to the file offset, which QEMU never does, so the slots
-  are backed by a file the unit creates instead. And it describes a
-  memory registration in up to 32k page runs, so a large buffer scattered
-  to the page is admitted rather than refused.
+  is merged upstream. The commit carries everything this module used to
+  patch: it answers QEMU's `GET_SHMEM_CONFIG`, which the
+  `vhost-user-backend` trait default refuses and QEMU fails the device on,
+  and it no longer places the GPU and fd-translation tables in device
+  config, where a vhost-user frontend's 256-byte message limit made them
+  unreadable. It also serves UVM pool slots from `--pool-backing`: UVM
+  maps its own file only at the address equal to the file offset, which
+  QEMU never does, so the slots are backed by a file the unit creates
+  instead. And it describes a memory registration in up to 32k page runs,
+  so a large buffer scattered to the page is admitted rather than refused.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
   serving every instance. `/dev/nvidia*` come from `nvgpu-nodes.service`,
@@ -68,8 +51,10 @@ other.
   type QEMU under `svirt_t` may map.
   `--vram-limit-mib` caps each guest (default 4096 MiB of the card, set
   in `/usr/lib/nvgpu/backend.env`, overridable per host in
-  `/etc/nvgpu/backend.env`): 615.71.09 is a release the backend's
-  video-memory table covers.
+  `/etc/nvgpu/backend.env`).
+
+The **host driver** is `hardware/nvidia`: the backend opens the nodes it
+created. This module requires the Secure Boot cert that module provides.
 
 ## How a VM uses it
 
@@ -126,28 +111,11 @@ the slots libvirt has already assigned to the domain's other devices.
 
 ## Relationship with vfio-passthrough
 
-The two cannot share the card at once, and they disagree about who binds
-it at boot. This module needs the host driver to own the GPU, so
-`virtualization/vfio-passthrough` was reduced to `iommu=pt`: no more
-`rd.driver.pre=vfio-pci`, no `vfio-pci ids=`, no boot-time rebind -- all
-of that fought the NVIDIA driver for the card. Passthrough domains now
-bind vfio-pci per VM, through libvirt's managed hostdev entries
-(`managed='yes'`), which detach the card from the host driver on start
-and give it back on stop.
-
-On a host that ran an earlier image, the driver binding may also have
-been forced by locally-added kernel arguments; the image's own
-`rd.driver.pre=vfio-pci` goes away with this change, but anything added
-by hand stays. Remove them once, then reboot:
-
-```sh
-sudo rpm-ostree kargs \
-    --delete=rd.driver.pre=vfio-pci \
-    --delete=vfio_pci.ids=10de:1e84,10de:10f8,10de:1ad8,10de:1ad9
-```
-
-While virtio-nvgpu guests are running the card is unavailable to
-passthrough domains (and the other way around): stop the sharing guests
-before starting a passthrough domain. `host/switch-gpu-win11.sh` from the
-setup notes, or `virsh nodedev-detach`/`nodedev-reattach`, covers the
-cases libvirt's automatic detach cannot.
+The two cannot share the card at once. This module needs the host driver
+(`hardware/nvidia`) to own the GPU, and `virtualization/vfio-passthrough`
+is `iommu=pt` only: passthrough domains bind `vfio-pci` per VM through
+libvirt's managed hostdev entries (`managed='yes'`), which detach the card
+from the host driver on start and give it back on stop. While virtio-nvgpu
+guests are running the card is unavailable to passthrough domains (and the
+other way around): stop the sharing guests before starting a passthrough
+domain.
