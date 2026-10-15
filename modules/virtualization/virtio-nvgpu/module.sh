@@ -127,13 +127,14 @@ dnf5 remove -y --noautoremove kernel-devel gcc gcc-c++ make elfutils-libelf-deve
 ### The vhost-user-nvgpu backend
 dnf5 install -y cargo rust patch git
 
-git clone --quiet https://github.com/nestrilabs/virtio-nvgpu.git /tmp/virtio-nvgpu
+# The pin is on the johngrantdev fork until the branch is merged
+# upstream; switch this URL back to nestrilabs with that merge.
+git clone --quiet https://github.com/johngrantdev/virtio-nvgpu.git /tmp/virtio-nvgpu
 git -C /tmp/virtio-nvgpu checkout --quiet "$ASSET_VIRTIO_NVGPU_VERSION"
 if [ "$(git -C /tmp/virtio-nvgpu rev-parse HEAD)" != "$ASSET_VIRTIO_NVGPU_VERSION" ]; then
 	echo "virtio-nvgpu checkout did not land on the pinned commit" >&2
 	exit 1
 fi
-git -C /tmp/virtio-nvgpu apply "$MODDIR/patches/0001-vhost-user-answer-GET_SHMEM_CONFIG.patch"
 
 (cd /tmp/virtio-nvgpu && cargo build --release --locked --features vhost-user -p device --bin vhost-user-nvgpu)
 install -D -m 0755 /tmp/virtio-nvgpu/target/release/vhost-user-nvgpu /usr/libexec/nvgpu/vhost-user-nvgpu

@@ -37,12 +37,18 @@ other.
 - **QEMU with vhost-user shared memory.** Fedora 44's QEMU predates
   `VHOST_USER_PROTOCOL_F_SHMEM`; the device's memory window is built on
   it. Installed from the virt-preview COPR, version-floored at 11.1.2 in
-  `module.sh`. Drop the repo and the floor once Fedora ships it.
+  `module.sh`. Drop the repo and the floor once Fedora ships it. No
+  config-chunking QEMU patch is needed: the device keeps its config under
+  one 256-byte message and serves the larger tables over the control
+  queue, and a host that still runs a patched build works unchanged.
 - **The `vhost-user-nvgpu` backend** built from a pinned commit
-  [21a4f075](https://github.com/nestrilabs/virtio-nvgpu/tree/21a4f075d5c01c0865c809a8592e40b860435768).
-  The patch in `patches/` makes it answer QEMU's `GET_SHMEM_CONFIG`,
-  which the `vhost-user-backend` trait default refuses and QEMU fails the
-  device on. Upstream a fix here removes the patch.
+  [7d74e9a](https://github.com/johngrantdev/virtio-nvgpu/tree/7d74e9a7593a8b423d52bec48c5d5bf59c6af1ee),
+  currently on the johngrantdev fork until the branch is merged upstream.
+  The commit carries everything this module used to patch: it answers
+  QEMU's `GET_SHMEM_CONFIG`, which the `vhost-user-backend` trait default
+  refuses and QEMU fails the device on, and it no longer places the
+  GPU and fd-translation tables in device config, where a vhost-user
+  frontend's 256-byte message limit made them unreadable.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
   serving every instance. The unit opens its own socket's mode and
@@ -70,10 +76,15 @@ as QEMU's generic vhost-user device. The fragments that matter:
     <qemu:arg value='-chardev'/>
     <qemu:arg value='socket,id=nvgpu,path=/run/nvgpu/GUEST.sock'/>
     <qemu:arg value='-device'/>
-    <qemu:arg value='vhost-user-test-device-pci,virtio-id=45,num_vqs=2,vq_size=256,config_size=4096,chardev=nvgpu'/>
+    <qemu:arg value='vhost-user-test-device-pci,virtio-id=45,num_vqs=2,vq_size=256,config_size=64,chardev=nvgpu'/>
   </qemu:commandline>
 </domain>
 ```
+
+`config_size` is 64 because a vhost-user frontend reads at most 256
+bytes of device config per message; the device's larger tables arrive
+over its control queue. Larger values need a QEMU carrying the
+config-chunking patch.
 
 `GUEST` is the domain name: the hook starts `nvgpu@GUEST.service` for any
 domain whose config contains `vhost-user-test-device`, and the start
