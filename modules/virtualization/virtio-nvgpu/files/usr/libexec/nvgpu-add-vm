@@ -1,0 +1,95 @@
+#!/bin/sh
+# Add the virtio-nvgpu device to an existing libvirt domain.
+#
+# Usage: nvgpu-add-vm NAME
+#
+# The domain must be shut down: both the memory backing and the command
+# line change, and neither reaches a QEMU that is already running. The
+# device takes the next free PCI slot on the root bus, because QEMU
+# places an address-less device itself and lands on slots libvirt has
+# already assigned. The guest still needs the driver and NVIDIA's
+# user-mode package, see the module README.
+set -eu
+
+die() {
+	echo "nvgpu-add-vm: $*" >&2
+	exit 1
+}
+
+name=${1:-}
+[ -n "$name" ] || { printf 'VM name: '; read -r name; }
+[ -n "$name" ] || die "usage: nvgpu-add-vm NAME"
+state=$(virsh -c qemu:///system domstate "$name" 2>/dev/null) || die "no domain named $name"
+[ "$state" = "shut off" ] || die "$name is $state; shut it down first"
+
+xml=$(mktemp)
+trap 'rm -f "$xml"' EXIT
+virsh -c qemu:///system dumpxml "$name" >"$xml"
+if grep -q vhost-user-test-device "$xml"; then
+	die "$name already has the device"
+fi
+
+python3 - "$xml" "$name" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+path, name = sys.argv[1], sys.argv[2]
+QEMU_NS = '{http://libvirt.org/schemas/domain/qemu/1.0}'
+ET.register_namespace('qemu', QEMU_NS)
+
+tree = ET.parse(path)
+root = tree.getroot()
+
+backing = root.find('memoryBacking')
+if backing is None:
+    backing = ET.Element('memoryBacking')
+    ET.SubElement(backing, 'source').set('type', 'memfd')
+    ET.SubElement(backing, 'access').set('mode', 'shared')
+    at = 0
+    for i, child in enumerate(root):
+        if child.tag in ('maxMemory', 'memory', 'currentMemory'):
+            at = i + 1
+    root.insert(at, backing)
+else:
+    source = backing.find('source')
+    access = backing.find('access')
+    shared = (
+        source is not None
+        and source.get('type') == 'memfd'
+        and access is not None
+        and access.get('mode') == 'shared'
+    )
+    if not shared:
+        sys.exit('the domain has a memoryBacking that is not memfd and shared; remove it first')
+
+# The next free slot on the root bus, above the low slots QEMU and the
+# machine's own integrated devices claim. A slot libvirt has assigned
+# collapses with a device of its own at QEMU's first come, first served.
+used = {
+    int(address.get('slot'), 16)
+    for address in root.iter('address')
+    if address.get('type') == 'pci' and address.get('bus') == '0x00'
+}
+slot = next((s for s in range(0x03, 0x1F) if s not in used), None)
+if slot is None:
+    sys.exit('no free PCI slot on the root bus')
+
+commandline = root.find(QEMU_NS + 'commandline')
+if commandline is None:
+    commandline = ET.SubElement(root, QEMU_NS + 'commandline')
+for args in (
+    ('-chardev', 'socket,id=nvgpu,path=/run/nvgpu/%s.sock' % name),
+    (
+        '-device',
+        'vhost-user-test-device-pci,virtio-id=45,num_vqs=2,vq_size=256,'
+        'config_size=64,chardev=nvgpu,addr=0x%x' % slot,
+    ),
+):
+    for value in args:
+        ET.SubElement(commandline, QEMU_NS + 'arg').set('value', value)
+tree.write(path, encoding='utf-8', xml_declaration=True)
+PY
+
+virsh -c qemu:///system define "$xml" >/dev/null
+echo "$name now has the device; start it when ready."
+echo "The guest still needs the driver and the NVIDIA user-mode package, see the module README."

@@ -109,6 +109,19 @@ NVIDIA's user-mode driver at the same version as this image's kernel
 module. No NVIDIA kernel module goes in the guest -- that is what the
 virtio driver replaces.
 
+Two helpers cover the usual cases, both in the goojust menu
+(`Virtualization` group) and on the command line:
+
+```
+nvgpu-create-vm NAME ISO    create the domain, wire the device, boot the installer
+nvgpu-add-vm NAME           wire the device into an existing, stopped domain
+```
+
+They prompt for anything the arguments omit. `nvgpu-add-vm` gives the
+device the next free PCI slot on the root bus: QEMU places an
+address-less device at a slot of its own choosing, which collides with
+the slots libvirt has already assigned to the domain's other devices.
+
 ## Relationship with vfio-passthrough
 
 The two cannot share the card at once, and they disagree about who binds

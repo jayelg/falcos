@@ -441,7 +441,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/virtio-nvgpu,targe
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
     ASSET_VIRTIO_NVGPU_VERSION="8908cd6e31e3c0609b4866b8fb122ebf357f9894" \
-    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
+    FLAVOR_GATE=desktop MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
 
 # ---- [laptop] ----
 # ---- hardware/laptop-tweaks ----
