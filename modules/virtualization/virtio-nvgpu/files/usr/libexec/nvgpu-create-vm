@@ -18,7 +18,9 @@ name=${1:-}
 iso=${2:-}
 [ -n "$name" ] || { printf 'VM name: '; read -r name; }
 [ -n "$iso" ] || { printf 'Installer ISO path: '; read -r iso; }
-[ -n "$name" ] && [ -n "$iso" ] || die "usage: nvgpu-create-vm NAME ISO"
+if [ -z "$name" ] || [ -z "$iso" ]; then
+	die "usage: nvgpu-create-vm NAME ISO"
+fi
 case "$name" in
 	'' | *[!A-Za-z0-9_.+-]*) die "the name may hold letters, digits, dot, dash, underscore and plus" ;;
 esac
