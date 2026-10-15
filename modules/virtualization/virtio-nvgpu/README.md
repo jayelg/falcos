@@ -42,20 +42,25 @@ other.
   one 256-byte message and serves the larger tables over the control
   queue, and a host that still runs a patched build works unchanged.
 - **The `vhost-user-nvgpu` backend** built from a pinned commit
-  [2bd07c4](https://github.com/johngrantdev/virtio-nvgpu/tree/2bd07c474bec7b8e3ed58bb720d0398b8d2c9114),
+  [892c9bc](https://github.com/johngrantdev/virtio-nvgpu/tree/892c9bc84c9bedf55909385a8e747cc9d02fedbd),
   currently on the johngrantdev fork until the branch is merged upstream.
   The commit carries everything this module used to patch: it answers
   QEMU's `GET_SHMEM_CONFIG`, which the `vhost-user-backend` trait default
   refuses and QEMU fails the device on, and it no longer places the
   GPU and fd-translation tables in device config, where a vhost-user
-  frontend's 256-byte message limit made them unreadable.
+  frontend's 256-byte message limit made them unreadable. It also serves
+  UVM pool slots from `--pool-backing`: UVM maps its own file only at the
+  address equal to the file offset, which QEMU never does, so the slots
+  are backed by a file the unit creates instead.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
   serving every instance. It creates `/dev/nvidia*` with `nvidia-modprobe`
   before starting: the udev rule that normally does it fires on a module
   event that a boot can miss. The unit opens its own socket's mode and
   labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
-  it runs as `virtd_t`, which has no `relabelto` for it (measured).
+  it runs as `virtd_t`, which has no `relabelto` for it (measured). It
+  also creates the pool backing file and labels it `svirt_image_t`, the
+  type QEMU under `svirt_t` may map.
   `--vram-limit-mib` caps each guest (default 4096 MiB of the card, set
   in `/usr/lib/nvgpu/backend.env`, overridable per host in
   `/etc/nvgpu/backend.env`): 615.71.09 is a release the backend's

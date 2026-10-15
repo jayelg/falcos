@@ -14,6 +14,13 @@ SupplementaryGroups=render
 # so the nvgpu user can create them here, and a failure stops the unit
 # instead of letting QEMU attach to a socket with no backend.
 ExecStartPre=/usr/bin/nvidia-modprobe
+# A pool slot is backed by this file rather than the UVM file: UVM maps
+# its own file only at the address equal to the file offset, and QEMU
+# maps at an address of its own choosing. 64 MiB cover the largest pool,
+# and the pages carry no UVM content. QEMU under svirt_t may map only
+# svirt_image_t files, so the label is set here; the backend opens it
+# read-write.
+ExecStartPre=/bin/sh -c 'truncate -s 64M /run/nvgpu/pool-backing && chmod 600 /run/nvgpu/pool-backing && chcon -t svirt_image_t /run/nvgpu/pool-backing'
 # 615.71.09 has a video-memory table of its own, so the per-guest VRAM cap
 # works: each backend admits at most this much GPU memory for its VM.
 EnvironmentFile=-/usr/lib/nvgpu/backend.env
@@ -21,7 +28,8 @@ EnvironmentFile=-/etc/nvgpu/backend.env
 ExecStart=/usr/libexec/nvgpu/vhost-user-nvgpu \
 	--socket /run/nvgpu/%i.sock \
 	--caps graphics,compute,video,utility \
-	--vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB}
+	--vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB} \
+	--pool-backing /run/nvgpu/pool-backing
 # The backend binds the socket 0700 and QEMU runs as its own user under
 # svirt_t, which needs both a writable mode and the one label it may
 # connect to. chmod by the owner and chcon from an unconfined context are
