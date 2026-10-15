@@ -440,7 +440,7 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/virtio-nvgpu,targe
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
     --mount=type=secret,id=mok_privkey,target=/run/secrets/mok_privkey,required=false \
-    ASSET_VIRTIO_NVGPU_VERSION="892c9bc84c9bedf55909385a8e747cc9d02fedbd" \
+    ASSET_VIRTIO_NVGPU_VERSION="8908cd6e31e3c0609b4866b8fb122ebf357f9894" \
     FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
 
 # ---- [laptop] ----
