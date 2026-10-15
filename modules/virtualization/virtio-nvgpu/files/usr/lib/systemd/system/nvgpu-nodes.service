@@ -1,0 +1,12 @@
+[Unit]
+Description=Create the /dev/nvidia* nodes the virtio-nvgpu backends open
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# A bare nvidia-modprobe only loads the kernel module; each device node
+# needs its own flag, and minor 0 is this host's first GPU. It runs
+# through /bin/sh because the setuid helper's xserver_exec_t label cannot
+# be executed from a unit's init_t context, while /bin/sh reaches the
+# service domain the usual way.
+ExecStart=/bin/sh -c '/usr/bin/nvidia-modprobe -c 255 -c 0 && /usr/bin/nvidia-modprobe -m && /usr/bin/nvidia-modprobe -u -c 0'

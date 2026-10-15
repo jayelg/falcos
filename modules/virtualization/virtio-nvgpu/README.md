@@ -57,9 +57,11 @@ other.
   to the page is admitted rather than refused.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
   started and stopped by the libvirt hook, one unprivileged `nvgpu` user
-  serving every instance. It creates `/dev/nvidia*` with `nvidia-modprobe`
-  before starting: the udev rule that normally does it fires on a module
-  event that a boot can miss. The unit opens its own socket's mode and
+  serving every instance. `/dev/nvidia*` come from `nvgpu-nodes.service`,
+  which every backend start pulls in: a bare `nvidia-modprobe` only loads
+  the kernel module, so that unit names every node it wants, and the udev
+  rule that would normally create them fires on a module event a boot can
+  miss. The unit opens its own socket's mode and
   labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
   it runs as `virtd_t`, which has no `relabelto` for it (measured). It
   also creates the pool backing file and labels it `svirt_image_t`, the

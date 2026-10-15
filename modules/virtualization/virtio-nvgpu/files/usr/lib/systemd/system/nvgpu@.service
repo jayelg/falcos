@@ -2,18 +2,17 @@
 Description=virtio-nvgpu backend for %i
 Documentation=https://github.com/nestrilabs/virtio-nvgpu
 After=systemd-user-sessions.service
+Wants=nvgpu-nodes.service
+After=nvgpu-nodes.service
 
 [Service]
 Type=simple
 User=nvgpu
 Group=nvgpu
 SupplementaryGroups=render
-# The device nodes can be missing after a boot: the udev rule that calls
-# nvidia-modprobe runs on the NVIDIA module event, and that event is missed
-# when the modules load before udev is listening. nvidia-modprobe is setuid,
-# so the nvgpu user can create them here, and a failure stops the unit
-# instead of letting QEMU attach to a socket with no backend.
-ExecStartPre=/usr/bin/nvidia-modprobe
+# Device nodes come from nvgpu-nodes.service, pulled in above. A bare
+# nvidia-modprobe creates none, so the nodes step names every node it
+# wants, and a backend started before the nodes exist has nothing to open.
 # A pool slot is backed by this file rather than the UVM file: UVM maps
 # its own file only at the address equal to the file offset, and QEMU
 # maps at an address of its own choosing. 64 MiB cover the largest pool,
