@@ -18,6 +18,15 @@ it through libvirt's managed hostdev.
   udev rules that create `/dev/nvidia*`, the modprobe config and the
   firmware; `nvidia-driver-cuda` brings `nvidia-smi`. The stub keeps the
   multi-gigabyte DKMS source package and its toolchain out of the image.
+- **The graphics userspace** (`nvidia-driver-libs`): EGL, GLX, GLES,
+  Vulkan and the GBM backend, which the compute half does not carry and
+  which a rendering container (Wolf) needs.
+- **`/usr/lib64/nvidia-gow/`**, the driver libraries collected into the
+  layout NVIDIA's own `.run` installer produces (`lib/`, `lib/gbm/`,
+  `share/{vulkan,glvnd,egl}/`). A GOW image links the driver from
+  `/usr/nvidia`; mounting this tree there gives it the host's driver
+  without building upstream's `nvidia-driver` image at runtime. See
+  `hardware/wolf`.
 - **`modules-load.d/nvidia.conf`**, which loads `nvidia_drm` and
   `nvidia_uvm` at boot: neither has a PCI alias for udev to load it by,
   and `nvidia-modprobe` only creates them on demand mid-open, so a

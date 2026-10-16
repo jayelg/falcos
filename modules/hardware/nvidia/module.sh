@@ -30,7 +30,64 @@ dnf5 install -y "$MODDIR/nvidia-kmod-stub.rpm"
 dnf5 --enablerepo="$CUDA_REPO" install -y --setopt=install_weak_deps=False \
 	"nvidia-kmod-common-${NVVER}" \
 	"nvidia-driver-common-${NVVER}" \
-	"nvidia-driver-cuda-${NVVER}"
+	"nvidia-driver-cuda-${NVVER}" \
+	"nvidia-driver-libs-${NVVER}"
+
+# nvidia-driver-libs is the graphics half of the userspace -- EGL, GLX,
+# GLES, Vulkan, GBM -- which nvidia-driver-cuda (compute) alone does not
+# bring. A container that renders (Wolf/gamescope) needs it.
+
+# The GOW images (ghcr.io/games-on-whales/*) link the driver from
+# /usr/nvidia, the layout NVIDIA's own .run installer produces, because
+# they ship no NVIDIA userspace of their own. Rather than build the
+# upstream nvidia-driver image at runtime -- which downloads the .run
+# installer and must be rebuilt on every driver bump -- collect the
+# libraries this image already has into that same layout, once, here.
+#
+# ldconfig picks them up because the GOW images carry /usr/nvidia/lib in
+# /etc/ld.so.conf.d; nothing else about this tree is special.
+GOW_LIB=/usr/lib64/nvidia-gow
+install -d "$GOW_LIB/lib" "$GOW_LIB/lib/gbm" "$GOW_LIB/share/vulkan/icd.d" \
+	"$GOW_LIB/share/glvnd/egl_vendor.d" "$GOW_LIB/share/egl/egl_external_platform.d"
+
+# Every driver .so, by glob across the two packages' naming. The symlinks
+# (.so.1 -> .so.<ver>) come along with their targets, so the sonames the
+# loader resolves stay intact.
+find /usr/lib64 -maxdepth 1 \( -type f -o -type l \) -name '*.so*' |
+	while IFS= read -r so; do
+		case "$(basename "$so")" in
+			libcuda.so*|libcudadebugger.so*|libnvcuvid.so*|libnvoptix.so*| \
+			libnvidia-*.so*|libEGL_nvidia.so*|libGLX_nvidia.so*| \
+			libGLESv1_CM_nvidia.so*|libGLESv2_nvidia.so*)
+				cp -a "$so" "$GOW_LIB/lib/" ;;
+		esac
+	done
+
+# GBM backend and the loader config files, at the paths the GOW init
+# script (30-nvidia.sh) reads them from. Guarded rather than `&&` chained:
+# set -e would abort the layer on a test that legitimately fails.
+if [ -e /usr/lib64/gbm/nvidia-drm_gbm.so ]; then
+	cp -a /usr/lib64/gbm/nvidia-drm_gbm.so "$GOW_LIB/lib/gbm/"
+fi
+for f in /usr/share/vulkan/icd.d/nvidia_icd*.json; do
+	[ -e "$f" ] || continue
+	cp -a "$f" "$GOW_LIB/share/vulkan/icd.d/"
+done
+if [ -e /usr/share/glvnd/egl_vendor.d/10_nvidia.json ]; then
+	cp -a /usr/share/glvnd/egl_vendor.d/10_nvidia.json "$GOW_LIB/share/glvnd/egl_vendor.d/"
+fi
+# The EGL external-platform shims (wayland, gbm) live in the GOW image,
+# not here; copy them from the same package-named sources if present.
+for f in /usr/share/egl/egl_external_platform.d/*nvidia*.json; do
+	[ -e "$f" ] || continue
+	cp -a "$f" "$GOW_LIB/share/egl/egl_external_platform.d/"
+done
+
+# The DLSS/Wine NGX payload the installer also stages.
+if [ -d /usr/lib64/nvidia/wine ]; then
+	install -d "$GOW_LIB/lib/nvidia/wine"
+	cp -a /usr/lib64/nvidia/wine/. "$GOW_LIB/lib/nvidia/wine/"
+fi
 
 # Kernel modules: built from the DKMS package's source for the image
 # kernel. uname inside a build container reports the build host's kernel,

@@ -1,0 +1,64 @@
+[Unit]
+Description=Wolf / Games On Whales
+Requires=network-online.target podman.socket
+After=network-online.target podman.socket
+
+[Service]
+TimeoutStartSec=900
+ExecStartPre=-/usr/bin/podman rm --force WolfPulseAudio
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+
+[Container]
+AutoUpdate=registry
+ContainerName=%p
+HostName=%p
+Image=ghcr.io/games-on-whales/wolf:stable
+Network=host
+
+# SELinux cannot relabel the bind-mounted /dev, so the container's own
+# label is dropped rather than fought with. This is the upstream quadlet's
+# choice too.
+SecurityLabelDisable=true
+
+# --ipc=host: Wolf shares shm with the per-app containers it launches
+# (gamescope/wayland buffers). --device-cgroup-rule: the driver's
+# character devices are major 13 (nvidia) and the wildcard covers every
+# node, present and future, without listing each.
+PodmanArgs=--ipc=host --device-cgroup-rule "c 13:* rmw"
+
+# GPU: the render/card nodes for the virtual compositor and encoding, the
+# driver's control/uvm nodes, and the virtual input devices Wolf creates.
+AddDevice=/dev/dri
+AddDevice=/dev/uinput
+AddDevice=/dev/uhid
+AddDevice=/dev/nvidia-uvm
+AddDevice=/dev/nvidia-uvm-tools
+AddDevice=/dev/nvidia-caps/nvidia-cap1
+AddDevice=/dev/nvidia-caps/nvidia-cap2
+AddDevice=/dev/nvidiactl
+AddDevice=/dev/nvidia0
+AddDevice=/dev/nvidia-modeset
+
+# The driver userspace, collected into the NVIDIA-installer layout by
+# hardware/nvidia. The GOW images carry /usr/nvidia/lib in ld.so.conf, so
+# mounting it here is all it takes for the loader to find EGL/GLX/Vulkan.
+# Read-only: nothing in the container should write the host's driver.
+Volume=/usr/lib64/nvidia-gow:/usr/nvidia:ro
+
+# /dev and udev shared so hotplug and the virtual devices appear; /etc/wolf
+# is the per-install state directory.
+Volume=/dev/:/dev/:rw
+Volume=/run/udev:/run/udev:rw
+Volume=/etc/wolf/:/etc/wolf:rw
+
+# Rootful: the system podman socket. Wolf needs it to launch app
+# containers; it cannot use a user socket across the boundary.
+Volume=/run/podman/podman.sock:/var/run/docker.sock:ro
+
+Environment=WOLF_STOP_CONTAINER_ON_EXIT=TRUE
+Environment=WOLF_RENDER_NODE=/dev/dri/renderD128
+
+[Install]
+WantedBy=multi-user.target

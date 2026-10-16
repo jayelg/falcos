@@ -170,7 +170,6 @@ image {
 
         flavor "desktop" {
             module "hardware/nvidia"
-            module "hardware/nvidia-container-toolkit"
             module "hardware/wolf"
             module "virtualization/vfio-passthrough"
             module "virtualization/virtio-nvgpu"

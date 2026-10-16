@@ -434,21 +434,15 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/nvidia,target=/ctx/modul
     FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/nvidia
 
 # ---- [desktop] ----
-# ---- hardware/nvidia-container-toolkit ----
-RUN --mount=type=bind,from=ctx,source=/modules/hardware/nvidia-container-toolkit,target=/ctx/modules/hardware/nvidia-container-toolkit \
-    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
-    --mount=type=cache,target=/var/cache \
-    --mount=type=cache,target=/var/log \
-    --mount=type=tmpfs,target=/tmp \
-    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/nvidia-container-toolkit
-
-# ---- [desktop] ----
 # ---- hardware/wolf ----
 RUN --mount=type=bind,from=ctx,source=/modules/hardware/wolf,target=/ctx/modules/hardware/wolf \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
+    ASSET_UDEV_RULES_VERSION="6a5053b4ebbb19f2c0f3bf1e8fbbd8babf109273" \
+    ASSET_UDEV_RULES_URL="https://raw.githubusercontent.com/games-on-whales/wolf/6a5053b4ebbb19f2c0f3bf1e8fbbd8babf109273/85-wolf.rules" \
+    ASSET_UDEV_RULES_SHA256="52567af7cce1feb6a6625938b804e0def2c1fee6f70db69f36c366f7cdf8151c" \
     FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/wolf
 
 # ---- [desktop] ----

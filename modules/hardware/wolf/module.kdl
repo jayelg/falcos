@@ -2,11 +2,27 @@ description "Wolf game streaming server: Steam in Gamepad UI, streamed to Moonli
 
 supports "fedora"
 
-// The container needs the host driver exposed through a CDI spec, which
-// the toolkit module generates at boot from /sys. Depend on the
-// capability so the spec exists before this ever runs.
+// The container needs the host's NVIDIA userspace, which hardware/nvidia
+// installs and collects into the /usr/nvidia layout. Depend on the
+// capability so the tree exists before this ever runs.
 requires "nvidia-driver"
 
-// A pure-file module: the quadlet below is the whole deliverable. Wolf
-// itself and its per-game app containers come from images pulled at
-// runtime, so nothing is installed into the image tree.
+// A pure-file module (quadlet + udev rule) plus one pinned asset below.
+// Wolf itself and its per-game app containers come from images pulled at
+// runtime, so no package is installed into the image tree.
+
+// Upstream's host udev rules. Two jobs: grant access to /dev/uinput and
+// /dev/uhid (Wolf creates the virtual gamepads there), and park Wolf's
+// own virtual controllers on a phantom seat so a streamed pad does not
+// also drive the host desktop (wolf#451).
+//
+// There is no release or tag to follow -- the file lives on the stable
+// branch and only changes when upstream edits it -- so it is pinned by
+// commit and hash, deliberately, not by branch name that would drift
+// under us.
+asset "udev-rules" {
+    manual "a branch file with no release feed; re-pin by commit when upstream changes it"
+    version "6a5053b4ebbb19f2c0f3bf1e8fbbd8babf109273"
+    url "https://raw.githubusercontent.com/games-on-whales/wolf/{version}/85-wolf.rules"
+    sha256 "52567af7cce1feb6a6625938b804e0def2c1fee6f70db69f36c366f7cdf8151c" from="manual"
+}
