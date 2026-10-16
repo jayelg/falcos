@@ -2,6 +2,12 @@ description "NVIDIA host driver: the proprietary userspace, the kernel modules b
 
 supports "fedora"
 
+// The installed driver userspace. A consumer that needs the driver present
+// -- the container toolkit generating a CDI spec from /sys, a sharing
+// backend -- depends on this rather than on this module's name, so the
+// provider can move.
+provides "nvidia-driver"
+
 // The host driver owns the card. It is the trust boundary virtio-nvgpu
 // shares and the driver a passthrough domain detaches. Kept as a module
 // of its own so a GPU consumer requires the driver rather than the

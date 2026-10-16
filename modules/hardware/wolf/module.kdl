@@ -1,0 +1,12 @@
+description "Wolf game streaming server: Steam in Gamepad UI, streamed to Moonlight clients over the network"
+
+supports "fedora"
+
+// The container needs the host driver exposed through a CDI spec, which
+// the toolkit module generates at boot from /sys. Depend on the
+// capability so the spec exists before this ever runs.
+requires "nvidia-driver"
+
+// A pure-file module: the quadlet below is the whole deliverable. Wolf
+// itself and its per-game app containers come from images pulled at
+// runtime, so nothing is installed into the image tree.

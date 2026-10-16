@@ -1,0 +1,59 @@
+[Unit]
+Description=Wolf - Game Streaming Server (Steam Gamepad UI)
+
+[Container]
+ContainerName=wolf
+Image=ghcr.io/games-on-whales/wolf:stable
+AutoUpdate=registry
+
+# Host networking: Moonlight clients reach Wolf directly and it manages
+# its own ports. It is the streaming server; nothing else proxies it.
+Network=host
+
+# NVIDIA passthrough. nvidia.com/gpu=all is the CDI device the
+# nvidia-container-toolkit module writes to /etc/cdi/nvidia.yaml at boot,
+# so it always names the driver the running system has.
+AddDevice=nvidia.com/gpu=all
+Environment=NVIDIA_DRIVER_CAPABILITIES=all
+Environment=NVIDIA_VISIBLE_DEVICES=all
+
+# Virtual input (uinput/uhid) and the DRM render nodes the headless
+# compositor and gamescope draw on. No host display or host input is
+# bound: Moonlight clients supply input over the network and Wolf
+# presents a virtual display, which is the whole point of running it
+# headless.
+AddDevice=/dev/dri
+
+# Wolf launches a sibling container per app it runs, so it needs the
+# container runtime socket. Rootless: this user's own podman socket, at
+# the path Wolf expects (it speaks the Docker socket protocol).
+Volume=%t/podman/podman.sock:/var/run/docker.sock:rw
+Environment=WOLF_DOCKER_SOCKET=/var/run/docker.sock
+
+# State and sockets, all per-user so several users on one box never
+# collide. State lives under the home directory; sockets under the
+# per-user runtime dir. /dev and udev are shared so hotplug and the
+# virtual devices Wolf creates are visible.
+Volume=%h/.local/share/wolf:/etc/wolf:rw,Z
+Volume=/dev:/dev:rw
+Volume=/run/udev:/run/udev:rw
+Volume=%t/wolf:/tmp/sockets:rw
+Environment=XDG_RUNTIME_DIR=/tmp/sockets
+Environment=HOST_APPS_STATE_FOLDER=/etc/wolf
+
+# App containers run as the logged-in user, taken from the session rather
+# than hardcoded so the one quadlet serves every user.
+Environment=WOLF_DEFAULT_RUN_UID=%U
+Environment=WOLF_DEFAULT_RUN_GID=%G
+Environment=WOLF_RENDER_NODE=/dev/dri/renderD128
+
+# Keep the Wolf server running: only its spawned app containers stop when
+# a client disconnects, so the next connection has no cold start.
+Environment=WOLF_STOP_CONTAINER_ON_EXIT=FALSE
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

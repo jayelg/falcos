@@ -434,6 +434,24 @@ RUN --mount=type=bind,from=ctx,source=/modules/hardware/nvidia,target=/ctx/modul
     FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/nvidia
 
 # ---- [desktop] ----
+# ---- hardware/nvidia-container-toolkit ----
+RUN --mount=type=bind,from=ctx,source=/modules/hardware/nvidia-container-toolkit,target=/ctx/modules/hardware/nvidia-container-toolkit \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/nvidia-container-toolkit
+
+# ---- [desktop] ----
+# ---- hardware/wolf ----
+RUN --mount=type=bind,from=ctx,source=/modules/hardware/wolf,target=/ctx/modules/hardware/wolf \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/hardware/wolf
+
+# ---- [desktop] ----
 # ---- virtualization/vfio-passthrough ----
 RUN --mount=type=bind,from=ctx,source=/modules/virtualization/vfio-passthrough,target=/ctx/modules/virtualization/vfio-passthrough \
     --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
