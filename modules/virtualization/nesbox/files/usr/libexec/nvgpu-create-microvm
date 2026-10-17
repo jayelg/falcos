@@ -1,0 +1,76 @@
+#!/bin/sh
+# Write a nesbox config for a virtio-nvgpu microVM.
+#
+# Usage: nvgpu-create-microvm NAME VMLINUX ROOTFS [MEM_MIB] [VCPUS]
+#
+# The guest must have been prepared with the virtio_gpu_nv driver and
+# NVIDIA's user-mode driver; see /usr/share/nvgpu/fedora-guest-setup.sh.
+# This only writes /etc/nesbox/NAME.json and prints the unit to start. It
+# does not start the VM: the rootfs is usually still being prepared.
+set -eu
+
+die() {
+	echo "nvgpu-create-microvm: $*" >&2
+	exit 1
+}
+
+name=${1:-}
+kernel=${2:-}
+rootfs=${3:-}
+mem=${4:-2048}
+vcpus=${5:-2}
+
+[ -n "$name" ] && [ -n "$kernel" ] && [ -n "$rootfs" ] ||
+	die "usage: nvgpu-create-microvm NAME VMLINUX ROOTFS [MEM_MIB] [VCPUS]"
+case "$name" in
+	'' | *[!A-Za-z0-9_.+-]*) die "the name may hold letters, digits, dot, dash, underscore and plus" ;;
+esac
+case "$kernel$rootfs" in
+	*[\"\']* | *\\*) die "quote and backslash characters are not supported in paths" ;;
+esac
+[ -f "$kernel" ] || die "no kernel at $kernel"
+[ -f "$rootfs" ] || die "no rootfs at $rootfs"
+case "$mem" in
+	'' | *[!0-9]*) die "memory must be a whole number of MiB" ;;
+esac
+case "$vcpus" in
+	'' | *[!0-9]*) die "vCPUs must be a whole number" ;;
+esac
+[ "$mem" -ge 128 ] || die "memory must be at least 128 MiB"
+[ "$vcpus" -ge 1 ] || die "at least one vCPU is needed"
+
+config=/etc/nesbox/$name.json
+[ ! -e "$config" ] || die "$config already exists"
+
+mkdir -p /etc/nesbox
+tmp=$config.tmp
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp" <<EOF
+{
+  "boot-source": {
+    "kernel_image_path": "$kernel",
+    "boot_args": "console=hvc0 root=/dev/vda rw"
+  },
+  "drives": [
+    {
+      "drive_id": "rootfs",
+      "path_on_host": "$rootfs",
+      "is_root_device": true,
+      "is_read_only": false
+    }
+  ],
+  "machine-config": {
+    "vcpu_count": $vcpus,
+    "mem_size_mib": $mem
+  },
+  "gpu-forward": {
+    "socket": "/run/nvgpu/$name.sock"
+  }
+}
+EOF
+mv "$tmp" "$config"
+trap - EXIT
+
+echo "created $config"
+echo "start it with: systemctl start nesbox@$name"
+echo "the backend's VRAM cap is /etc/nvgpu/backend.env; raise it with care."

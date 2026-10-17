@@ -461,8 +461,18 @@ RUN --mount=type=bind,from=ctx,source=/modules/virtualization/virtio-nvgpu,targe
     --mount=type=cache,target=/var/cache \
     --mount=type=cache,target=/var/log \
     --mount=type=tmpfs,target=/tmp \
-    ASSET_VIRTIO_NVGPU_VERSION="8908cd6e31e3c0609b4866b8fb122ebf357f9894" \
-    FLAVOR_GATE=desktop MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
+    ASSET_VIRTIO_NVGPU_VERSION="v0.2.1" \
+    FLAVOR_GATE=desktop bash /ctx/lib/run-module.sh /ctx/modules/virtualization/virtio-nvgpu
+
+# ---- [desktop] ----
+# ---- virtualization/nesbox ----
+RUN --mount=type=bind,from=ctx,source=/modules/virtualization/nesbox,target=/ctx/modules/virtualization/nesbox \
+    --mount=type=bind,from=ctx,source=/lib,target=/ctx/lib \
+    --mount=type=cache,target=/var/cache \
+    --mount=type=cache,target=/var/log \
+    --mount=type=tmpfs,target=/tmp \
+    ASSET_NESBOX_VERSION="v0.3.1" \
+    FLAVOR_GATE=desktop MODULE_COLLECT="justfile.inc=/usr/share/goojust/justfile.apps" bash /ctx/lib/run-module.sh /ctx/modules/virtualization/nesbox
 
 # ---- [laptop] ----
 # ---- hardware/laptop-tweaks ----

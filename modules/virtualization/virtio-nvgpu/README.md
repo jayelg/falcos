@@ -1,113 +1,68 @@
 # virtio-nvgpu
 
-Share one NVIDIA GPU across several VMs while the host keeps the card,
+Share one NVIDIA GPU across several microVMs while the host keeps the card,
 through [virtio-nvgpu](https://github.com/nestrilabs/virtio-nvgpu). The
 host runs NVIDIA's own driver and a per-VM backend process; each guest
 runs the real NVIDIA user-mode driver on top of the `virtio_gpu_nv`
 kernel module, which relays ioctls to the backend and maps GPU memory
-straight into the guest -- passthrough-grade speed without locking the
-card to one VM and without vGPU licences.
+straight into the guest.
+
+This module installs the **host backend and the guest setup only**. The
+VMM is [`virtualization/nesbox`](../nesbox): it carries the virtio-nvgpu
+device and the two vhost-user shared-memory regions the guest maps -- the
+device window and the CUDA aperture. QEMU is deliberately not involved:
+its stock microvm transport has no shared-memory regions, so the old
+full-VM path needed a newer QEMU for every consumer. QEMU and libvirt
+stay stock for full VMs, which reach a GPU through
+[`virtualization/vfio-passthrough`](../vfio-passthrough) instead.
 
 **Linux guests only.** Upstream ships no Windows driver and the design
-relays the Linux driver ABI, so a Windows guest cannot use it; Windows
-and other passthrough domains keep using `virtualization/vfio-passthrough`.
-**Not hardware isolation**: the host driver is the trust boundary, the
-same as the Docker-container level, not the IOMMU level -- see upstream's
-SECURITY.md. Don't share the card between tenants that don't trust each
-other.
+relays the Linux driver ABI. **Not hardware isolation**: the host driver
+is the trust boundary, the same as the Docker-container level, not the
+IOMMU level -- see upstream's SECURITY.md. Don't share the card between
+tenants that don't trust each other.
 
 ## What this module installs
 
-- **QEMU with vhost-user shared memory.** Fedora 44's QEMU predates
-  `VHOST_USER_PROTOCOL_F_SHMEM`; the device's memory window is built on
-  it. Installed from the virt-preview COPR, version-floored at 11.1.2 in
-  `module.sh`. Drop the repo and the floor once Fedora ships it. No
-  config-chunking QEMU patch is needed: the device keeps its config under
-  one 256-byte message and serves the larger tables over the control
-  queue, and a host that still runs a patched build works unchanged.
-- **The `vhost-user-nvgpu` backend** built from a pinned commit
-  [8908cd6](https://github.com/johngrantdev/virtio-nvgpu/tree/8908cd6e31e3c0609b4866b8fb122ebf357f9894),
-  currently on the johngrantdev fork's stock-qemu branch until the series
-  is merged upstream. The commit carries everything this module used to
-  patch: it answers QEMU's `GET_SHMEM_CONFIG`, which the
-  `vhost-user-backend` trait default refuses and QEMU fails the device on,
-  and it no longer places the GPU and fd-translation tables in device
-  config, where a vhost-user frontend's 256-byte message limit made them
-  unreadable. It also serves UVM pool slots from `--pool-backing`: UVM
-  maps its own file only at the address equal to the file offset, which
-  QEMU never does, so the slots are backed by a file the unit creates
-  instead. And it describes a memory registration in up to 32k page runs,
-  so a large buffer scattered to the page is admitted rather than refused.
+- **The `vhost-user-nvgpu` backend** built from the upstream
+  [v0.2.1](https://github.com/nestrilabs/virtio-nvgpu/tree/v0.2.1) tag.
+  The tag is the pin: upstream publishes no archives, so the checkout is
+  its own integrity. The backend serves the window and the CUDA aperture
+  through vhost-user shared memory, and enforces
+  `--vram-limit-mib` per guest.
 - **One backend per VM, on demand**: `nvgpu@.service` (a template unit),
-  started and stopped by the libvirt hook, one unprivileged `nvgpu` user
-  serving every instance. `/dev/nvidia*` come from `nvgpu-nodes.service`,
-  which every backend start pulls in: a bare `nvidia-modprobe` only loads
-  the kernel module, so that unit names every node it wants, and the udev
-  rule that would normally create them fires on a module event a boot can
-  miss. The unit opens its own socket's mode and
-  labels it `svirt_socket_t` for QEMU (`ExecStartPost`); the hook cannot,
-  it runs as `virtd_t`, which has no `relabelto` for it (measured). It
-  also creates the pool backing file and labels it `svirt_image_t`, the
-  type QEMU under `svirt_t` may map.
-  `--vram-limit-mib` caps each guest (default 4096 MiB of the card, set
-  in `/usr/lib/nvgpu/backend.env`, overridable per host in
-  `/etc/nvgpu/backend.env`).
+  one unprivileged `nvgpu` user serving every instance. The unit starts
+  from `/run/nvgpu/GUEST.sock`, requires `hardware/nvidia`'s
+  `nvidia-nodes.service`, and hands the socket to the VMM.
+- **`/usr/lib/nvgpu/backend.env`**, the default video-memory cap (4096
+  MiB). Override per host in `/etc/nvgpu/backend.env`.
+- **`/usr/share/nvgpu/fedora-guest-setup.sh`**, the guest-side installer
+  for Fedora. It installs NVIDIA's user-mode driver at 615.71.09 -- the
+  version the host kernel module runs -- builds `virtio_gpu_nv` against
+  the guest's own kernel, loads it, and smoke-tests.
 
 The **host driver** is `hardware/nvidia`: the backend opens the nodes it
-created. This module requires the Secure Boot cert that module provides.
+created. This module requires the `nvidia-driver` capability it provides.
 
-## How a VM uses it
+## How a microVM uses it
 
-The domain must give guest RAM as a shared memfd and attach the backend
-as QEMU's generic vhost-user device. The fragments that matter:
+Use the [`virtualization/nesbox`](../nesbox) module. Its
+`nvgpu-create-microvm` helper writes a config naming the guest `vmlinux`,
+the rootfs and `/run/nvgpu/NAME.sock`; `systemctl start nesbox@NAME`
+starts the backend and the VMM together.
 
-```xml
-<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
-  ...
-  <memoryBacking>
-    <source type='memfd'/>
-    <access mode='shared'/>
-  </memoryBacking>
-  ...
-  <qemu:commandline>
-    <qemu:arg value='-chardev'/>
-    <qemu:arg value='socket,id=nvgpu,path=/run/nvgpu/GUEST.sock'/>
-    <qemu:arg value='-device'/>
-    <qemu:arg value='vhost-user-test-device-pci,virtio-id=45,num_vqs=2,vq_size=256,config_size=64,chardev=nvgpu'/>
-  </qemu:commandline>
-</domain>
-```
+The guest rootfs is not in this image. It runs the `virtio_gpu_nv` kernel
+module (built against the guest's own kernel) plus NVIDIA's user-mode
+driver at the same version as this image's kernel module, 615.71.09. No
+NVIDIA kernel module goes in the guest -- that is what the virtio driver
+replaces. For Fedora guests, copy `/usr/share/nvgpu/fedora-guest-setup.sh`
+into the guest and run it with sudo; rerun it after every guest kernel
+update. Other distros build the module by hand (`driver/README.md` in
+the upstream repo).
 
-`config_size` is 64 because a vhost-user frontend reads at most 256
-bytes of device config per message; the device's larger tables arrive
-over its control queue. Larger values need a QEMU carrying the
-config-chunking patch.
-
-`GUEST` is the domain name: the hook starts `nvgpu@GUEST.service` for any
-domain whose config contains `vhost-user-test-device`, and the start
-returns only once the unit's `ExecStartPost` has made the socket mode
-0777 and labelled it `svirt_socket_t` -- the one type QEMU's `svirt_t`
-may connect to. On `stopped`/`release` the backend is stopped again.
-
-The **guest** side is not in this image: the guest runs the
-`virtio_gpu_nv` kernel module (built from the upstream tree against the
-guest's own kernel, `driver/README.md` in the repo covers it) plus
-NVIDIA's user-mode driver at the same version as this image's kernel
-module. No NVIDIA kernel module goes in the guest -- that is what the
-virtio driver replaces.
-
-Two helpers cover the usual cases, both in the goojust menu
-(`Virtualization` group) and on the command line:
-
-```
-nvgpu-create-vm NAME ISO    create the domain, wire the device, boot the installer
-nvgpu-add-vm NAME           wire the device into an existing, stopped domain
-```
-
-They prompt for anything the arguments omit. `nvgpu-add-vm` gives the
-device the next free PCI slot on the root bus: QEMU places an
-address-less device at a slot of its own choosing, which collides with
-the slots libvirt has already assigned to the domain's other devices.
+The guest kernel needs `VIRTIO_PCI`, `PCI_MMCONFIG` and the usual virtio
+block support; nesbox boots a `vmlinux` directly, so the guest must be
+built as one (not a distro UKI).
 
 ## Relationship with vfio-passthrough
 

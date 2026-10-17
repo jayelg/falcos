@@ -1,0 +1,22 @@
+[Unit]
+Description=Create the /dev/nvidia* nodes GPU consumers open
+Documentation=https://github.com/games-on-whales/wolf
+Before=wolf.service nvgpu@.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# The nodes the driver exposes are created on demand, not by loading the
+# module: nvidia_uvm can be loaded (modules-load.d does load it) and
+# /dev/nvidia-uvm still not exist, because nvidia-modprobe is what mknods
+# it and the 60-nvidia.rules udev rule only fires that on an "nvidia"
+# device add/bind event -- which a boot that loads the modules directly
+# never produces. So every node is named here explicitly.
+#
+# Through /bin/sh because the setuid helper's xserver_exec_t label cannot
+# be executed from a unit's init_t context, while /bin/sh reaches the
+# service domain the usual way.
+ExecStart=/bin/sh -c '/usr/bin/nvidia-modprobe -c 255 -c 0 && /usr/bin/nvidia-modprobe -m && /usr/bin/nvidia-modprobe -u -c 0'
+
+[Install]
+WantedBy=multi-user.target

@@ -105,7 +105,8 @@ For a repository that publishes modules for others to pin:
 - `virtualization/podman` -- podman-compose, podman-machine, podman-tui
 - `virtualization/distrobox` -- Distrobox containers integrated with the host desktop
 - `virtualization/vfio-passthrough` -- VFIO `iommu=pt` only; binding is per VM via libvirt managed hostdev (desktop flavor only)
-- `virtualization/virtio-nvgpu` -- share the NVIDIA GPU across VMs: vhost-user backend and SHMEM-capable QEMU (desktop flavor only)
+- `virtualization/virtio-nvgpu` -- share the NVIDIA GPU across microVMs: the host backend and guest setup (desktop flavor only)
+- `virtualization/nesbox` -- the microVM VMM that runs virtio-nvgpu guests, with a systemd template (desktop flavor only)
 - `virtualization/looking-glass` -- kvmfr DKMS module for GPU passthrough (desktop flavor only)
 
 ### Backup (`backup/`)

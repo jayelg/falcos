@@ -1,0 +1,22 @@
+[Unit]
+Description=nesbox microVM %i
+Documentation=https://github.com/nestrilabs/nesbox
+# The backend owns the GPU and must have its socket ready before the VMM
+# connects. BindsTo stops this unit if the backend dies; PropagatesStopTo
+# stops the backend when this unit is stopped.
+BindsTo=nvgpu@%i.service
+After=nvgpu@%i.service
+PropagatesStopTo=nvgpu@%i.service
+AssertPathExists=/etc/nesbox/%i.json
+
+[Service]
+Type=simple
+# Root: opening /dev/kvm, the tap device and the backend socket is this
+# unit's job. The backend itself is the unprivileged nvgpu user.
+ExecStart=/usr/libexec/nvgpu/nesbox /etc/nesbox/%i.json
+# A VMM that died must not come back serving a guest it no longer knows;
+# start the unit again deliberately.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

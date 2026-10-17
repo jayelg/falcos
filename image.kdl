@@ -173,6 +173,7 @@ image {
             module "hardware/wolf"
             module "virtualization/vfio-passthrough"
             module "virtualization/virtio-nvgpu"
+            module "virtualization/nesbox"
         }
 
         flavor "laptop" {

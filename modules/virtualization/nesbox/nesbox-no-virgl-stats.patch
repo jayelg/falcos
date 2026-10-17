@@ -1,0 +1,14 @@
+Upstream v0.3.1 compiles the stats module unconditionally, but it imports
+virtio-gpu types that only exist with the virgl feature. Gate it with the
+rest of the stats surface so the NVIDIA-only build compiles.
+
+--- a/vmm/src/lib.rs
++++ b/vmm/src/lib.rs
+@@ -21,6 +21,7 @@ pub mod regs;
+ pub mod renderer;
+ pub mod seccomp;
+ pub mod serial;
++#[cfg(feature = "virgl")]
+ pub mod stats;
+ pub mod virtiofsd;
+ pub mod vm;

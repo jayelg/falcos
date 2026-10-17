@@ -1,0 +1,23 @@
+description "nesbox microVM VMM for virtio-nvgpu, with a systemd template and a guest-config helper"
+
+supports "fedora"
+
+// The VMM exists for this device: it carries the virtio-nvgpu device and
+// the two vhost-user shared-memory regions the guest maps. Depend on the
+// backend and its template unit by path rather than on the module name,
+// so the provider can move.
+requires-file "/usr/libexec/nvgpu/vhost-user-nvgpu"
+requires-file "/usr/lib/systemd/system/nvgpu@.service"
+
+// The binary and the unit that runs one config are the module's public
+// surface; the helper is how a config is written without hand-editing
+// JSON.
+provides-file "/usr/libexec/nvgpu/nesbox"
+provides-file "/usr/lib/systemd/system/nesbox@.service"
+
+// Upstream tags releases but ships source only. The tag is the pin; the
+// clone is its own integrity and there is no url or sha256 to declare.
+asset "nesbox" {
+    renovate datasource="github-releases" depName="nestrilabs/nesbox"
+    version "v0.3.1"
+}

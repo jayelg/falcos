@@ -1,22 +1,29 @@
-description "NVIDIA GPU sharing across VMs: the vhost-user-nvgpu backend and a SHMEM-capable QEMU"
+description "NVIDIA GPU sharing across microVMs: the vhost-user-nvgpu backend and guest setup"
 
 supports "fedora"
 
-// The host driver is hardware/nvidia: this module shares the card that
-// driver owns, and needs the backend to open the nodes it created.
-requires-file "/usr/share/secureboot/sb_cert.der"
+// The backend opens /dev/nvidia* and the host driver is the trust
+// boundary this module shares. Depend on the driver, not on the module
+// that happens to provide it.
+requires "nvidia-driver"
 
 // The backend is built here because upstream ships source only. The path
 // is the contract with nvgpu@.service in this module's files/ overlay.
 provides-file "/usr/libexec/nvgpu/vhost-user-nvgpu"
 
-// Upstream publishes no releases or tags, so the pin is a commit, cloned
-// and checked out: the commit is its own integrity, and there is no url or
-// sha256 to declare. The pin is the tip of stock-qemu, the combined branch
-// on the johngrantdev fork, with one branch per fix beside it until the
-// series merges upstream; module.sh clones that branch. No local patch
-// remains: the commit answers GET_SHMEM_CONFIG.
+// The template unit every microVM starts. virtualization/nesbox names
+// this path rather than the unit's name, so the provider can move.
+provides-file "/usr/lib/systemd/system/nvgpu@.service"
+
+// The backend starts before the nodes exist only if its unit can order
+// against the one that makes them. hardware/nvidia owns that unit.
+requires-file "/usr/lib/systemd/system/nvidia-nodes.service"
+
+// Upstream tags releases but publishes no archives, so the tag is the
+// pin: the checkout is its own integrity and there is no url or sha256 to
+// declare. module.sh builds this tag; the guest setup script names the
+// same release.
 asset "virtio-nvgpu" {
-    manual "upstream publishes no releases; pinned to a dev-branch commit"
-    version "8908cd6e31e3c0609b4866b8fb122ebf357f9894"
+    renovate datasource="github-tags" depName="nestrilabs/virtio-nvgpu"
+    version "v0.2.1"
 }

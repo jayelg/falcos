@@ -2,44 +2,33 @@
 Description=virtio-nvgpu backend for %i
 Documentation=https://github.com/nestrilabs/virtio-nvgpu
 After=systemd-user-sessions.service
-Wants=nvgpu-nodes.service
-After=nvgpu-nodes.service
+# /dev/nvidia* come from hardware/nvidia's nvidia-nodes.service, which is
+# enabled at boot (the nodes are created on demand and the udev rule that
+# normally does it fires on an event a boot can miss). It is a hard
+# dependency here too: a backend started before the nodes exist has
+# nothing to open.
+Requires=nvidia-nodes.service
+After=nvidia-nodes.service
 
 [Service]
 Type=simple
 User=nvgpu
 Group=nvgpu
 SupplementaryGroups=render
-# Device nodes come from nvgpu-nodes.service, pulled in above. A bare
-# nvidia-modprobe creates none, so the nodes step names every node it
-# wants, and a backend started before the nodes exist has nothing to open.
-# A pool slot is backed by this file rather than the UVM file: UVM maps
-# its own file only at the address equal to the file offset, and QEMU
-# maps at an address of its own choosing. 64 MiB cover the largest pool,
-# and the pages carry no UVM content. QEMU under svirt_t may map only
-# svirt_image_t files, so the label is set here; the backend opens it
-# read-write.
-ExecStartPre=/bin/sh -c 'truncate -s 64M /run/nvgpu/pool-backing && chmod 600 /run/nvgpu/pool-backing && chcon -t svirt_image_t /run/nvgpu/pool-backing'
-# 615.71.09 has a video-memory table of its own, so the per-guest VRAM cap
-# works: each backend admits at most this much GPU memory for its VM.
+# The video-memory cap is the backend's: each guest is admitted at most
+# this much GPU memory. Override per host in /etc/nvgpu/backend.env.
 EnvironmentFile=-/usr/lib/nvgpu/backend.env
 EnvironmentFile=-/etc/nvgpu/backend.env
 ExecStart=/usr/libexec/nvgpu/vhost-user-nvgpu \
 	--socket /run/nvgpu/%i.sock \
 	--caps graphics,compute,video,utility \
-	--vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB} \
-	--pool-backing /run/nvgpu/pool-backing
-# The backend binds the socket 0700 and QEMU runs as its own user under
-# svirt_t, which needs both a writable mode and the one label it may
-# connect to. chmod by the owner and chcon from an unconfined context are
-# both allowed here; the libvirt hook cannot relabel (it runs as virtd_t,
-# "avc: denied { relabelto } ... tclass=sock_file", measured), which is
-# why this is not in the hook. The wait covers this racing the process's
-# own bind; a socket that never appears fails the unit, and the hook
-# passes that failure on.
-ExecStartPost=/bin/sh -c 's=/run/nvgpu/%i.sock; i=0; while [ ! -S "$s" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; chmod 0777 "$s" && chcon -t svirt_socket_t "$s"'
-# The libvirt hook owns this unit's lifetime. No auto-restart: a backend
-# that died mid-VM must not come back serving a VM it no longer knows.
+	--vram-limit-mib ${NVGPU_VRAM_LIMIT_MIB}
+# The socket is created by the backend, not by this unit. Wait for it so
+# a VMM ordered after this service cannot race the bind; the backend
+# leaves it 0700, and the VMM (nesbox@%i.service) runs as root.
+ExecStartPost=/bin/sh -c 's=/run/nvgpu/%i.sock; i=0; while [ ! -S "$s" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; test -S "$s"'
+# The VMM owns this unit's lifetime. No auto-restart: a backend that died
+# mid-VM must not come back serving a VM it no longer knows.
 Restart=no
 NoNewPrivileges=true
 

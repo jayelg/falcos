@@ -1,0 +1,6 @@
+# The /dev/nvidia* nodes are created on demand, and the udev rule that
+# normally does it only fires on a device event a direct-module boot
+# never produces. Enable the unit that names every node explicitly, so
+# they exist before any GPU consumer (Wolf, a virtio-nvgpu backend)
+# starts, not only when one of them happens to pull it in.
+enable nvidia-nodes.service

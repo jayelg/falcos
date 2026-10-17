@@ -26,6 +26,13 @@ provides "nvidia-driver"
 // in an image.
 provides-file "/usr/share/secureboot/sb_cert.der"
 
+// The nodes the driver exposes are created on demand, so this module
+// ships nvidia-nodes.service (enabled at boot) to mknod every one the
+// consumers open, and declares the unit as the contract: a consumer that
+// needs /dev/nvidia-uvm before it starts names this file, not the unit's
+// name, so the provider stays free to move.
+provides-file "/usr/lib/systemd/system/nvidia-nodes.service"
+
 // The driver modules are MOK-signed so they load under Secure Boot, the
 // same material the DKMS modules sign with. The cert ships in files/.
 secret "mok_privkey"

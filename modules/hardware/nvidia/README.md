@@ -31,12 +31,20 @@ it through libvirt's managed hostdev.
   `nvidia_uvm` at boot: neither has a PCI alias for udev to load it by,
   and `nvidia-modprobe` only creates them on demand mid-open, so a
   consumer that opens the card at boot needs them present.
+- **`nvidia-nodes.service`** (enabled at boot), which mknods every
+  `/dev/nvidia*` node a GPU consumer opens. Loading `nvidia_uvm` does not
+  create `/dev/nvidia-uvm`, and the udev rule that would — `nvidia-modprobe`
+  on an `nvidia` device event — fires on an event a boot that loads the
+  modules directly never produces. So the unit names each node explicitly.
+  Its path is a `provides-file` contract: consumers that need the nodes
+  before they start (`hardware/wolf`, `virtualization/virtio-nvgpu`)
+  require it.
 
 ## Relationship with the GPU-sharing and passthrough modules
 
 This module owns the card's binding. `virtualization/virtio-nvgpu` shares
-the card this driver holds and requires the Secure Boot cert this module
-provides. `virtualization/vfio-passthrough` is `iommu=pt` only: VMware
+the card this driver holds and requires the `nvidia-driver` capability
+this module provides. `virtualization/vfio-passthrough` is `iommu=pt` only: VMware
 passthrough domains bind `vfio-pci` per VM through libvirt's managed
 hostdev entries, which detach the card from this driver on start and give
 it back on stop. The sharing guests and a passthrough domain cannot use
