@@ -13,6 +13,8 @@ create-nvgpu-microvm:
 	name=$(prompt "VM name:")
 	kernel=$(prompt "Guest vmlinux path:")
 	rootfs=$(prompt "Guest rootfs path:")
-	[ -n "$name" ] && [ -n "$kernel" ] && [ -n "$rootfs" ] ||
-		{ echo "a name, a kernel and a rootfs are all needed" >&2; exit 1; }
+	if [ -z "$name" ] || [ -z "$kernel" ] || [ -z "$rootfs" ]; then
+		echo "a name, a kernel and a rootfs are all needed" >&2
+		exit 1
+	fi
 	/usr/libexec/nvgpu-create-microvm "$name" "$kernel" "$rootfs"

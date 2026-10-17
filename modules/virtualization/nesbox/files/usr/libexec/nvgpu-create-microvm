@@ -20,8 +20,9 @@ rootfs=${3:-}
 mem=${4:-2048}
 vcpus=${5:-2}
 
-[ -n "$name" ] && [ -n "$kernel" ] && [ -n "$rootfs" ] ||
+if [ -z "$name" ] || [ -z "$kernel" ] || [ -z "$rootfs" ]; then
 	die "usage: nvgpu-create-microvm NAME VMLINUX ROOTFS [MEM_MIB] [VCPUS]"
+fi
 case "$name" in
 	'' | *[!A-Za-z0-9_.+-]*) die "the name may hold letters, digits, dot, dash, underscore and plus" ;;
 esac
